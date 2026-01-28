@@ -1,0 +1,25 @@
+/target
+**/target/
+**/*.rs.bk
+Cargo.lock
+tmp/
+tmp[0-9]/
+.clj-condo/
+.lsp/
+AGENTS.md
+/packages/vscode-clove/node_modules
+/packages/vscode-clove/dist
+# export/publication artifacts
+clove.deps.json
+clove.lock.json
+.DS_Store
+# examples/
+.cache/
+ref/
+plugins/
+lib/
+*.sqlite
+docs/phase2/bench/**/bin
+
+# phase2 internal bench bins
+docs/phase2/_internal/bench/**/bin

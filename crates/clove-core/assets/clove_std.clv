@@ -1,0 +1,771 @@
+(ns std)
+
+;; For base version display
+(defn prelude-version {:subject-pos 1}
+  "Version tag for the built-in std."
+  []
+  "clove-std-dev")
+
+(defn seqs-have-values? {:subject-pos 1}
+  [seqs]
+  (loop [ss seqs]
+    (if (or (nil? ss) (empty? ss))
+      true
+      (let [xs (first ss)]
+        (if (or (nil? xs) (empty? xs))
+          false
+          (recur (rest ss)))))))
+
+(defn seq-map {:subject-pos :last}
+  "Apply f across a sequence of sequences and collect into a vector."
+  [f seqs]
+  (let [acc (mut [])]
+    (loop [xs seqs]
+      (if (or (nil? xs) (empty? xs))
+        (imut acc)
+        (do
+          (conj! acc (f (first xs)))
+          (recur (rest xs)))))))
+
+(defn associative-container? {:subject-pos 1}
+  [value]
+  (or (map? value) (vector? value) (list? value) (set? value)))
+
+(defn normalize-order {:subject-pos 1}
+  [result]
+  (cond
+    (number? result) (cond
+                       (< result 0) -1
+                       (> result 0) 1
+                       :else 0)
+    (true? result) -1
+    (false? result) 1
+    :else (core::runtime-error "sort comparator must return number or boolean")))
+
+(defn insert-sorted {:subject-pos 1}
+  [sorted elem keyfn comp]
+  (let [elem-key (keyfn elem)
+        prefix (mut [])]
+    (loop [suffix sorted]
+      (if (empty? suffix)
+        (do
+          (conj! prefix elem)
+          (imut prefix))
+        (let [candidate (first suffix)
+              cmp (normalize-order (comp elem-key (keyfn candidate)))]
+          (if (< cmp 0)
+            (do
+              (conj! prefix elem)
+              (loop [rest-items suffix]
+                (if (or (nil? rest-items) (empty? rest-items))
+                  nil
+                  (do
+                    (conj! prefix (first rest-items))
+                    (recur (rest rest-items)))))
+              (imut prefix))
+            (do
+              (conj! prefix candidate)
+              (recur (rest suffix)))))))))
+
+(defn apply {:subject-pos 1}
+  "Apply f to args followed by all elements of the final collection."
+  [f & args]
+  (when (zero? (count args))
+    (core::runtime-error "apply expects callable and collection"))
+  (let [arg-vec (vec args)
+        last-index (dec (count arg-vec))
+        last-arg (nth arg-vec last-index)
+        spread (cond
+                 (nil? last-arg) nil
+                 (list? last-arg) last-arg
+                 (vector? last-arg) (seq last-arg)
+                 (seq? last-arg) last-arg
+                 :else (core::runtime-error "apply expects last argument to be list, vector, or seq"))
+        acc (if (nil? spread) () spread)
+        final-args (loop [idx (dec last-index) acc acc]
+                     (if (< idx 0)
+                       acc
+                       (recur (dec idx) (cons (nth arg-vec idx) acc))))]
+    (core::apply f final-args)))
+
+;; Collection operations (strict)
+(defn range {:subject-pos 1}
+  "Range that mirrors clojure.core::range. (range) is lazy; finite arities are eager vectors."
+  [& args]
+  (apply core::range args))
+
+(defn range-core {:subject-pos 1} [start end step]
+  (when (zero? step)
+    (core::runtime-error "range step cannot be zero"))
+  (let [ascending? (> step 0)
+        acc (mut [])]
+    (loop [current start]
+      (if (if ascending?
+            (< current end)
+            (> current end))
+        (do
+          (conj! acc current)
+          (recur (+ current step)))
+        (imut acc)))))
+
+(defn repeat {:subject-pos 2}
+  "Repeat value (one-arg returns lazy seq, two-arg returns vector)."
+  [& args]
+  (apply core::repeat args))
+
+(defn map {:subject-pos 2}
+  "Map that becomes lazy when any collection is a seq (delegates to core::map)."
+  [f coll & colls]
+  (apply core::map f coll colls))
+
+(def pmap dag::pmap)
+
+(defn filter {:subject-pos :last}
+  "Filter; lazy when coll is seq (delegates to core::filter)."
+  [pred coll]
+  (core::filter pred coll))
+
+(def pfilter dag::pfilter)
+
+(defn remove {:subject-pos :last}
+  "Remove; lazy when coll is seq (delegates to core::remove)."
+  [pred coll]
+  (core::remove pred coll))
+
+(defn zipmap {:subject-pos 1}
+  "Create a map from keys and values."
+  [keys vals]
+  (let [ks (core::vec keys)
+        vs (core::vec vals)
+        len-ks (count ks)
+        len-vs (count vs)
+        total (if (< len-ks len-vs) len-ks len-vs)
+        acc (mut {})]
+    (loop [idx 0]
+      (if (>= idx total)
+        (imut acc)
+        (do
+          (assoc! acc (nth ks idx) (nth vs idx))
+          (recur (inc idx)))))))
+
+(defn interleave {:subject-pos 1}
+  "Strict interleave across collections."
+  [& colls]
+  (let [vecs (core::vec (map core::vec colls))
+        lens (core::vec (map count vecs))]
+    (if (zero? (count vecs))
+      []
+      (let [total (core::reduce (fn [m n] (if (< n m) n m)) (first lens) (rest lens))
+            vec-count (count vecs)
+            acc (mut [])]
+        (loop [idx 0]
+          (if (>= idx total)
+            (imut acc)
+            (do
+              (loop [v-idx 0]
+                (if (>= v-idx vec-count)
+                  nil
+                  (do
+                    (conj! acc (nth (nth vecs v-idx) idx))
+                    (recur (inc v-idx)))))
+              (recur (inc idx)))))))))
+
+(defn interpose {:subject-pos :last}
+  "Insert sep between each item of coll."
+  [sep coll]
+  (let [xs (core::vec coll)
+        total (count xs)
+        acc (mut [])]
+    (loop [idx 0]
+      (if (>= idx total)
+        (imut acc)
+        (do
+          (when (not (zero? idx))
+            (conj! acc sep))
+          (conj! acc (nth xs idx))
+          (recur (inc idx)))))))
+
+(defn concat {:subject-pos 1}
+  "Strict concat that eagerly materializes to a vector."
+  [& colls]
+  (apply core::concat colls))
+
+(defn mapcat {:subject-pos 2}
+  "Map a function across collections and concat each intermediate collection."
+  [f coll & colls]
+  (apply core::mapcat f coll colls))
+
+(defn reduce {:subject-pos :last}
+  "Strict reduce. Mirrors Clojure's behavior (throws on empty coll without init)."
+  [f & args]
+  (apply core::reduce f args))
+
+(defn take {:subject-pos :last}
+  "Return the first n items. Even when coll is a seq, materialize into a vec while pulling at most n elements upstream. Use core::take for a fully lazy version."
+  [n coll]
+  (let [res (core::take n coll)]
+    (if (seq? res)
+      (core::vec res)
+      res)))
+
+(defn drop {:subject-pos :last}
+  "Drop the first n items. When coll is a seq, keep it lazy to avoid realizing unbounded inputs. Use core::vec if you need a concrete collection."
+  [n coll]
+  (core::drop n coll))
+
+(defn take-while {:subject-pos :last}
+  "Collect from the start while pred stays truthy. Materializes to a vec even for seq inputs; a never-false predicate on an infinite seq will not terminate. Use core::take-while for a fully lazy variant."
+  [pred coll]
+  (let [res (core::take-while pred coll)]
+    (if (seq? res)
+      (core::vec res)
+      res)))
+
+(defn drop-while {:subject-pos :last}
+  "Skip while pred is truthy, then return the remaining sequence. When coll is a seq, keep it lazy to avoid realizing unbounded inputs. Use core::vec if you need a concrete collection."
+  [pred coll]
+  (core::drop-while pred coll))
+
+(defn partition {:subject-pos :last}
+  "Partition coll into vectors of n, stepping by step, optionally padding."
+  [& args]
+  (let [argc (count args)]
+    (cond
+      (= argc 2) (partition-core (first args) (first args) nil (second args))
+      (= argc 3) (partition-core (first args) (second args) nil (nth args 2))
+      (= argc 4) (partition-core (first args) (second args) (nth args 2) (nth args 3))
+      :else (core::runtime-error "partition expects 2 to 4 args"))))
+
+(defn partition-core {:subject-pos :last} [n step pad coll]
+  (when (<= n 0)
+    (core::runtime-error "partition count must be positive"))
+  (when (<= step 0)
+    (core::runtime-error "partition step must be positive"))
+  (let [xs (core::vec coll)
+        total (count xs)
+        acc (mut [])]
+    (loop [start 0]
+      (if (>= start total)
+        (imut acc)
+        (let [chunk (mut [])]
+          (loop [i 0]
+            (if (>= i n)
+              nil
+              (let [idx (+ start i)]
+                (if (>= idx total)
+                  nil
+                  (do
+                    (conj! chunk (nth xs idx))
+                    (recur (inc i)))))))
+          (let [chunk-count (count chunk)]
+            (cond
+              (= chunk-count n)
+                (do
+                  (conj! acc (imut chunk))
+                  (recur (+ start step)))
+              pad
+                (let [needed (- n chunk-count)
+                      pad-items (core::vec (take needed pad))
+                      pad-count (count pad-items)]
+                  (if (= pad-count needed)
+                    (do
+                      (loop [p-idx 0]
+                        (if (>= p-idx pad-count)
+                          nil
+                          (do
+                            (conj! chunk (nth pad-items p-idx))
+                            (recur (inc p-idx)))))
+                      (conj! acc (imut chunk))
+                      (recur (+ start step)))
+                    (imut acc)))
+              :else
+                (imut acc))))))))
+
+(defn partition-all {:subject-pos :last}
+  "Partition coll into vectors of n, keeping the tail chunk."
+  [& args]
+  (let [argc (count args)]
+    (cond
+      (= argc 2) (partition-all-core (first args) (first args) (second args))
+      (= argc 3) (partition-all-core (first args) (second args) (nth args 2))
+      :else (core::runtime-error "partition-all expects 2 or 3 args"))))
+
+(defn partition-all-core {:subject-pos :last} [n step coll]
+  (when (<= n 0)
+    (core::runtime-error "partition-all count must be positive"))
+  (when (<= step 0)
+    (core::runtime-error "partition-all step must be positive"))
+  (let [xs (core::vec coll)
+        total (count xs)
+        acc (mut [])]
+    (loop [start 0]
+      (if (>= start total)
+        (imut acc)
+        (let [chunk (mut [])]
+          (loop [i 0]
+            (if (>= i n)
+              nil
+              (let [idx (+ start i)]
+                (if (>= idx total)
+                  nil
+                  (do
+                    (conj! chunk (nth xs idx))
+                    (recur (inc i)))))))
+          (conj! acc (imut chunk))
+          (recur (+ start step)))))))
+
+(defn partition-by {:subject-pos :last}
+  "Split coll whenever (f item) changes."
+  [f coll]
+  (let [xs (core::vec coll)
+        total (count xs)
+        acc (mut [])
+        current (mut [])]
+    (loop [idx 0 cur current current-key :clove.std::no-key initialized? false]
+      (if (>= idx total)
+        (do
+          (when (not (empty? cur))
+            (conj! acc (imut cur)))
+          (imut acc))
+        (let [item (nth xs idx)
+              k (f item)]
+          (if (and initialized? (= k current-key))
+            (do
+              (conj! cur item)
+              (recur (inc idx) cur current-key true))
+            (do
+              (when (not (empty? cur))
+                (conj! acc (imut cur)))
+              (let [next (mut [])]
+                (conj! next item)
+                (recur (inc idx) next k true)))))))))
+
+(defn flatten-into {:subject-pos 1}
+  ([value acc]
+   (core::flatten-into value acc))
+  ([value acc depth]
+   (core::flatten-into value acc depth)))
+
+(defn flatten {:subject-pos 1}
+  "Flatten nested sequential structures into a vector. If depth is provided, flatten at most depth levels."
+  ([coll] (core::flatten coll))
+  ([coll depth] (core::flatten coll depth)))
+
+(defn frequencies {:subject-pos 1}
+  "Return a map of item -> occurrence count."
+  [coll]
+  (let [acc (mut {})]
+    (loop [xs (seq coll)]
+      (if (or (nil? xs) (empty? xs))
+        (imut acc)
+        (let [item (first xs)]
+          (assoc! acc item (inc (get acc item 0)))
+          (recur (rest xs)))))))
+
+(defn distinct {:subject-pos 1}
+  "Return a vector of the distinct items in coll, preserving order."
+  [coll]
+  (let [seen (mut #{})
+        acc (mut [])]
+    (loop [xs (seq coll)]
+      (if (or (nil? xs) (empty? xs))
+        (imut acc)
+        (let [item (first xs)]
+          (if (contains? seen item)
+            (recur (rest xs))
+            (do
+              (conj! seen item)
+              (conj! acc item)
+              (recur (rest xs)))))))))
+
+(defn dedupe {:subject-pos 1}
+  "Remove consecutive duplicates from coll."
+  [coll]
+  (let [xs (core::vec coll)
+        total (count xs)
+        acc (mut [])]
+    (loop [idx 0 prev :clove.std::no-value initialized? false]
+      (if (>= idx total)
+        (imut acc)
+        (let [item (nth xs idx)]
+          (if (and initialized? (= item prev))
+            (recur (inc idx) prev true)
+            (do
+              (conj! acc item)
+              (recur (inc idx) item true))))))))
+
+(defn get-in {:subject-pos 1}
+  "Retrieve a value in a nested associative structure."
+  [m ks & defaults]
+  (if (empty? defaults)
+    (core::get-in m ks)
+    (core::get-in m ks (first defaults))))
+
+(defn assoc-in {:subject-pos 1}
+  "Associate a value in a nested associative structure."
+  [m ks value]
+  (core::assoc-in m ks value))
+
+(defn update-in {:subject-pos 1}
+  "Update a value in a nested associative structure."
+  [m ks f & args]
+  (apply core::update-in m ks f args))
+
+(defn select-keys {:subject-pos 1}
+  "Return a map containing only entries for keys."
+  [m ks]
+  (let [path (core::vec ks)
+        total (count path)
+        acc (mut {})]
+    (loop [idx 0]
+      (if (>= idx total)
+        (imut acc)
+        (let [k (nth path idx)]
+          (when (and (map? m) (contains? m k))
+            (assoc! acc k (get m k)))
+          (recur (inc idx)))))))
+
+(defn merge-with {:subject-pos 2}
+  "Merge maps with a combining function for duplicate keys."
+  [f & maps]
+  (let [valid (filter (fn [m] (not (nil? m))) maps)
+        grouped (mut {})]
+    (loop [ms valid]
+      (if (empty? ms)
+        nil
+        (do
+          (loop [entries (seq (first ms))]
+            (if (or (nil? entries) (empty? entries))
+              nil
+              (let [entry (first entries)
+                    k (first entry)
+                    v (second entry)
+                    existing (get grouped k nil)]
+                (if existing
+                  (conj! existing v)
+                  (let [bucket (mut [])]
+                    (conj! bucket v)
+                    (assoc! grouped k bucket)))
+                (recur (rest entries)))))
+          (recur (rest ms)))))
+    (let [result (mut {})]
+      (loop [entries (seq grouped)]
+        (if (or (nil? entries) (empty? entries))
+          (imut result)
+          (let [entry (first entries)
+                k (first entry)
+                values (second entry)
+                value-count (count values)
+                args (core::vec values)]
+            (assoc! result k
+                    (if (= value-count 1)
+                      (nth args 0)
+                      (apply f args)))
+            (recur (rest entries))))))))
+
+(defn sort-by* {:subject-pos :last}
+  [keyfn comp coll]
+  (reduce
+    (fn [sorted elem]
+      (insert-sorted sorted elem keyfn comp))
+    []
+    (or coll [])))
+
+(defn sort-by {:subject-pos :last}
+  "Strict stable sort by key function."
+  [keyfn arg & rest]
+  (cond
+    (empty? rest) (sort-by* keyfn core::compare arg)
+    (fn? arg) (sort-by* keyfn arg (first rest))
+    :else (sort-by* keyfn (first rest) arg)))
+
+(defn sort {:subject-pos :last}
+  "Strict stable sort with optional comparator."
+  [arg & rest]
+  (cond
+    (empty? rest) (sort-by* identity core::compare arg)
+    (fn? arg) (sort-by* identity arg (first rest))
+    :else (sort-by* identity (first rest) arg)))
+
+(defn some {:subject-pos :last}
+  "Return the first truthy result of applying pred to items."
+  [pred coll]
+  (loop [xs (seq coll)]
+    (if (or (nil? xs) (empty? xs))
+      nil
+      (let [result (pred (first xs))]
+        (if result
+          result
+          (recur (rest xs)))))))
+
+(defn every? {:subject-pos :last}
+  "true if pred returns truthy for all items."
+  [pred coll]
+  (loop [xs (seq coll)]
+    (if (or (nil? xs) (empty? xs))
+      true
+      (if (pred (first xs))
+        (recur (rest xs))
+        false))))
+
+(defn not-any? {:subject-pos :last}
+  "true if pred returns falsey for every item."
+  [pred coll]
+  (not (some pred coll)))
+
+(defn group-by {:subject-pos :last}
+  "Group coll into a map keyed by f."
+  [f coll]
+  (let [xs (core::vec coll)
+        total (count xs)
+        acc (mut {})]
+    (loop [idx 0]
+      (if (>= idx total)
+        (imut acc)
+        (let [item (nth xs idx)
+              k (f item)
+              bucket (get acc k nil)]
+          (if bucket
+            (conj! bucket item)
+            (let [next (mut [])]
+              (conj! next item)
+              (assoc! acc k next)))
+          (recur (inc idx)))))))
+
+;; Commonly used functors
+(defn identity {:subject-pos 1} [x] x)
+(defn tap {:subject-pos :last}
+  "Apply f to x for side effects, then return x."
+  [f x]
+  (f x)
+  x)
+(defn repl {:subject-pos 1}
+  "Enter a debug REPL with ?v bound to v. Returns v."
+  [v]
+  (repl v))
+(defn each {:subject-pos :last}
+  "Apply f to each item in coll for side effects (eager). Returns coll."
+  [f coll]
+  (run! f coll)
+  coll)
+(defn run! {:subject-pos :last}
+  "Apply f to each item in coll for side effects (eager). Returns nil."
+  [f coll]
+  (loop [xs (seq coll)]
+    (if (or (nil? xs) (empty? xs))
+      nil
+      (do
+        (f (first xs))
+        (recur (rest xs))))))
+(defn constantly {:subject-pos 1} [x] (fn [& _] x))
+(defn complement {:subject-pos 1} [f] (fn [& args] (not (apply f args))))
+
+(defn partial {:subject-pos 1}
+  "Return a function with the first arguments of `f` pre-applied."
+  [f & captured]
+  (let [captured-vec (vec captured)]
+    (fn [& more]
+      (core::apply f (into captured-vec more)))))
+
+(defn comp {:subject-pos 1}
+  "Right-to-left function composition."
+  [& fns]
+  (cond
+    (empty? fns) identity
+    (= 1 (count fns)) (first fns)
+    :else
+      (let [ordered (vec fns)
+            last-idx (dec (count ordered))]
+        (fn [& args]
+          (let [initial (core::apply (nth ordered last-idx) (vec args))]
+            (loop [idx (dec last-idx) acc initial]
+              (if (< idx 0)
+                acc
+                (recur (dec idx) ((nth ordered idx) acc)))))))))
+
+(defn with-redefs-fn {:subject-pos :last}
+  "Return a function that executes `f` under temporary redefinitions."
+  [bindings f]
+  (fn [& args]
+    (with-redefs bindings
+      (apply f args))))
+
+(defn pipe {:subject-pos 1}
+  "Left-to-right function composition."
+  [& fns]
+  (cond
+    (empty? fns) identity
+    (= 1 (count fns)) (first fns)
+    :else
+      (let [ordered (vec fns)
+            size (count ordered)]
+        (fn [& args]
+          (let [initial (core::apply (first ordered) (vec args))]
+            (loop [idx 1 acc initial]
+              (if (>= idx size)
+                acc
+                (recur (inc idx) ((nth ordered idx) acc)))))))))
+
+(defn juxt {:subject-pos 1}
+  "Return a function that applies multiple fns to the same args."
+  [& fns]
+  (let [fn-vec (vec fns)]
+    (fn [& args]
+      (let [acc (mut [])]
+        (loop [idx 0]
+          (if (>= idx (count fn-vec))
+            (imut acc)
+            (do
+              (conj! acc (apply (nth fn-vec idx) args))
+              (recur (inc idx)))))))))
+
+;; ------------- I/O / HTTP / CLI / Process wrappers -------------
+
+(def slurp-bytes io::slurp-bytes)
+(def spit-bytes io::spit-bytes)
+(def file-exists? fs::file-exists?)
+(def file? fs::file?)
+(def dir? fs::dir?)
+(def list-dir fs::list-dir)
+(def mkdir fs::mkdir)
+(def mkdirs fs::mkdirs)
+(def delete fs::delete)
+(def copy fs::copy)
+(def move fs::move)
+(def glob fs::glob)
+(def glob* fs::glob*)
+(def line-seq io::line-seq)
+(def read-line io::read-line)
+(def read-all io::read-all)
+(def resource-url io::resource-url)
+(def resource-bytes io::resource-bytes)
+(def resource->tempfile io::resource->tempfile)
+
+(def path-cwd path::cwd)
+(def path-home-dir path::home-dir)
+(def path-temp-dir path::temp-dir)
+(def path-join path::join)
+(def path-basename path::basename)
+(def path-dirname path::dirname)
+(def path-extname path::extname)
+(def path-normalize path::normalize)
+(def path-canonicalize path::canonicalize)
+(def path-absolute? path::absolute?)
+(def path-relative? path::relative?)
+(def path-resolve path::resolve)
+(def path-source-dir path::source-dir)
+(def sanitize path::sanitize)
+
+(defn now {:subject-pos 1} [] (time::now))
+(defn instant {:subject-pos 1} [ms] (time::instant ms))
+(defn parse-time {:subject-pos 1} [s] (time::parse s))
+(defn format-time {:subject-pos 1} [inst fmt] (time::format inst fmt))
+(defn time-plus {:subject-pos 1} [inst dur] (time::plus inst dur))
+(defn time-minus {:subject-pos 1} [inst dur] (time::minus inst dur))
+(defn time-between {:subject-pos 1} [a b] (time::between a b))
+(defn sleep {:subject-pos 1} [dur] (time::sleep dur))
+
+(defn json-parse {:subject-pos 1} [s] (json::parse s))
+(defn json-generate {:subject-pos 1} [v] (json::generate v))
+(defn json-generate-pretty {:subject-pos 1} [v] (json::generate-pretty v))
+(defn json-read-file {:subject-pos 1} [p] (json::read-file p))
+(defn json-read-file-seq {:subject-pos 1} [p] (json::read-file-seq p))
+(defn json-read-seq {:subject-pos 1} [p] (json::read-seq p))
+(defn json-write-file {:subject-pos 1} [p v] (json::write-file p v))
+
+(defn yaml-parse {:subject-pos 1} [s] (yaml::parse s))
+(defn yaml-generate {:subject-pos 1} [v] (yaml::generate v))
+(defn yaml-read-file {:subject-pos 1} [p] (yaml::read-file p))
+(defn yaml-write-file {:subject-pos 1} [p v] (yaml::write-file p v))
+
+(defn toml-parse {:subject-pos 1} [s] (toml::parse s))
+(defn toml-generate {:subject-pos 1} [v] (toml::generate v))
+(defn toml-read-file {:subject-pos 1} [p] (toml::read-file p))
+(defn toml-write-file {:subject-pos 1} [p v] (toml::write-file p v))
+(defn ini-parse {:subject-pos 1} [s] (ini::parse s))
+(defn ini-generate {:subject-pos 1} [v] (ini::generate v))
+(defn env-parse-file {:subject-pos 1} [p] (env::parse-file p))
+
+(defn http-request {:subject-pos 1} [opts] (http::request opts))
+(defn http-get {:subject-pos 1} [url & rest]
+  (let [opts (if (empty? rest) {} (first rest))]
+    (http::request (assoc opts :url url :method "GET"))))
+(defn http-post {:subject-pos 1} [url & rest]
+  (let [opts (if (empty? rest) {} (first rest))]
+    (http::request (assoc opts :url url :method "POST"))))
+(defn http-put {:subject-pos 1} [url & rest]
+  (let [opts (if (empty? rest) {} (first rest))]
+    (http::request (assoc opts :url url :method "PUT"))))
+(defn http-delete {:subject-pos 1} [url & rest]
+  (let [opts (if (empty? rest) {} (first rest))]
+    (http::request (assoc opts :url url :method "DELETE"))))
+(defn http-get-json {:subject-pos 1} [url & rest]
+  (let [opts (if (empty? rest) {} (first rest))]
+    (:json (http-get url opts))))
+(defn http-post-json {:subject-pos 1} [url body & rest]
+  (let [opts (if (empty? rest) {} (first rest))]
+    (:json (http::request (assoc opts :url url :method "POST" :json body)))))
+
+(def sh process::sh)
+(def sh! process::sh!)
+(defn shell-split {:subject-pos 1} [s] (shell::split s))
+(defn shell-escape {:subject-pos 1} [xs] (shell::escape xs))
+(defn shellwords {:subject-pos 1}
+  "Split command line text into shell arguments (alias of shell::split)."
+  [s]
+  (shell::split s))
+
+(defn argv {:subject-pos 1} [] (cli::argv))
+(defn env {:subject-pos 1} [] (env::vars))
+(defn env-vars {:subject-pos 1} [] (env::vars))
+(defn env-get {:subject-pos 1} [k & rest]
+  (if (empty? rest)
+    (cli::env-get k)
+    (cli::env-get k (first rest))))
+(defn env-has? {:subject-pos 1} [k] (env::has? k))
+(defn parse-opts {:subject-pos 1} [argv spec] (cli::parse-opts argv spec))
+(defn parse-opts-adv {:subject-pos 1} [argv spec] (cli::parse-opts-adv argv spec))
+(defn exit {:subject-pos 1} [& rest]
+  (if (empty? rest)
+    (cli::exit)
+    (cli::exit (first rest))))
+
+(defn log-trace {:subject-pos 1} [& xs] (apply log::trace xs))
+(defn log-debug {:subject-pos 1} [& xs] (apply log::debug xs))
+(defn log-info {:subject-pos 1} [& xs] (apply log::info xs))
+(defn log-warn {:subject-pos 1} [& xs] (apply log::warn xs))
+(defn log-error {:subject-pos 1} [& xs] (apply log::error xs))
+
+(defn dbg {:subject-pos 1}
+  "Print value(s) to stderr and return last."
+  [& xs]
+  (when (not (empty? xs))
+    (core::println (apply str "[DBG] " (map pr-str xs))))
+  (if (empty? xs) nil (last xs)))
+
+(defn spy {:subject-pos 1}
+  "Alias of dbg."
+  [& xs]
+  (apply dbg xs))
+
+(defn deftest {:subject-pos 1} [name f] (test::deftest name f))
+(defn is {:subject-pos 1} [expected & rest]
+  (if (empty? rest)
+    (test::is expected)
+    (test::is expected (first rest))))
+(defn run-tests {:subject-pos 1} [] (test::run-tests))
+
+;; ------------- set operations (similar to clojure.set) -------------
+
+(def union set::union)
+(def intersection set::intersection)
+(def difference set::difference)
+(def set-select set::select)
+(def project set::project)
+(def join string::join)
+(def rename set::rename)
+(def rename-keys set::rename-keys)
+(def index set::index)
+(def map-invert set::map-invert)
+(def subset? set::subset?)
+(def superset? set::superset?)

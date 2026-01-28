@@ -1,0 +1,36 @@
+(ns examples::import_gz_json_to_sqlite)
+
+(require clove-sqlite)
+(require clove-io-compress)
+(require json)
+(require io)
+(require fs)
+
+(def data-path "examples/sql/data/items.json.gz")
+(def db-path "examples/sql/out/items.sqlite")
+
+(defn ensure-schema [db]
+  (sqlite::exec db
+    "CREATE TABLE IF NOT EXISTS items (
+       id INTEGER PRIMARY KEY,
+       name TEXT NOT NULL
+     );"
+    {:ignore-already-exists? true}))
+
+(defn import-items []
+  (fs::mkdirs "examples/sql/out")
+  (let [db (sqlite::open db-path)
+        r (io::gzip-reader data-path)]
+    (try
+      (ensure-schema db)
+      (sqlite::exec db "DELETE FROM items;")
+      (sqlite::transaction db
+        (fn []
+          (let [stmt (sqlite::prepare db "INSERT INTO items(id, name) VALUES(?, ?)")]
+            (doseq [item (json::read-seq r)]
+              (sqlite::execute stmt [(get item "id") (get item "name")])))))
+      (finally
+        (io::close r)
+        (sqlite::close db)))))
+
+(import-items)

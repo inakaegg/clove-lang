@@ -1,0 +1,1 @@
+{:s "a\nb\tc\"d" :r /foo.+bar/ :p #/a.*b/}

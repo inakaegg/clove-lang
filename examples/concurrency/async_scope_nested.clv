@@ -1,0 +1,70 @@
+(ns examples::concurrency::async-scope-nested)
+
+;; Nested async-scope examples and fail-fast behavior checks.
+
+(defn success-case []
+  ;; All tasks, including the inner scope, complete successfully.
+  (let [{:keys [await]} (async-scope
+                          ;; Outer child task
+                          [(future (fn [] (chan-take! (timeout 20)) :outer-child))]
+                          ;; Create an inner scope inside the body
+                          (let [{:keys [await]} (async-scope
+                                                  [(future (fn [] (chan-take! (timeout 5)) :inner-a))
+                                                   (future (fn [] (chan-take! (timeout 10)) :inner-b))]
+                                                  :inner-body)]
+                            {:inner (await)}))]
+    (await)))
+
+(defn fail-fast-case []
+  ;; Cancel propagates as soon as a child returns Err.
+  (let [log (chan)
+        {:keys [await]} (async-scope
+                          [(future
+                             (fn []
+                               (chan-take! (timeout 5))
+                               (throw (runtime-error "boom"))))
+                           (future
+                             (fn []
+                               ;; Wait for cancel-chan to close
+                               (chan-take! (async::scope-cancel-chan))
+                               (chan-put! log :cancelled)
+                               :alive-after-cancel))]
+                          ;; Body also watches cancel-chan
+                          (chan-take! (async::scope-cancel-chan)))]
+    (let [result (try
+                   (await)
+                   (catch RuntimeError e e))]
+      {:result result
+       :log    (chan-take! log)})))
+
+(defn nested-fail-fast-case []
+  ;; If an inner child fails, cancel propagates from inner to outer.
+  (let [log (chan 4)
+        {:keys [await]} (async-scope
+                          [(future
+                             (fn []
+                               (chan-take! (async::scope-cancel-chan))
+                               (chan-put! log :outer-child-cancel)))]
+                          (let [{:keys [await]} (async-scope
+                                                  [(future
+                                                     (fn []
+                                                       (chan-take! (timeout 5))
+                                                       (throw (runtime-error "inner-bang"))))
+                                                   (future
+                                                     (fn []
+                                                       (chan-take! (async::scope-cancel-chan))
+                                                       (chan-put! log :inner-sibling-cancel)))]
+                                                  ;; Inner body also watches cancel-chan
+                                                  (chan-take! (async::scope-cancel-chan)))]
+                            (await)))]
+    (let [result (try
+                   (await)
+                   (catch RuntimeError e e))
+          events [(chan-take! log) (chan-take! log)]]
+      {:result result
+       :events events})))
+
+(defn -main []
+  (println "success-case =>" (success-case))
+  (println "fail-fast-case =>" (fail-fast-case))
+  (println "nested-fail-fast-case =>" (nested-fail-fast-case)))

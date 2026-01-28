@@ -1,0 +1,10 @@
+; formatter fixture: simple terminal loop stub
+(ns examples::terminal1)
+
+(def config {:width 10 :height 5})
+
+(defn handle-key [state key]
+  (if (= key "q")
+    (assoc state :running? false)
+    state))
+

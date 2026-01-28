@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/clove-core",
+  "crates/clove-lang",
+  "crates/clove-ruby",
+  "crates/clove-python",
+  "crates/clove-lsp",
+  "crates/clove-plugin-api",
+  "crates/clove-plugin-sdk",
+  "crates/clove-plugin-sdk-macros",
+  "crates/clove2-core",
+  "crates/clove2-lang",
+  "crates/clove2-lsp",
+]
+
+default-members = [
+  "crates/clove-core",
+  "crates/clove-lang",
+  "crates/clove-ruby",
+  "crates/clove-python",
+  "crates/clove-lsp",
+  "crates/clove-plugin-api",
+]
+
+[patch.crates-io]
+reedline = { git = "https://github.com/inakaegg/reedline.git", branch = "clove-multiline-ide-menu" }

@@ -1,0 +1,400 @@
+; snake_state.clv (application state + pure logic only)
+(ns game::snake_state)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; snake_state.clv
+;; -----------------------------------------------------------
+;; This file gathers only the game's core (state + pure logic).
+;; - Terminal control / raw mode / input loop / render loop are not written here.
+;; - Only data structures and pure functions live here.
+;; - snake_terminal.clv is expected to use only GameState and tick / input-*.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 1. Small variant types (enum)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; GamePhase = Title | Playing | Paused | GameOver
+(defenum GamePhases
+  PhaseTitle
+  PhasePlaying
+  PhasePaused
+  PhaseGameOver)
+
+;; Directions
+(defenum Directions
+  DirectionUp
+  DirectionDown
+  DirectionLeft
+  DirectionRight)
+
+;; Cell kinds on the board
+(defenum CellKinds
+  CellEmpty
+  CellSnakeHead
+  CellSnakeBody
+  CellFood)
+
+;; Collision kinds
+(defenum Collisions
+  CollisionNone
+  CollisionHitWall
+  CollisionHitSelf)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 2. Core data structures (Position / Board / Snake / Food / World / Step)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Board coordinate
+(deftype Position
+  {:x :int :y :int})
+
+;; Board size
+(deftype Board
+  {:width :int :height :int})
+
+;; Snake body
+(deftype Snake
+  {:body :vector ;; Vector of Position (head is the first element)
+   :dir :map ;; Direction* : current heading
+   :pending-dir :map ;; Direction* : desired direction for next tick (overwritten by input)
+  })
+
+;; Food
+(deftype Food
+  {:pos :map ;; Position
+  })
+
+;; Game-wide configuration
+(deftype GameConfig
+  {:board :map ;; Board
+   :tick-ms :duration ;; Timer interval (ms)
+  })
+
+;; Snake step result
+(deftype StepResult
+  {:snake :map ;; Snake
+   :collision :map ;; Collision*
+   :ate-food? :bool ;; Whether food was eaten on this tick
+  })
+
+;; World: the visible state of the game world
+(deftype World
+  {:config :map ;; GameConfig
+   :snake :map ;; Snake
+   :food :map ;; Food
+   :phase :map ;; GamePhases*
+   :score :int})
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 3. Event product + enum
+;;    - Represents external events like input and time passing.
+;;    - All become reducer inputs to GameState.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Direction key input
+(deftype InputDirectionEvent
+  {:dir :map ;; Direction*
+  })
+
+;; Pause/resume toggle
+(deftype InputPauseResumeEvent
+  {})
+
+;; Restart (rebuild World from scratch)
+(deftype InputRestartEvent
+  {})
+
+;; Quit (stop the loop)
+(deftype InputQuitEvent
+  {})
+
+;; Time elapsed (dt-ms is unused for now, kept for future speed control)
+(deftype TickEvent
+  {:dt-ms :int})
+
+;; Here we group only external events as GameEvents.
+(defenum GameEvents
+  TickEvent
+  InputDirectionEvent
+  InputPauseResumeEvent
+  InputRestartEvent
+  InputQuitEvent)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 4. EventBusState / GameState
+;;    - GameState is the single source of truth.
+;;    - bus stores debug info (also part of GameState).
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; EventBusState: holds the history of GameEvents so far
+(deftype EventBusState
+  {:queue :vector ;; GameEvents[] (old -> new)
+   :total-count :int ;; Total number of events processed
+   :per-kind :map ;; {keyword -> int} Count per event kind
+  })
+
+;; GameState: the single state of the whole game
+(deftype GameState
+  {:world :map ;; World (state visible on screen)
+   :bus :map ;; EventBusState (debugging)
+   :running? :bool ;; Main-loop continue flag
+  })
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 5. Basic helpers (Position / Snake / Board)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn make-position [x y]
+  ;; Helper to create Position from x,y
+  (Position {:x, :y,}))
+
+(defn position= [a b]
+  ;; Are two Positions equal?
+  (and (= (:x a) (:x b)) (= (:y a) (:y b))))
+
+(defn snake-head [snake]
+  ;; Get snake head (first element)
+  (first (:body snake)))
+
+(defn cell-kind-at [pos snake food]
+  ;; Check whether pos is snake head/body/food
+  (let [head  (snake-head snake)
+        body  (:body snake)
+        fpos  (:pos food)]
+    (cond
+      (position= pos head) (CellSnakeHead)
+      (some (fn [p] (position= p pos)) body) (CellSnakeBody)
+      (position= pos fpos) (CellFood)
+      :else (CellEmpty))))
+
+(defn direction-delta [dir]
+  ;; Compute (dx,dy) for one step from direction
+  (match dir
+    DirectionUp     (Position {:x 0 :y -1})
+    DirectionDown   (Position {:x 0 :y 1})
+    DirectionLeft   (Position {:x -1 :y 0})
+    DirectionRight  (Position {:x 1 :y 0})))
+
+(defn normalized-direction [current requested]
+  ;; Invalidate 180-degree reversals (up->down, left->right), accept others.
+  ;; This prevents input that would hit itself.
+  (match [current requested]
+    [DirectionUp DirectionDown]     current
+    [DirectionDown DirectionUp]     current
+    [DirectionLeft DirectionRight]  current
+    [DirectionRight DirectionLeft]  current
+    [_ _]                           requested))
+
+(defn collision-none? [c]
+  ;; Small helper to check if collision is 'none'
+  (match c
+    CollisionNone  true
+    _              false))
+
+(defn detect-collision [head body board]
+  ;; Detect collision from head position and board/body.
+  (let [x         (:x head)
+        y         (:y head)
+        width     (:width board)
+        height    (:height board)
+        hit-wall  (or (< x 0) (>= x width) (< y 0) (>= y height))
+        hit-self  (some (fn [p] (position= p head)) body)]
+    (cond
+      hit-wall  (CollisionHitWall)
+      hit-self  (CollisionHitSelf)
+      :else     (CollisionNone))))
+
+(defn step-snake [snake board food-pos]
+  ;; Pure function to advance the snake by one tick.
+  ;; - Decide actual direction considering pending-dir
+  ;; - Compute new-head / new-body
+  ;; - Check collision and whether food was eaten
+  (let [dir0       (:dir snake)
+        pending    (:pending-dir snake)
+        dir        (normalized-direction dir0 pending) ;; Decide valid direction from current + pending
+        head       (snake-head snake)
+        delta      (direction-delta dir)
+        new-head   (Position {:x (+ (:x head) (:x delta))
+                              :y (+ (:y head) (:y delta))})
+        body       (:body snake)
+        tail       (butlast body)
+        ate-food?  (position= new-head food-pos)
+        new-body   (if ate-food?
+                     (cons new-head body) ;; If eaten, grow (do not drop tail)
+                     (cons new-head
+                       tail ;; Otherwise length stays the same
+                     )) ;placeholder
+        collision  (detect-collision new-head tail board)] ;placeholder
+    (StepResult {:snake (Snake {:body new-body;placeholder
+                                :dir dir;placeholder
+                                ;; Save the decided dir to pending-dir as well
+                                :pending-dir dir})
+                 :collision collision;placeholder
+                 :ate-food?,}))) ;placeholder
+
+(defn random-food [board snake-body]
+  ;; Choose a random food position that does not overlap the snake body.
+  ;; Note: if the board is small and snake-body nearly fills it,
+  ;;   the loop count increases; this is a simple demo implementation.
+  (let [w  (:width board)
+        h  (:height board)]
+    (loop [n  0]
+      (let [x  (long (rand w))
+            y  (long (rand h))
+            p  (Position {:x, :y,})]
+        (if
+          (some (fn [s] (position= s p)) snake-body)
+          ;; If a cell already has the snake, retry
+          (recur (inc n))
+          ;; If the cell is empty, accept it
+          (Food {:pos p}))))))
+
+(defn new-world [config]
+  ;; Pure function to initialize World from GameConfig.
+  ;; - Snake starts in the center moving right
+  ;; - Food is placed randomly without overlapping the snake
+  ;; - Phase starts as Playing, score is 0
+  (let [board  (:board config)
+        w      (:width board)
+        h      (:height board)
+        cx     (quot w 2)
+        cy     (quot h 2)
+        head   (Position {:x cx :y cy})
+        snake  (Snake {:body        [head]
+                       :dir         (DirectionRight)
+                       :pending-dir (DirectionRight)})
+        food   (random-food board [head])]
+    (World {:config,
+            :snake,
+            :food,
+            :phase (PhasePlaying)
+            :score 0})))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 6. Pure function to advance World by one tick
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn tick-world [world dt-ms]
+  ;; Return a new World from World and elapsed time dt-ms.
+  ;; - Advance the snake only when Phase is Playing.
+  ;; - On collision, transition Phase to GameOver.
+  ;; - If food is eaten, place new food and increment score.
+  ;; - dt-ms is unused for now, kept for future speed control.
+  (match (:phase world)
+    PhasePlaying (let [config  (:config world)
+                       board   (:board config)
+                       snake   (:snake world)
+                       food    (:food world)
+                       step    (step-snake snake board (:pos food))
+                       snake'  (:snake step)
+                       coll    (:collision step)
+                       ate?    (:ate-food? step)
+                       food'   (if ate?
+                                 (random-food board (:body snake'))
+                                 food)
+                       score'  (+ (:score world) (if ate? 1 0))
+                       world'  (assoc world :snake snake' :food food' :score score')]
+      (match coll
+        CollisionNone world'
+        ;; Wall or self collision -> transition to GameOver
+        _ (assoc world' :phase (PhaseGameOver))))
+    ;; When Title/Paused/GameOver, ticking does not change World
+    _ world))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 7. Helpers to update EventBusState
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn event-kind-key [ev]
+  ;; Extract the kind key from a GameEvents product value.
+  ;; - Info used only to increment per-kind counters for debugging.
+  (match ev
+    (TickEvent _)              :tick
+    (InputDirectionEvent _)    :input-direction
+    (InputPauseResumeEvent _)  :input-pause-resume
+    (InputRestartEvent _)      :input-restart
+    (InputQuitEvent _)         :input-quit
+    _                          :unknown))
+
+(defn record-event [bus ev]
+  ;; Return a new EventBusState with one event added.
+  (let [k          (event-kind-key ev)
+        queue      (:queue bus)
+        total      (:total-count bus)
+        per-kind   (:per-kind bus)
+        prev       (if (contains? per-kind k)
+                     (get per-kind k)
+                     0)
+        per-kind'  (assoc per-kind k (inc prev))]
+    (EventBusState {:queue       (conj queue ev)
+                    :total-count (inc total)
+                    :per-kind    per-kind'})))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 8. GameState initialization & reducers
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn initial-game-state [config]
+  ;; Create the initial GameState from GameConfig.
+  ;; - world is delegated to new-world
+  ;; - bus is empty
+  ;; - running? is true
+  (let [world  (new-world config)
+        bus    (EventBusState {:queue       []
+                               :total-count 0
+                               :per-kind    {}})]
+    (GameState {:world, :bus, :running? true})))
+
+(defn- with-event [state ev world' running?]
+  ;; Common steps:
+  ;; - Record ev in bus
+  ;; - Return new GameState with updated world / running?
+  (let [bus   (:bus state)
+        bus'  (record-event bus ev)]
+    (GameState {:world world' :bus bus' :running?,})))
+
+(defn reduce-state [state ev]
+  ;; The only reducer that returns a new GameState from GameState and GameEvents.
+  ;; All game logic (how state changes via events) is centralized here.
+  (let [world     (:world state)
+        running?  (:running? state)]
+    (match ev
+      ;; Time elapsed
+      (TickEvent {:dt-ms dt}) (with-event state ev (tick-world world dt) running?)
+      ;; Direction input: only update snake pending-dir; do not move immediately
+      (InputDirectionEvent {:dir,}) (let [snake   (:snake world)
+                                          snake'  (assoc snake :pending-dir dir)
+                                          world'  (assoc world :snake snake')]
+        (with-event state ev world' running?))
+      ;; Pause / resume toggle
+      (InputPauseResumeEvent {}) (let [phase   (:phase world)
+                                       phase'  (match phase
+                                                 PhasePlaying  (PhasePaused)
+                                                 PhasePaused   (PhasePlaying)
+                                                 _             phase)
+                                       world'  (assoc world :phase phase')]
+        (with-event state ev world' running?))
+      ;; Restart: rebuild World and set running? back to true
+      (InputRestartEvent {}) (let [world'  (new-world (:config world))]
+        (with-event state ev world' true))
+      ;; Quit: only set running? to false without touching World
+      (InputQuitEvent {}) (with-event state ev world false)
+      ;; Ignore unexpected values (keep state as-is)
+      _ state)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 9. Thin wrappers called from snake_terminal.clv
+;;    - The terminal side only needs to consider what it wants to do to GameState.
+;;    - Hide the concrete Event product types here.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn tick [state dt-ms]
+  ;; Handle one TickEvent (time elapsed)
+  (reduce-state state (TickEvent {:dt-ms,})))
+
+(defn input-direction [state dir]
+  ;; Direction key input
+  (reduce-state state (InputDirectionEvent {:dir,})))
+
+(defn input-pause-resume [state]
+  ;; Pause / resume toggle
+  (reduce-state state (InputPauseResumeEvent {})))
+
+(defn input-restart [state]
+  ;; Restart
+  (reduce-state state (InputRestartEvent {})))
+
+(defn input-quit [state]
+  ;; Quit
+  (reduce-state state (InputQuitEvent {})))

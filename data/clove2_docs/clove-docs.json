@@ -1,0 +1,2554 @@
+[
+  {
+    "name": "!=",
+    "signature": "!= & values",
+    "doc": "Return true when any of the arguments differ.",
+    "origin": "core",
+    "examples": [
+      "(!= 1 2) ; => true",
+      "(!= 1 1) ; => false"
+    ]
+  },
+  {
+    "name": "*",
+    "signature": "* & nums",
+    "doc": "Multiply the numeric arguments left-to-right; zero arguments yield 1.",
+    "origin": "core",
+    "examples": [
+      "(* 2 3 4) ; => 24",
+      "(* ) ; => 1"
+    ]
+  },
+  {
+    "name": "+",
+    "signature": "+ & nums",
+    "doc": "Add the numeric arguments left-to-right; zero arguments yield 0.",
+    "origin": "core",
+    "examples": [
+      "(+ 1 2 3) ; => 6",
+      "(+ ) ; => 0"
+    ]
+  },
+  {
+    "name": "-",
+    "signature": "- x & ys",
+    "doc": "Negate a single number or subtract each subsequent number from the first.",
+    "origin": "core",
+    "examples": [
+      "(- 10 3 2) ; => 5",
+      "(- 5) ; => -5"
+    ]
+  },
+  {
+    "name": "->",
+    "signature": "-> expr & forms",
+    "doc": "Thread expr through forms as first argument of each.",
+    "origin": "special form",
+    "examples": [
+      "(-> {:a {:b 1}} :a :b) ; => 1"
+    ]
+  },
+  {
+    "name": "->>",
+    "signature": "->> expr & forms",
+    "doc": "Thread expr through forms as last argument of each.",
+    "origin": "special form",
+    "examples": [
+      "(->> [1 2 3] (map inc) (take 2) (vec)) ; => [2 3]"
+    ]
+  },
+  {
+    "name": "/",
+    "signature": "/ x & divisors",
+    "doc": "Divide the first number by each subsequent argument; with one argument return its reciprocal (division by zero raises).",
+    "origin": "core",
+    "examples": [
+      "(/ 8 2 2) ; => 2",
+      "(/ 2) ; => 0.5"
+    ]
+  },
+  {
+    "name": "<",
+    "signature": "< & values",
+    "doc": "Return true when the arguments form a strictly increasing sequence (zero or one argument returns true).",
+    "origin": "core",
+    "examples": [
+      "(< 1 2 3) ; => true",
+      "(< 1 1) ; => false"
+    ]
+  },
+  {
+    "name": "<=",
+    "signature": "<= & values",
+    "doc": "Return true when the arguments never decrease (allows equality; zero or one argument returns true).",
+    "origin": "core",
+    "examples": [
+      "(<= 1 1 2) ; => true",
+      "(<= 2 1) ; => false"
+    ]
+  },
+  {
+    "name": "=",
+    "signature": "= & values",
+    "doc": "Return true when all arguments are equal; zero or one argument returns true.",
+    "origin": "core",
+    "examples": [
+      "(= 1 1 1) ; => true",
+      "(= 1 2) ; => false"
+    ]
+  },
+  {
+    "name": ">",
+    "signature": "> & values",
+    "doc": "Return true when the arguments are strictly decreasing (zero or one argument returns true).",
+    "origin": "core",
+    "examples": [
+      "(> 3 2 1) ; => true",
+      "(> 1 2) ; => false"
+    ]
+  },
+  {
+    "name": ">=",
+    "signature": ">= & values",
+    "doc": "Return true when the arguments never increase (allows equality; zero or one argument returns true).",
+    "origin": "core",
+    "examples": [
+      "(>= 3 3 1) ; => true",
+      "(>= 1 2) ; => false"
+    ]
+  },
+  {
+    "name": "__comp-call",
+    "signature": "__comp-call fns args",
+    "doc": "Internal helper for comp; not intended for direct use.",
+    "origin": "core",
+    "examples": []
+  },
+  {
+    "name": "__juxt-call",
+    "signature": "__juxt-call fns args",
+    "doc": "Internal helper for juxt; not intended for direct use.",
+    "origin": "core",
+    "examples": []
+  },
+  {
+    "name": "abs",
+    "signature": "abs n",
+    "doc": "Return the absolute value, preserving int/float shape.",
+    "origin": "core",
+    "examples": [
+      "(abs -3) ; => 3",
+      "(abs -1.5) ; => 1.5"
+    ]
+  },
+  {
+    "name": "and",
+    "signature": "and expr*",
+    "doc": "Short-circuiting logical conjunction.",
+    "origin": "special form",
+    "examples": [
+      "(and true 1) ; => 1",
+      "(and false 1) ; => false"
+    ]
+  },
+  {
+    "name": "apply",
+    "signature": "apply f & args",
+    "doc": "Call f with args, treating the final argument as a collection to be spliced into the call list.",
+    "origin": "core",
+    "examples": [
+      "(apply + [1 2 3 4]) ; => 10",
+      "(apply vector 0 (list 1 2) [3 4]) ; => [0 (1 2) 3 4]"
+    ]
+  },
+  {
+    "name": "as",
+    "signature": "as T value",
+    "doc": "Return value when it matches type T, otherwise nil.",
+    "origin": "core",
+    "examples": [
+      "(as Int 1) ; => 1",
+      "(as Str 1) ; => nil"
+    ]
+  },
+  {
+    "name": "as->",
+    "signature": "as-> expr name & forms",
+    "doc": "Thread expr binding it to name at each step.",
+    "origin": "special form",
+    "examples": [
+      "(as-> 1 x (+ x 2) (* x 3)) ; => 9"
+    ]
+  },
+  {
+    "name": "assoc",
+    "signature": "assoc map key value & kvs",
+    "doc": "Add or replace key/value pairs in a map, returning a new map.",
+    "origin": "core",
+    "examples": [
+      "(assoc {:a 1} :b 2) ; => {:a 1 :b 2}",
+      "(assoc [0 1 2] 1 99) ; => [0 99 2]"
+    ]
+  },
+  {
+    "name": "assoc-in",
+    "signature": "assoc-in map path value",
+    "doc": "Like assoc, but walks a path creating nested maps as needed.",
+    "origin": "core",
+    "examples": [
+      "(assoc-in {:a {:b 1}} [:a :b] 2) ; => {:a {:b 2}}"
+    ]
+  },
+  {
+    "name": "async-scope",
+    "signature": "async-scope [children] body",
+    "doc": "Run body within a structured async scope that links spawned work to the scope lifetime; returns a handle with :cancel!/ :await/ :cancelled? and observability keys.\nchildren must be promise-like\nmain-body must not return promise-like; put it in children or deref it",
+    "origin": "special form",
+    "examples": [
+      "(let [{:keys [await]} (async-scope [(future (fn [] 1))] :done)] (await)) ; => :done",
+      "(let [{:keys [cancel! await]} (async-scope [] (chan-take! (async::cancel-chan)))] (cancel!) (await)) ; => nil"
+    ]
+  },
+  {
+    "name": "async::scope",
+    "signature": "async::scope [children] body",
+    "doc": "Alias of async-scope; structured concurrency block that links spawned work to the scope lifetime and returns a handle map (:cancel!/:await/:cancelled?/etc.).",
+    "origin": "special form",
+    "examples": [
+      "(let [{:keys [await]} (async::scope [] :ok)] (await)) ; => :ok"
+    ]
+  },
+  {
+    "name": "async::scope-loop",
+    "signature": "async::scope-loop bindings & body",
+    "doc": "Loop sugar for async-scope: checks (async::cancelled?) each iteration and returns nil when cancelled (body is skipped).",
+    "origin": "special form",
+    "examples": [
+      "(let [{:keys [await]} (async-scope [] (async::scope-loop [n 0] (if (< n 1) (recur (inc n)) :done)))] (await)) ; => nil"
+    ]
+  },
+  {
+    "name": "bench",
+    "signature": "bench iterations callable",
+    "doc": "Call the zero-arity callable iterations times and return the measurement map {:result v :elapsed-ms n :avg-ms n :runs iterations} (milliseconds as float).",
+    "origin": "core",
+    "examples": [
+      "(get (bench 5 (fn [] (+ 1 2))) :runs) ; => 5",
+      "(get (bench 10 (fn [] (reduce + (range 5)))) :result) ; => 10"
+    ]
+  },
+  {
+    "name": "bit-and",
+    "signature": "bit-and & ints",
+    "doc": "Bitwise AND across all integer arguments; no arguments yield -1 (all bits set).",
+    "origin": "core",
+    "examples": [
+      "(bit-and 15 7 3) ; => 3",
+      "(bit-and) ; => -1"
+    ]
+  },
+  {
+    "name": "bit-not",
+    "signature": "bit-not value",
+    "doc": "Bitwise complement of the integer.",
+    "origin": "core",
+    "examples": [
+      "(bit-not 0) ; => -1",
+      "(bit-not -1) ; => 0"
+    ]
+  },
+  {
+    "name": "bit-or",
+    "signature": "bit-or & ints",
+    "doc": "Bitwise OR across all integer arguments; zero arguments yield 0.",
+    "origin": "core",
+    "examples": [
+      "(bit-or 1 2 4) ; => 7",
+      "(bit-or) ; => 0"
+    ]
+  },
+  {
+    "name": "bit-shift-left",
+    "signature": "bit-shift-left value bits",
+    "doc": "Shift the integer value left by bits (wrapping within 64 bits).",
+    "origin": "core",
+    "examples": [
+      "(bit-shift-left 1 3) ; => 8",
+      "(bit-shift-left -2 1) ; => -4"
+    ]
+  },
+  {
+    "name": "bit-shift-right",
+    "signature": "bit-shift-right value bits",
+    "doc": "Arithmetic right shift of the integer value by bits (preserves sign).",
+    "origin": "core",
+    "examples": [
+      "(bit-shift-right 16 2) ; => 4",
+      "(bit-shift-right -8 1) ; => -4"
+    ]
+  },
+  {
+    "name": "bit-xor",
+    "signature": "bit-xor & ints",
+    "doc": "Bitwise XOR across all integer arguments; zero arguments yield 0.",
+    "origin": "core",
+    "examples": [
+      "(bit-xor 1 3) ; => 2",
+      "(bit-xor 5 5 5) ; => 5"
+    ]
+  },
+  {
+    "name": "blank?",
+    "signature": "blank? s",
+    "doc": "True when the string contains only Unicode whitespace characters.",
+    "origin": "string",
+    "examples": [
+      "(blank? \"  \n\t\") ; => true",
+      "(blank? \"now\") ; => false"
+    ]
+  },
+  {
+    "name": "bool",
+    "signature": "bool x",
+    "doc": "Parse a boolean from a bool value or a string (\"true\" or \"false\").",
+    "origin": "core",
+    "examples": [
+      "(bool \"true\") ; => true",
+      "(bool false) ; => false"
+    ]
+  },
+  {
+    "name": "bool?",
+    "signature": "bool? x",
+    "doc": "True when x is either true or false (and false for all other values).",
+    "origin": "core",
+    "examples": [
+      "(bool? true) ; => true",
+      "(bool? 0) ; => false"
+    ]
+  },
+  {
+    "name": "boolean?",
+    "signature": "boolean? x",
+    "doc": "True when x is either true or false (and false for all other values).",
+    "origin": "core",
+    "examples": [
+      "(boolean? true) ; => true",
+      "(boolean? 0) ; => false"
+    ]
+  },
+  {
+    "name": "break",
+    "signature": "break",
+    "doc": "Exit from the nearest loop/doseq.",
+    "origin": "special form",
+    "examples": [
+      "(comment (break)) ; => nil ; Exit from the nearest loop"
+    ]
+  },
+  {
+    "name": "butlast",
+    "signature": "butlast coll",
+    "doc": "Return the collection without its final element; lists/vectors retain their type and lazy seqs realize into vectors.",
+    "origin": "core",
+    "examples": [
+      "(butlast [1 2 3]) ; => [1 2]",
+      "(butlast (range 3)) ; => [0 1]"
+    ]
+  },
+  {
+    "name": "capitalize",
+    "signature": "capitalize s",
+    "doc": "Upper-case the first character of s and lower-case the remainder.",
+    "origin": "string",
+    "examples": [
+      "(capitalize \"clove\") ; => \"Clove\"",
+      "(capitalize \"ßeta\") ; => \"SSeta\""
+    ]
+  },
+  {
+    "name": "coll?",
+    "signature": "coll? value",
+    "doc": "Return true when value is a collection (list, vector, map, or set).",
+    "origin": "core",
+    "examples": [
+      "(coll? [1 2 3]) ; => true",
+      "(coll? 10) ; => false"
+    ]
+  },
+  {
+    "name": "comment",
+    "signature": "comment & body",
+    "doc": "Ignore body expressions and return nil.",
+    "origin": "special form",
+    "examples": [
+      "(comment (+ 1 2)) ; => nil"
+    ]
+  },
+  {
+    "name": "comp",
+    "signature": "comp & fns",
+    "doc": "Return a function applying fns right-to-left and passing the result forward.",
+    "origin": "core",
+    "examples": [
+      "((comp inc inc) 1) ; => 3",
+      "((comp str keyword) :ok) ; => \"ok\""
+    ]
+  },
+  {
+    "name": "compare",
+    "signature": "compare a b",
+    "doc": "Return -1, 0, or 1 depending on the ordering of comparable values.",
+    "origin": "core",
+    "examples": [
+      "(compare 1 2) ; => -1",
+      "(compare \"b\" \"a\") ; => 1"
+    ]
+  },
+  {
+    "name": "complement",
+    "signature": "complement f",
+    "doc": "Return a function that negates the boolean result of f.",
+    "origin": "core",
+    "examples": [
+      "((complement even?) 3) ; => true",
+      "((complement nil?) 0) ; => true"
+    ]
+  },
+  {
+    "name": "concat",
+    "signature": "concat & colls",
+    "doc": "Eagerly concatenate colls into a single vector.",
+    "origin": "core",
+    "examples": [
+      "(concat [1 2] (list 3 4)) ; => [1 2 3 4]",
+      "(concat [:a] [:b] [:c]) ; => [:a :b :c]"
+    ]
+  },
+  {
+    "name": "cond",
+    "signature": "cond test expr & more",
+    "doc": "Evaluate tests in order and return the expr for the first truthy test.",
+    "origin": "special form",
+    "examples": [
+      "(cond false :a true :b) ; => :b"
+    ]
+  },
+  {
+    "name": "cond->",
+    "signature": "cond-> expr & clauses",
+    "doc": "Conditionally thread expr as first arg when tests are truthy.",
+    "origin": "special form",
+    "examples": [
+      "(cond-> {:a 1} true (assoc :b 2)) ; => {:a 1 :b 2}"
+    ]
+  },
+  {
+    "name": "cond->>",
+    "signature": "cond->> expr & clauses",
+    "doc": "Conditionally thread expr as last arg when tests are truthy.",
+    "origin": "special form",
+    "examples": [
+      "(cond->> 1 true (vector)) ; => [1]"
+    ]
+  },
+  {
+    "name": "condp",
+    "signature": "condp pred test-expr & clauses",
+    "doc": "Compare test-expr with clauses using pred; returns the first matching result.",
+    "origin": "special form",
+    "examples": [
+      "(condp = 3 1 :one 2 :two 3 :three :default) ; => :three",
+      "(condp re-find \"foobarbaz\" /foo/ :foo /bar/ :bar :none) ; => :foo"
+    ]
+  },
+  {
+    "name": "conj",
+    "signature": "conj coll & values",
+    "doc": "Add values to a collection, preserving its type (lists add to front, vectors to back, sets/maps merge elements).",
+    "origin": "core",
+    "examples": [
+      "(conj [1 2] 3) ; => [1 2 3]"
+    ]
+  },
+  {
+    "name": "cons",
+    "signature": "cons value coll",
+    "doc": "Prepend value to coll, yielding a sequence with value first.",
+    "origin": "core",
+    "examples": [
+      "(cons 0 '(1 2)) ; => (0 1 2)"
+    ]
+  },
+  {
+    "name": "constantly",
+    "signature": "constantly value",
+    "doc": "Return a function that always yields value, ignoring its arguments.",
+    "origin": "core",
+    "examples": [
+      "((constantly 42) :ignored) ; => 42",
+      "((constantly :ok) 1 2 3) ; => :ok"
+    ]
+  },
+  {
+    "name": "contains?",
+    "signature": "contains? coll key-or-index",
+    "doc": "True when a map/set contains the key; for vector/list it checks index existence. To test membership by value, use includes?.",
+    "origin": "core",
+    "examples": [
+      "(contains? {:a 1 :b 2} :a) ; => true",
+      "(contains? [10 20] 1) ; => true"
+    ]
+  },
+  {
+    "name": "count",
+    "signature": "count coll",
+    "doc": "Return the number of items in coll (nil counts as 0); works on strings and other countable types.",
+    "origin": "core",
+    "examples": [
+      "(count [1 2 3]) ; => 3"
+    ]
+  },
+  {
+    "name": "create-ns",
+    "signature": "create-ns name",
+    "doc": "Create or return the namespace with the given name.",
+    "origin": "special form",
+    "examples": [
+      "(comment (create-ns 'app::scratch)) ; => nil ; Create or return a namespace"
+    ]
+  },
+  {
+    "name": "current-ns",
+    "signature": "current-ns",
+    "doc": "Return the current namespace symbol.",
+    "origin": "special form",
+    "examples": [
+      "(current-ns) ; => user"
+    ]
+  },
+  {
+    "name": "debug",
+    "signature": "debug",
+    "doc": "Enter a debug REPL session.",
+    "origin": "special form",
+    "examples": [
+      "(comment (debug)) ; => nil ; Enter a debug REPL session"
+    ]
+  },
+  {
+    "name": "dec",
+    "signature": "dec n",
+    "doc": "Decrease the number by 1, preserving int/float shape.",
+    "origin": "core",
+    "examples": [
+      "(dec 5) ; => 4",
+      "(dec 2.5) ; => 1.5"
+    ]
+  },
+  {
+    "name": "dedupe",
+    "signature": "dedupe coll",
+    "doc": "Remove only consecutive duplicate items from coll.",
+    "origin": "core",
+    "examples": [
+      "(dedupe [1 1 2 2 1]) ; => [1 2 1]",
+      "(dedupe [:a :a :b :b :c]) ; => [:a :b :c]"
+    ]
+  },
+  {
+    "name": "def",
+    "signature": "def name doc? attr-map? value",
+    "doc": "Define a symbol in current namespace. Optional docstring and attr-map may appear after the name in any order.",
+    "origin": "special form",
+    "examples": [
+      "(do (def x 1) x) ; => 1"
+    ]
+  },
+  {
+    "name": "defenum",
+    "signature": "defenum Name doc? attr-map? variants",
+    "doc": "Register a sum/enum type in the current namespace; each member must be a product type in the same namespace or a spread of another enum (e.g. *OtherEnum). Missing member types are auto-created as empty products (constructors/predicates are emitted). Optional docstring and attr-map may appear after the name in any order.",
+    "origin": "special form",
+    "examples": [
+      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Red :user::Green]",
+      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Dog",
+      "(defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Dog :user::Cat :user::Salmon]"
+    ]
+  },
+  {
+    "name": "defn",
+    "signature": "defn name doc? attr-map? [params] body",
+    "doc": "Define a named function. Optional docstring and attr-map may appear after the name in any order.",
+    "origin": "special form",
+    "examples": [
+      "(do (defn f [x] (* x 2)) (f 3)) ; => 6"
+    ]
+  },
+  {
+    "name": "deftype",
+    "signature": "deftype Name doc? attr-map? {field type & more}",
+    "doc": "Define a record-like type with typed fields; emits a constructor function with the same name. Optional docstring and attr-map may appear after the name in any order.",
+    "origin": "special form",
+    "examples": [
+      "(deftype Point {:x Int :y Int})",
+      "(Point {:x 1 :y 2}) ; => {:type user::Point :x 1 :y 2}"
+    ]
+  },
+  {
+    "name": "delay",
+    "signature": "delay & body",
+    "doc": "Return a delay of body that is realized on first deref and cached thereafter.",
+    "origin": "special form",
+    "examples": [
+      "(def d (delay (+ 1 2))) (deref d) ; => 3",
+      "(realized? (delay 1)) ; => false"
+    ]
+  },
+  {
+    "name": "dissoc",
+    "signature": "dissoc map & keys",
+    "doc": "Remove the given keys from a map, returning a new map.",
+    "origin": "core",
+    "examples": [
+      "(dissoc {:a 1 :b 2} :a) ; => {:b 2}"
+    ]
+  },
+  {
+    "name": "distinct",
+    "signature": "distinct coll",
+    "doc": "Return a vector of the distinct items in coll, preserving the first occurrence of each.",
+    "origin": "core",
+    "examples": [
+      "(distinct [1 2 1 2]) ; => [1 2]",
+      "(distinct [:a :a :b nil :b]) ; => [:a :b nil]"
+    ]
+  },
+  {
+    "name": "do",
+    "signature": "do expr*",
+    "doc": "Evaluate expressions sequentially.",
+    "origin": "special form",
+    "examples": [
+      "(do 1 2 3) ; => 3"
+    ]
+  },
+  {
+    "name": "dorun",
+    "signature": "dorun coll\ndorun n coll",
+    "doc": "Realize items of coll (optionally first n) for side effects, returning nil.",
+    "origin": "core",
+    "examples": [
+      "(dorun (map println [1 2])) ; => nil ; prints lines",
+      "(dorun 1 (map println [1 2])) ; => nil ; realizes one item"
+    ]
+  },
+  {
+    "name": "doseq",
+    "signature": "doseq [bindings] body",
+    "doc": "Iterate for side effects across sequences of bindings; returns nil.",
+    "origin": "special form",
+    "examples": [
+      "(doseq [x [1 2]] (println \"x =\" x)) ; => nil ; prints lines for each x",
+      "(doseq [x [1 2] y [:a :b]] (println x y)) ; => nil ; emits 4 pairs for side effects"
+    ]
+  },
+  {
+    "name": "dotimes",
+    "signature": "dotimes [n binding] body",
+    "doc": "Execute body n times with binding from 0 to n-1; returns nil.",
+    "origin": "special form",
+    "examples": [
+      "(dotimes [n 0] n) ; => nil"
+    ]
+  },
+  {
+    "name": "doto",
+    "signature": "doto target & forms",
+    "doc": "Evaluate target once, apply each form with target as the first argument, and return target.",
+    "origin": "special form",
+    "examples": [
+      "(let [a (atom 0)] (doto a (swap! inc) (swap! inc)) (deref a)) ; => 2"
+    ]
+  },
+  {
+    "name": "drop",
+    "signature": "drop n coll",
+    "doc": "Skip the first n items of coll, returning the remainder. When coll is a seq, the remainder stays lazy to avoid realizing unbounded sequences; use vec if you need a concrete collection.",
+    "origin": "core",
+    "examples": [
+      "(vec (drop 2 [1 2 3 4])) ; => [3 4]"
+    ]
+  },
+  {
+    "name": "drop-last",
+    "signature": "drop-last coll\ndrop-last n coll",
+    "doc": "Return a vector without the last n items (defaults to 1); seq inputs are fully realized.",
+    "origin": "core",
+    "examples": [
+      "(drop-last [1 2 3]) ; => [1 2]",
+      "(drop-last 2 [1 2 3 4]) ; => [1 2]"
+    ]
+  },
+  {
+    "name": "drop-while",
+    "signature": "drop-while pred coll",
+    "doc": "Skip items while pred returns truthy, then return the remaining sequence. When coll is a seq, the remainder stays lazy to avoid realizing unbounded sequences; use vec if you need a concrete collection. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(vec (drop-while neg? [-2 -1 0 1])) ; => [0 1]",
+      "(drop-while odd? [1 3 4 5]) ; => [4 5]",
+      "(vec (drop-while [x [-2 -1 0 1]] (neg? x))) ; => [0 1]"
+    ]
+  },
+  {
+    "name": "each",
+    "signature": "each [bindings] body",
+    "doc": "Iterate for side effects across sequences of bindings; returns the first collection value.",
+    "origin": "special form",
+    "examples": [
+      "(each [x [1 2]] (println \"x =\" x)) ; => [1 2] ; prints lines for each x",
+      "(each [x [1 2] y [:a :b]] (println x y)) ; => [1 2] ; emits 4 pairs for side effects"
+    ]
+  },
+  {
+    "name": "empty",
+    "signature": "empty coll",
+    "doc": "Return an empty collection of the same logical type (string -> empty string, seq -> empty seq, nil -> nil).",
+    "origin": "core",
+    "examples": [
+      "(empty [1 2 3]) ; => []",
+      "(empty {:a 1}) ; => {}"
+    ]
+  },
+  {
+    "name": "empty?",
+    "signature": "empty? coll",
+    "doc": "Return true when the collection has no elements; nil counts as empty.",
+    "origin": "core",
+    "examples": [
+      "(empty? []) ; => true"
+    ]
+  },
+  {
+    "name": "ends-with?",
+    "signature": "ends-with? [s suffix]",
+    "doc": "True when the string ends with suffix.",
+    "origin": "string",
+    "examples": [
+      "(ends-with? \"clove\" \"ve\") ; => true",
+      "(ends-with? \"clove\" \"cl\") ; => false"
+    ]
+  },
+  {
+    "name": "err",
+    "signature": "err form*",
+    "doc": "Try clause for handling errors; only valid at the end of try or any body. The error value is available as ?.",
+    "origin": "special form",
+    "examples": [
+      "(try (throw 1) (err ?)) ; => 1",
+      "(do (throw 2) (err ?)) ; => 2",
+      "(do (defn f [] (throw 3) (err ?)) (f)) ; => 3"
+    ]
+  },
+  {
+    "name": "eval",
+    "signature": "eval form",
+    "doc": "Evaluate the given form as code in the current environment.",
+    "origin": "special form",
+    "examples": [
+      "(eval '(+ 1 2)) ; => 3"
+    ]
+  },
+  {
+    "name": "even?",
+    "signature": "even? n",
+    "doc": "Return true when the numeric argument is evenly divisible by two.",
+    "origin": "core",
+    "examples": [
+      "(even? 4) ; => true",
+      "(even? 3) ; => false"
+    ]
+  },
+  {
+    "name": "every?",
+    "signature": "every? pred coll",
+    "doc": "True when pred returns truthy for all items in coll. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(every? even? [2 4]) ; => true",
+      "(every? [x [2 4]] (even? x)) ; => true"
+    ]
+  },
+  {
+    "name": "expect",
+    "signature": "expect T value",
+    "doc": "Assert that value matches type T; returns value or raises a type error.",
+    "origin": "core",
+    "examples": [
+      "(expect Int 1) ; => 1"
+    ]
+  },
+  {
+    "name": "false?",
+    "signature": "false? x",
+    "doc": "True only for the literal false.",
+    "origin": "core",
+    "examples": [
+      "(false? false) ; => true"
+    ]
+  },
+  {
+    "name": "filter",
+    "signature": "filter pred coll",
+    "doc": "Return items from coll where pred yields truthy; stays lazy when coll is a seq. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(filter odd? [1 2 3 4]) ; => [1 3]",
+      "(filter #{:a :c} [:b :a :d :c]) ; => [:a :c]",
+      "(vec (filter [x [1 2 3 4]] (odd? x))) ; => [1 3]"
+    ]
+  },
+  {
+    "name": "fin",
+    "signature": "fin form*",
+    "doc": "Try clause for cleanup; runs once when leaving try or an implicit body try. Only valid at the end of try or any body.",
+    "origin": "special form",
+    "examples": [
+      "(do (def x (atom 0)) (try 1 (fin (atom-set! x 9))) @x) ; => 9",
+      "(do (def x (atom 0)) (do 1 (fin (atom-set! x 7))) @x) ; => 7"
+    ]
+  },
+  {
+    "name": "first",
+    "signature": "first coll",
+    "doc": "Return the first item of coll (nil if empty).",
+    "origin": "core",
+    "examples": [
+      "(first [1 2]) ; => 1"
+    ]
+  },
+  {
+    "name": "flatten",
+    "signature": "flatten coll\nflatten coll depth",
+    "doc": "Flatten nested sequential structures into a vector. If depth is provided, flatten at most depth levels.",
+    "origin": "core",
+    "examples": [
+      "(flatten [1 [2 [3 4]]]) ; => [1 2 3 4]",
+      "(flatten [1 [2 [3 4]]] 1) ; => [1 2 [3 4]]",
+      "(flatten [1 [2 [3 4]]] 2) ; => [1 2 3 4]",
+      "(flatten [[:a] nil [:b :c]]) ; => [:a :b :c]"
+    ]
+  },
+  {
+    "name": "float",
+    "signature": "float n",
+    "doc": "Convert number to floating point.",
+    "origin": "core",
+    "examples": [
+      "(float 2) ; => 2.0"
+    ]
+  },
+  {
+    "name": "float?",
+    "signature": "float? v",
+    "doc": "True when v is a float.",
+    "origin": "core",
+    "examples": [
+      "(float? 1.0) ; => true",
+      "(float? 1) ; => false"
+    ]
+  },
+  {
+    "name": "fn",
+    "signature": "fn [params] body",
+    "doc": "Create anonymous function.",
+    "origin": "special form",
+    "examples": [
+      "(fn [x] (* x x)) ; => #<lambda>"
+    ]
+  },
+  {
+    "name": "fn?",
+    "signature": "fn? x",
+    "doc": "True when the value is a function or lambda.",
+    "origin": "core",
+    "examples": [
+      "(fn? (fn [] nil)) ; => true"
+    ]
+  },
+  {
+    "name": "for",
+    "signature": "for [bindings] body",
+    "doc": "List comprehension over the binding clauses, returning a sequence of body results.",
+    "origin": "special form",
+    "examples": [
+      "(for [x [1 2 3]] (* x x)) ; => [1 4 9]",
+      "(vec (for [x [1 2] y [:a :b]] [x y])) ; => [[1 :a] [1 :b] [2 :a] [2 :b]]"
+    ]
+  },
+  {
+    "name": "format",
+    "signature": "format template & args",
+    "doc": "C-style formatting where {} uses pr-str and {:?} uses debug output.",
+    "origin": "core",
+    "examples": [
+      "(format \"Hello {}\" :world) ; => \"Hello :world\"",
+      "(format \"{:?}\" {:a 1}) ; => \"{:a 1}\""
+    ]
+  },
+  {
+    "name": "frequencies",
+    "signature": "frequencies coll",
+    "doc": "Return a map from item to occurrence count.",
+    "origin": "core",
+    "examples": [
+      "(frequencies [:a :b :a]) ; => {:a 2 :b 1}",
+      "(frequencies [1 1 2 3 3 3]) ; => {1 2 2 1 3 3}"
+    ]
+  },
+  {
+    "name": "gensym",
+    "signature": "gensym\ngensym prefix",
+    "doc": "Return a new unique symbol, optionally prefixed.",
+    "origin": "core",
+    "examples": [
+      "(symbol? (gensym)) ; => true",
+      "(string/starts-with? (str (gensym \"tmp\")) \"tmp\") ; => true"
+    ]
+  },
+  {
+    "name": "get",
+    "signature": "get map key & [default]",
+    "doc": "Lookup key in map, returning default if not present.",
+    "origin": "core",
+    "examples": [
+      "(get {:a 1} :a) ; => 1"
+    ]
+  },
+  {
+    "name": "get-in",
+    "signature": "get-in target path & [default]",
+    "doc": "Traverse nested associative structures by path; returns default or nil when missing.",
+    "origin": "core",
+    "examples": [
+      "(get-in {:a {:b 2}} [:a :b]) ; => 2"
+    ]
+  },
+  {
+    "name": "go-loop",
+    "signature": "go-loop [bindings] body",
+    "doc": "Launch an asynchronous loop that supports channel operations.",
+    "origin": "special form",
+    "examples": [
+      "(comment (go-loop [] (println \"tick\"))) ; => nil ; Launch an async loop"
+    ]
+  },
+  {
+    "name": "group-by",
+    "signature": "group-by f coll",
+    "doc": "Group coll into a map keyed by (f item). Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(group-by count [\"a\" \"bb\" \"c\"]) ; => {1 [\"a\" \"c\"] 2 [\"bb\"]}",
+      "(group-by odd? [1 2 3 4]) ; => {true [1 3] false [2 4]}",
+      "(group-by [x [1 2 3 4]] (odd? x)) ; => {true [1 3] false [2 4]}"
+    ]
+  },
+  {
+    "name": "hash-map",
+    "signature": "hash-map & kvs",
+    "doc": "Create a map from the given key/value pairs (later pairs overwrite earlier).",
+    "origin": "core",
+    "examples": [
+      "(hash-map :a 1 :b 2) ; => {:a 1 :b 2}"
+    ]
+  },
+  {
+    "name": "identity",
+    "signature": "identity x",
+    "doc": "Return x without modification.",
+    "origin": "core",
+    "examples": [
+      "(identity [1 2]) ; => [1 2]",
+      "(map identity [nil false 3]) ; => [nil false 3]"
+    ]
+  },
+  {
+    "name": "if",
+    "signature": "if test then else?",
+    "doc": "Conditional branching; evaluate then when test is truthy, else otherwise.",
+    "origin": "special form",
+    "examples": [
+      "(if true :ok :ng) ; => :ok",
+      "(if false :ok :ng) ; => :ng"
+    ]
+  },
+  {
+    "name": "if-let",
+    "signature": "if-let [binding test] then else?",
+    "doc": "Evaluate test; if truthy, bind and evaluate then, otherwise evaluate else.",
+    "origin": "special form",
+    "examples": [
+      "(if-let [x 1] x 0) ; => 1"
+    ]
+  },
+  {
+    "name": "if-not",
+    "signature": "if-not test then else?",
+    "doc": "Evaluate then when test is falsy; otherwise evaluate else (default nil).",
+    "origin": "special form",
+    "examples": [
+      "(if-not false :ok :ng) ; => :ok",
+      "(if-not 1 :zero :nonzero) ; => :nonzero"
+    ]
+  },
+  {
+    "name": "if-some",
+    "signature": "if-some [binding test] then else?",
+    "doc": "Like if-let but treats only nil as falsey; false passes through.",
+    "origin": "special form",
+    "examples": [
+      "(if-some [x 0] x 9) ; => 0"
+    ]
+  },
+  {
+    "name": "inc",
+    "signature": "inc n",
+    "doc": "Increase the number by 1, preserving int/float shape.",
+    "origin": "core",
+    "examples": [
+      "(inc 4) ; => 5",
+      "(inc 2.5) ; => 3.5"
+    ]
+  },
+  {
+    "name": "includes?",
+    "signature": "includes? coll x",
+    "doc": "True when coll contains x. For strings, checks substring; for maps/sets, checks keys; for vectors/lists/seqs, checks values. Unlike contains?, which checks keys or indices.",
+    "origin": "core",
+    "examples": [
+      "(includes? \"clove\" \"lo\") ; => true",
+      "(includes? [:a :b :c] :b) ; => true",
+      "(includes? [:a :b :c] :z) ; => false",
+      "(includes? #{:a :b} :a) ; => true",
+      "(includes? {:a 1 :b 2} :a) ; => true",
+      "(includes? nil :a) ; => false"
+    ]
+  },
+  {
+    "name": "index-of",
+    "signature": "index-of s substr [start]",
+    "doc": "Return the index of the first occurrence of substr in s (or nil). Optional start skips that many characters.",
+    "origin": "string",
+    "examples": [
+      "(index-of \"banana\" \"na\") ; => 2",
+      "(index-of \"banana\" \"na\" 3) ; => 4"
+    ]
+  },
+  {
+    "name": "infer-type",
+    "signature": "infer-type form",
+    "doc": "Return the inferred static type for form without evaluating it.",
+    "origin": "special form",
+    "examples": [
+      "(infer-type [1 2]) ; => \"[Int]\"",
+      "(infer-type ([1 2]: [Int Int])) ; => \"[Int Int]\""
+    ]
+  },
+  {
+    "name": "instance?",
+    "signature": "instance? type value",
+    "doc": "Return true when value conforms to the given type name (symbol/keyword or string), validating required fields for deftype values.",
+    "origin": "core",
+    "examples": [
+      "(instance? :core::Int 1) ; => true",
+      "(instance? \"core::Str\" :name) ; => false"
+    ]
+  },
+  {
+    "name": "int",
+    "signature": "int n",
+    "doc": "Convert number to integer (truncating toward zero).",
+    "origin": "core",
+    "examples": [
+      "(int 1.9) ; => 1",
+      "(int -1.2) ; => -1"
+    ]
+  },
+  {
+    "name": "int?",
+    "signature": "int? x",
+    "doc": "True when x is an Int value.",
+    "origin": "core",
+    "examples": [
+      "(int? 1) ; => true",
+      "(int? 1.0) ; => false"
+    ]
+  },
+  {
+    "name": "integer?",
+    "signature": "integer? x",
+    "doc": "True for integral numbers (ints or floats with zero fractional part).",
+    "origin": "core",
+    "examples": [
+      "(integer? 2) ; => true"
+    ]
+  },
+  {
+    "name": "interleave",
+    "signature": "interleave [& colls]",
+    "doc": "Interleave items from each collection element-wise until the shortest runs out.",
+    "origin": "core",
+    "examples": [
+      "(interleave [1 2] [:a :b]) ; => [1 :a 2 :b]",
+      "(interleave (list \"x\" \"y\") [10 20]) ; => [\"x\" 10 \"y\" 20]"
+    ]
+  },
+  {
+    "name": "interpose",
+    "signature": "interpose sep coll",
+    "doc": "Insert sep between every pair of items in coll, returning a vector.",
+    "origin": "core",
+    "examples": [
+      "(interpose :/ [:a :b :c]) ; => [:a :/ :b :/ :c]",
+      "(interpose 0 [1 2]) ; => [1 0 2]"
+    ]
+  },
+  {
+    "name": "into",
+    "signature": "into to-coll from-coll",
+    "doc": "Conjoin each value from from-coll onto to-coll, preserving the target type.",
+    "origin": "core",
+    "examples": [
+      "(into [1 2] (list 3 4)) ; => [1 2 3 4]",
+      "(into {} [[:a 1] [:b 2]]) ; => {:a 1 :b 2}"
+    ]
+  },
+  {
+    "name": "iterate",
+    "signature": "iterate f x",
+    "doc": "Return a lazy seq of x, (f x), (f (f x)), ...",
+    "origin": "core",
+    "examples": [
+      "(vec (take 4 (iterate inc 0))) ; => [0 1 2 3]",
+      "(take 3 (iterate #(+ % 2) 1)) ; => [1 3 5]"
+    ]
+  },
+  {
+    "name": "join",
+    "signature": "join coll\njoin coll sep",
+    "doc": "Join a vector of strings into a single string, optionally inserting separator.",
+    "origin": "string",
+    "examples": [
+      "(join [\"a\" \"b\" \"c\"]) ; => \"abc\"",
+      "(join [\"a\" \"b\"] \", \") ; => \"a, b\""
+    ]
+  },
+  {
+    "name": "json::read-file",
+    "signature": "json::read-file path",
+    "doc": "Read a file from disk and parse it as JSON.",
+    "origin": "json",
+    "examples": [
+      "(json::read-file \"data::fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
+      "(map? (json::read-file \"data::fixtures/json/example.json\")) ; => true"
+    ]
+  },
+  {
+    "name": "json::read-string",
+    "signature": "json::read-string text",
+    "doc": "Parse JSON text and return the corresponding value.",
+    "origin": "json",
+    "examples": [
+      "(json::read-string \"{\\\"a\\\": 1}\") ; => {\"a\" 1}"
+    ]
+  },
+  {
+    "name": "json::write-file",
+    "signature": "json::write-file path value",
+    "doc": "Write value to the file at path as JSON text (returns path).",
+    "origin": "json",
+    "examples": [
+      "(json::write-file \"tmp/out.json\" {:ok true}) ; => \"tmp/out.json\"",
+      "(json::write-file \"tmp/list.json\" [1 2 3]) ; => \"tmp/list.json\""
+    ]
+  },
+  {
+    "name": "json::write-string",
+    "signature": "json::write-string value",
+    "doc": "Encode value as JSON text.",
+    "origin": "json",
+    "examples": [
+      "(json::read-string (json::write-string {\"a\" 1})) ; => {\"a\" 1}"
+    ]
+  },
+  {
+    "name": "juxt",
+    "signature": "juxt & fns",
+    "doc": "Return a function that applies each fn to the same args and collects the results.",
+    "origin": "core",
+    "examples": [
+      "((juxt inc dec str) 10) ; => [11 9 \"10\"]",
+      "((juxt first count) [1 2 3]) ; => [1 3]"
+    ]
+  },
+  {
+    "name": "keep",
+    "signature": "keep pred coll",
+    "doc": "Return a lazy seq of non-nil results from applying pred to each item. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(keep #(when (even? %) (/ % 2)) [1 2 3 4]) ; => [1 2]",
+      "(vec (keep first [[1 2] [nil 3] [4 5]])) ; => [1 4]",
+      "(vec (keep [x [1 2 3 4]] (if (even? x) (/ x 2) nil))) ; => [1 2]"
+    ]
+  },
+  {
+    "name": "keep-indexed",
+    "signature": "keep-indexed pred coll",
+    "doc": "Like keep but pred receives index and item.",
+    "origin": "core",
+    "examples": [
+      "(keep-indexed (fn [i x] (when (even? i) x)) [:a :b :c]) ; => [:a :c]",
+      "(vec (keep-indexed (fn [i x] (when (= i x) x)) [0 1 0 3])) ; => [0 1 3]"
+    ]
+  },
+  {
+    "name": "keys",
+    "signature": "keys [m]",
+    "doc": "Return the keys of a map as a sequence.",
+    "origin": "core",
+    "examples": [
+      "(vec (sort (keys {:a 1 :b 2}))) ; => [:a :b]"
+    ]
+  },
+  {
+    "name": "keyword",
+    "signature": "keyword x\nkeyword ns name",
+    "doc": "Create a keyword from string/symbol input, or namespace/name pair.",
+    "origin": "core",
+    "examples": [
+      "(keyword \"user\") ; => :user",
+      "(keyword \"ns\" \"name\") ; => :ns::name"
+    ]
+  },
+  {
+    "name": "keyword?",
+    "signature": "keyword? x",
+    "doc": "True when the value is a keyword.",
+    "origin": "core",
+    "examples": [
+      "(keyword? :a) ; => true"
+    ]
+  },
+  {
+    "name": "last",
+    "signature": "last coll",
+    "doc": "Return the last item of coll.",
+    "origin": "core",
+    "examples": [
+      "(last [1 2 3]) ; => 3"
+    ]
+  },
+  {
+    "name": "last-index-of",
+    "signature": "last-index-of s substr [end]",
+    "doc": "Return the index of the last occurrence of substr in s (or nil). Optional end limits the search to the first end characters.",
+    "origin": "string",
+    "examples": [
+      "(last-index-of \"banana\" \"na\") ; => 4",
+      "(last-index-of \"banana\" \"z\") ; => nil"
+    ]
+  },
+  {
+    "name": "let",
+    "signature": "let [bindings] body",
+    "doc": "Lexical bindings.",
+    "origin": "special form",
+    "examples": [
+      "(let [x 1 y 2] (+ x y)) ; => 3"
+    ]
+  },
+  {
+    "name": "lines",
+    "signature": "lines s",
+    "doc": "Split the string into lines, keeping line endings.",
+    "origin": "string",
+    "examples": [
+      "(lines \"a\\nb\\n\") ; => [\"a\\n\" \"b\\n\"]",
+      "(lines \"a\\r\\nb\") ; => [\"a\\r\\n\" \"b\"]"
+    ]
+  },
+  {
+    "name": "list",
+    "signature": "list & values",
+    "doc": "Create a list (linked) containing the supplied values.",
+    "origin": "core",
+    "examples": [
+      "(list 1 2 3) ; => (1 2 3)"
+    ]
+  },
+  {
+    "name": "load-file",
+    "signature": "load-file path",
+    "doc": "Read and evaluate the forms in the file at path.",
+    "origin": "special form",
+    "examples": [
+      "(comment (load-file \"examples/hello.clv\")) ; => nil ; Load and eval a file at runtime"
+    ]
+  },
+  {
+    "name": "load-string",
+    "signature": "load-string source",
+    "doc": "Read and evaluate all forms in the source string; returns the last result.",
+    "origin": "special form",
+    "examples": [
+      "(load-string \"(+ 1 2)\") ; => 3",
+      "(load-string \"(+ 1 2) (+ 3 4)\") ; => 7"
+    ]
+  },
+  {
+    "name": "lookup",
+    "signature": "lookup query & selectors",
+    "doc": "Alias of nav; unified search across namespaces, vars, and docs.",
+    "origin": "special form",
+    "examples": [
+      "(lookup \"disj\") ; => {:kind :nav ...}",
+      "(lookup /take|drop/ :var :doc) ; => {:kind :nav ...}"
+    ]
+  },
+  {
+    "name": "loop",
+    "signature": "loop [bindings] body",
+    "doc": "Create a recursion point with initial bindings for recur.",
+    "origin": "special form",
+    "examples": [
+      "(loop [n 3 acc 0] (if (zero? n) acc (recur (dec n) (+ acc n)))) ; => 6"
+    ]
+  },
+  {
+    "name": "lower-case",
+    "signature": "lower-case [s]",
+    "doc": "Return the lower-case form of the string.",
+    "origin": "string",
+    "examples": [
+      "(lower-case \"CLOVE\") ; => \"clove\"",
+      "(lower-case \"MiXeD\") ; => \"mixed\""
+    ]
+  },
+  {
+    "name": "map",
+    "signature": "map f coll",
+    "doc": "Apply f across items from each collection in lockstep; stops at the shortest and is lazy when any input is a seq. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(map inc [1 2 3]) ; => [2 3 4]",
+      "(map + [1 2 3] [10 20 30]) ; => [11 22 33]",
+      "(map #0 [[1 2] [3 4]]) ; => [1 3]",
+      "(vec (map [x [1 2 3]] (+ x 1))) ; => [2 3 4]"
+    ]
+  },
+  {
+    "name": "map-indexed",
+    "signature": "map-indexed f coll",
+    "doc": "Map across the collection, passing the current zero-based index as the first argument; returns a lazy seq when possible.",
+    "origin": "core",
+    "examples": [
+      "(vec (map-indexed (fn [i v] [i v]) [:a :b])) ; => [[0 :a] [1 :b]]",
+      "(first (map-indexed (fn [i v] (+ i v)) (range 1 4))) ; => 1"
+    ]
+  },
+  {
+    "name": "map?",
+    "signature": "map? x",
+    "doc": "True when the value is a map.",
+    "origin": "core",
+    "examples": [
+      "(map? {:a 1}) ; => true"
+    ]
+  },
+  {
+    "name": "mapcat",
+    "signature": "mapcat f coll & colls",
+    "doc": "Apply f across the provided colls and concat each intermediate result.",
+    "origin": "core",
+    "examples": [
+      "(mapcat #(vector % %) [1 2]) ; => [1 1 2 2]",
+      "(mapcat (fn [i ch] [i ch]) [1 2] [:a :b]) ; => [1 :a 2 :b]"
+    ]
+  },
+  {
+    "name": "match",
+    "signature": "match value & clauses",
+    "doc": "Pattern match value against clauses, returning the first matching result. Clauses are pairs of pattern and result expressions; _ is the catch-all pattern. Patterns support OR with '|' or ','.",
+    "origin": "special form",
+    "examples": [
+      "(do (deftype KeyEvent {:key Str}) (deftype TickEvent {:time Int}) (match (KeyEvent {:key \"a\"}) (KeyEvent {:key,}) key (TickEvent {:time,}) time _ :other)) ; => \"a\"",
+      "(match 1 0 :zero 1 :one _ :other) ; => :one",
+      "(match 2 1,2,3 :hit _ :miss) ; => :hit",
+      "(match 2 1 | 2 | 3 :hit _ :miss) ; => :hit",
+      "(do (deftype KeyEvent {:key Str}) (match (KeyEvent {:key \"x\"}) (KeyEvent {:key k}) :when (= k \"x\") k _ :miss)) ; => \"x\""
+    ]
+  },
+  {
+    "name": "max",
+    "signature": "max x & more",
+    "doc": "Return the largest of the numeric arguments (at least one argument required).",
+    "origin": "core",
+    "examples": [
+      "(max 3 10 4) ; => 10",
+      "(max -2 -7) ; => -2"
+    ]
+  },
+  {
+    "name": "merge",
+    "signature": "merge & maps",
+    "doc": "Combine maps left-to-right; later maps override earlier keys.",
+    "origin": "core",
+    "examples": [
+      "(merge {:a 1} {:b 2}) ; => {:a 1 :b 2}"
+    ]
+  },
+  {
+    "name": "merge-with",
+    "signature": "merge-with f & maps",
+    "doc": "Merge maps left-to-right, combining duplicate keys with f.",
+    "origin": "core",
+    "examples": [
+      "(merge-with + {:a 1 :b 2} {:a 3 :c 4}) ; => {:a 4 :b 2 :c 4}",
+      "(merge-with into {:tags #{:a}} {:tags #{:b :c}}) ; => {:tags #{:a :b :c}}"
+    ]
+  },
+  {
+    "name": "min",
+    "signature": "min x & more",
+    "doc": "Return the smallest of the numeric arguments (at least one argument required).",
+    "origin": "core",
+    "examples": [
+      "(min 3 10 4) ; => 3",
+      "(min -2 -7) ; => -7"
+    ]
+  },
+  {
+    "name": "mod",
+    "signature": "mod num div",
+    "doc": "Euclidean remainder of num divided by div (divisor zero raises).",
+    "origin": "core",
+    "examples": [
+      "(mod 5 3) ; => 2",
+      "(mod -3 2) ; => 1"
+    ]
+  },
+  {
+    "name": "name",
+    "signature": "name x",
+    "doc": "Return the name part of a keyword/symbol, or the string itself.",
+    "origin": "core",
+    "examples": [
+      "(name :foo/bar) ; => \"bar\"",
+      "(name \"baz\") ; => \"baz\""
+    ]
+  },
+  {
+    "name": "namespace",
+    "signature": "namespace x",
+    "doc": "Return the namespace part of a keyword or symbol, or nil if absent.",
+    "origin": "core",
+    "examples": [
+      "(namespace :foo/bar) ; => \"foo\"",
+      "(namespace :bar) ; => nil"
+    ]
+  },
+  {
+    "name": "nav",
+    "signature": "nav query & selectors",
+    "doc": "Unified search across namespaces, vars, and docs with a single API.",
+    "origin": "special form",
+    "examples": [
+      "(nav 'disj) ; => {:kind :nav ...}",
+      "(nav 'disj :var) ; => {:kind :nav ...}",
+      "(nav /take|drop/ :var :doc) ; => {:kind :nav ...}"
+    ]
+  },
+  {
+    "name": "neg?",
+    "signature": "neg? n",
+    "doc": "Return true when the number is less than zero.",
+    "origin": "core",
+    "examples": [
+      "(neg? -1) ; => true",
+      "(neg? 2) ; => false"
+    ]
+  },
+  {
+    "name": "next",
+    "signature": "next coll",
+    "doc": "Return the tail of coll as a seq, or nil when there are zero/one items.",
+    "origin": "core",
+    "examples": [
+      "(next [1 2 3]) ; => (2 3)"
+    ]
+  },
+  {
+    "name": "nil?",
+    "signature": "nil? x",
+    "doc": "True only when the value is nil.",
+    "origin": "core",
+    "examples": [
+      "(nil? nil) ; => true"
+    ]
+  },
+  {
+    "name": "not",
+    "signature": "not x",
+    "doc": "Return true if x is falsy, false otherwise.",
+    "origin": "core",
+    "examples": [
+      "(not true) ; => false"
+    ]
+  },
+  {
+    "name": "not-any?",
+    "signature": "not-any? pred coll",
+    "doc": "Return true when pred returns falsey for every item. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(not-any? pos? [-1 -2]) ; => true",
+      "(not-any? odd? [2 4 5]) ; => false",
+      "(not-any? [x [-1 -2]] (pos? x)) ; => true"
+    ]
+  },
+  {
+    "name": "not-empty",
+    "signature": "not-empty coll",
+    "doc": "Return coll when it contains items; return nil when empty.",
+    "origin": "core",
+    "examples": [
+      "(not-empty [1]) ; => [1]",
+      "(not-empty []) ; => nil"
+    ]
+  },
+  {
+    "name": "not-every?",
+    "signature": "not-every? pred coll",
+    "doc": "Return true when some element of coll fails the predicate. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(not-every? even? [2 4 5]) ; => true",
+      "(not-every? odd? [1 3]) ; => false",
+      "(not-every? [x [-1 0 1]] (neg? x)) ; => true"
+    ]
+  },
+  {
+    "name": "not=",
+    "signature": "not= x y",
+    "doc": "Return true when any of the arguments differ.",
+    "origin": "core",
+    "examples": [
+      "(not= 1 2) ; => true"
+    ]
+  },
+  {
+    "name": "ns",
+    "signature": "ns name doc? attr-map? & opts",
+    "doc": "Declare or switch namespace. Optional docstring and attr-map may appear after the name in any order.",
+    "origin": "special form",
+    "examples": [
+      "(ns demo.core) ; => demo.core",
+      "(ns tools.math) ; => tools.math"
+    ]
+  },
+  {
+    "name": "ns-map",
+    "signature": "ns-map [name]",
+    "doc": "Return a map of symbols defined in the namespace.",
+    "origin": "special form",
+    "examples": [
+      "(comment (ns-map 'app::core)) ; => nil ; Return a map of symbols in a namespace"
+    ]
+  },
+  {
+    "name": "nth",
+    "signature": "nth coll index [default]",
+    "doc": "Return the element at the zero-based index, or default (nil when omitted) when out of range. Index may be a number or an index collection (vector/list), in which case a vector of results is returned.",
+    "origin": "core",
+    "examples": [
+      "(nth [10 20 30] 1) ; => 20",
+      "(nth [0] 5 :miss) ; => :miss",
+      "(nth [10 20 30 40] [1 3]) ; => [20 40]",
+      "(nth [10 20 30] [0 99 2] nil) ; => [10 nil 30]"
+    ]
+  },
+  {
+    "name": "number?",
+    "signature": "number? x",
+    "doc": "Returns true for ints or floats.",
+    "origin": "core",
+    "examples": [
+      "(number? 1.5) ; => true"
+    ]
+  },
+  {
+    "name": "odd?",
+    "signature": "odd? n",
+    "doc": "Return true when the numeric argument is odd.",
+    "origin": "core",
+    "examples": [
+      "(odd? 3) ; => true",
+      "(odd? 4) ; => false"
+    ]
+  },
+  {
+    "name": "or",
+    "signature": "or expr*",
+    "doc": "Short-circuiting logical disjunction.",
+    "origin": "special form",
+    "examples": [
+      "(or false :a) ; => :a"
+    ]
+  },
+  {
+    "name": "p",
+    "signature": "p expr | p f a b ...",
+    "doc": "Print file:line:col and the value, then return it. With (p f a b ...), evaluates (f a b ...). With a single symbol, calls it only if it is not a local binding and accepts zero arguments.",
+    "origin": "special form",
+    "examples": [
+      "(p + 1 2) ; => 3"
+    ]
+  },
+  {
+    "name": "partial",
+    "signature": "partial f & args",
+    "doc": "Return a new function that pre-fills args and delegates to f when called.",
+    "origin": "core",
+    "examples": [
+      "(partial + 1) ; => #<partial + args=[1] remaining=any>"
+    ]
+  },
+  {
+    "name": "partition",
+    "signature": null,
+    "doc": null,
+    "origin": null,
+    "examples": [
+      "(partition 3 [1 2 3 4 5 6]) ; => [[1 2 3] [4 5 6]]",
+      "(partition 2 1 [1 2 3 4]) ; => [[1 2] [2 3] [3 4]]"
+    ]
+  },
+  {
+    "name": "partition-all",
+    "signature": "partition-all n coll\npartition-all n step coll",
+    "doc": "Partition coll into vectors of up to n items, keeping the tail chunk; optional step advances the window.",
+    "origin": "core",
+    "examples": [
+      "(partition-all 3 [1 2 3 4 5]) ; => [[1 2 3] [4 5]]",
+      "(partition-all 2 1 [:a :b :c]) ; => [[:a :b] [:b :c] [:c]]"
+    ]
+  },
+  {
+    "name": "partition-by",
+    "signature": "partition-by f coll",
+    "doc": "Split coll whenever (f item) changes, returning vectors of contiguous runs. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(partition-by odd? [1 3 2 4 5]) ; => [[1 3] [2 4] [5]]",
+      "(partition-by identity [\"a\" \"a\" \"b\"]) ; => [[\"a\" \"a\"] [\"b\"]]",
+      "(partition-by [x [\"a\" \"a\" \"b\"]] x) ; => [[\"a\" \"a\"] [\"b\"]]"
+    ]
+  },
+  {
+    "name": "peek",
+    "signature": "peek coll",
+    "doc": "For lists return the first element, for vectors return the last, for seqs return the next element; nil for empty collections.",
+    "origin": "core",
+    "examples": [
+      "(peek [1 2 3]) ; => 3",
+      "(peek (list 1 2 3)) ; => 1"
+    ]
+  },
+  {
+    "name": "pipe",
+    "signature": "pipe f & more",
+    "doc": "Compose functions left-to-right; the first function receives the original args, subsequent ones receive the previous result.",
+    "origin": "core",
+    "examples": [
+      "(let [f (pipe inc #(* % 2))] (f 3)) ; => 8",
+      "(let [f (pipe vector count)] (f 42)) ; => 1"
+    ]
+  },
+  {
+    "name": "pop",
+    "signature": "pop v",
+    "doc": "Return the vector without its last element.",
+    "origin": "core",
+    "examples": [
+      "(pop [1 2 3]) ; => [1 2]"
+    ]
+  },
+  {
+    "name": "pos?",
+    "signature": "pos? n",
+    "doc": "Return true when the number is greater than zero.",
+    "origin": "core",
+    "examples": [
+      "(pos? 3) ; => true",
+      "(pos? -1) ; => false"
+    ]
+  },
+  {
+    "name": "pr-str",
+    "signature": "pr-str & values",
+    "doc": "Return the pr-str representation of the given values as a single string.",
+    "origin": "core",
+    "examples": [
+      "(pr-str [1 2 3]) ; => \"\\\"[1 2 3]\\\"\" ; Return a string"
+    ]
+  },
+  {
+    "name": "print",
+    "signature": "print & values",
+    "doc": "Print each value without a trailing newline.",
+    "origin": "core",
+    "examples": [
+      "(comment (print \"hello\" 42)) ; => nil ; Print without a trailing newline"
+    ]
+  },
+  {
+    "name": "println",
+    "signature": "println & values",
+    "doc": "Print each value using display formatting, then emit a newline.",
+    "origin": "core",
+    "examples": [
+      "(comment (println \"hello\" 42)) ; => nil ; Print with a trailing newline"
+    ]
+  },
+  {
+    "name": "prn",
+    "signature": "prn & values",
+    "doc": "Print values with pr-str formatting and append a newline.",
+    "origin": "core",
+    "examples": [
+      "(comment (prn {:a 1 :b 2})) ; => nil ; Print with pr-str formatting and newline"
+    ]
+  },
+  {
+    "name": "pvalues",
+    "signature": "pvalues & exprs",
+    "doc": "Evaluate expressions and return their values (evaluated in parallel in Clojure; sequential here).",
+    "origin": "special form",
+    "examples": [
+      "(pvalues (+ 1 2) (* 2 3) (- 10 4)) ; => [3 6 6]"
+    ]
+  },
+  {
+    "name": "quot",
+    "signature": "quot dividend divisor",
+    "doc": "Integer division that truncates toward zero (errors on division by zero).",
+    "origin": "core",
+    "examples": [
+      "(quot 10 3) ; => 3",
+      "(quot -7 3) ; => -2"
+    ]
+  },
+  {
+    "name": "quote",
+    "signature": "quote form",
+    "doc": "Prevent evaluation.",
+    "origin": "special form",
+    "examples": [
+      "(quote [1 2]) ; => [1 2]"
+    ]
+  },
+  {
+    "name": "rand",
+    "signature": "rand [upper]",
+    "doc": "Return a random float in [0,1) or [0, upper) when a bound is supplied.",
+    "origin": "core",
+    "examples": [
+      "(< (rand) 1.0) ; => true",
+      "(< (rand 5.0) 5.0) ; => true"
+    ]
+  },
+  {
+    "name": "rand-int",
+    "signature": "rand-int n",
+    "doc": "Return a random integer in the range [0, n).",
+    "origin": "core",
+    "examples": [
+      "(= 0 (rand-int 1)) ; => true"
+    ]
+  },
+  {
+    "name": "rand-nth",
+    "signature": "rand-nth coll",
+    "doc": "Return a random item from a vector or string.",
+    "origin": "core",
+    "examples": [
+      "(= \"a\" (rand-nth [\"a\" \"a\"])) ; => true"
+    ]
+  },
+  {
+    "name": "range",
+    "signature": "range end",
+    "doc": "Generate numbers from start (default 0) to end (exclusive) by step; 0-arity is an infinite lazy seq.",
+    "origin": "core",
+    "examples": [
+      "(range 2 8 3) ; => [2 5]",
+      "(vec (take 4 (range))) ; => [0 1 2 3]"
+    ]
+  },
+  {
+    "name": "re-find",
+    "signature": "re-find pattern text",
+    "doc": "Return the first regex match in text; with capture groups, returns a vector of the full match and captures.",
+    "origin": "core",
+    "examples": [
+      "(re-find /\\d+/ \"foo123bar\") ; => \"123\"",
+      "(re-find /(\\w+)-(\\d+)/ \"tag-42 end\") ; => [\"tag-42\" \"tag\" \"42\"]"
+    ]
+  },
+  {
+    "name": "re-matches",
+    "signature": "re-matches pattern text",
+    "doc": "Return the match if regex matches the entire text, else nil; includes capture groups. Regex values are callable: (/.../ text) is equivalent and can be passed as a function (e.g. map/filter).",
+    "origin": "core",
+    "examples": [
+      "(re-matches /\\d+/ \"123\") ; => \"123\"",
+      "(re-matches /(\\w+)-(\\d+)/ \"tag-42\") ; => [\"tag-42\" \"tag\" \"42\"]",
+      "(map /\\d+/ [\"1\" \"a2\" \"333\"]) ; => [\"1\" nil \"333\"]"
+    ]
+  },
+  {
+    "name": "re-seq",
+    "signature": "re-seq pattern text",
+    "doc": "Return a lazy seq of successive regex matches in text.",
+    "origin": "core",
+    "examples": [
+      "(re-seq /\\d+/ \"v1v22\") ; => (\"1\" \"22\")",
+      "(re-seq /(\\w+)-(\\d+)/ \"a-1 b-22\") ; => ([\"a-1\" \"a\" \"1\"] [\"b-22\" \"b\" \"22\"])"
+    ]
+  },
+  {
+    "name": "recur",
+    "signature": "recur args",
+    "doc": "Tail-call to the nearest loop/defn with new arguments.",
+    "origin": "special form",
+    "examples": [
+      "(loop [n 0] (if (< n 2) (recur (inc n)) n)) ; => 2"
+    ]
+  },
+  {
+    "name": "reduce",
+    "signature": "reduce f coll",
+    "doc": "Combine a collection with f: without init uses the first element or calls f with no args on empty input; with init starts from that value.",
+    "origin": "core",
+    "examples": [
+      "(reduce + [1 2 3 4]) ; => 10",
+      "(reduce conj #{} [:x :y :x]) ; => #{:x :y}"
+    ]
+  },
+  {
+    "name": "reduce-kv",
+    "signature": "reduce-kv f init m",
+    "doc": "Reduce a map by applying f to accumulator, key, and value.",
+    "origin": "core",
+    "examples": [
+      "(reduce-kv (fn [acc k v] (+ acc v)) 0 {:a 1 :b 2}) ; => 3"
+    ]
+  },
+  {
+    "name": "refer",
+    "signature": "refer ns & opts",
+    "doc": "Refer public vars from ns into the current namespace.",
+    "origin": "special form",
+    "examples": [
+      "(comment (refer app::core :refer [foo bar])) ; => nil ; Refer public vars into the current namespace"
+    ]
+  },
+  {
+    "name": "rem",
+    "signature": "rem dividend divisor",
+    "doc": "Integer remainder following quot semantics (x - (quot x y) * y).",
+    "origin": "core",
+    "examples": [
+      "(rem 10 3) ; => 1",
+      "(rem -7 3) ; => -1"
+    ]
+  },
+  {
+    "name": "remove",
+    "signature": "remove pred coll",
+    "doc": "Return the items of coll for which pred returns falsey (lazy when coll is a seq). Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(remove odd? [1 2 3 4]) ; => [2 4]",
+      "(vec (remove #(= :skip %) [:run :skip :go])) ; => [:run :go]",
+      "(vec (remove [x [1 2 3 4]] (odd? x))) ; => [2 4]"
+    ]
+  },
+  {
+    "name": "repeat",
+    "signature": null,
+    "doc": null,
+    "origin": null,
+    "examples": [
+      "(take 3 (repeat :x)) ; => [:x :x :x]",
+      "(repeat 4 7) ; => [7 7 7 7]"
+    ]
+  },
+  {
+    "name": "repeatedly",
+    "signature": "repeatedly f\nrepeatedly n f",
+    "doc": "Call f repeatedly, returning a lazy seq (infinite) or vector of n results.",
+    "origin": "core",
+    "examples": [
+      "(take 3 (repeatedly (fn [] :tick))) ; => [:tick :tick :tick]",
+      "(repeatedly 3 (fn [] :x)) ; => [:x :x :x]"
+    ]
+  },
+  {
+    "name": "repl",
+    "signature": "repl\nrepl x",
+    "doc": "Start an interactive REPL session. Also available as a function value. When called as (repl x), binds ?, ?v, *?, and *1 to x and returns x after the REPL ends.",
+    "origin": "special form",
+    "examples": [
+      "(comment (repl)) ; => nil ; Start an interactive REPL session",
+      "(comment (repl [1 2 3])) ; => [1 2 3] ; ? / ?v / *? / *1 refer to the initial value"
+    ]
+  },
+  {
+    "name": "replace",
+    "signature": "replace smap coll",
+    "doc": "Replace items in coll according to the substitution map smap.",
+    "origin": "core",
+    "examples": [
+      "(replace {1 :one} [1 2 1]) ; => [:one 2 :one]",
+      "(replace {:a :b} {:a 1 :c 2}) ; => {:b 1 :c 2}"
+    ]
+  },
+  {
+    "name": "replace-first",
+    "signature": "replace-first [s match replacement]",
+    "doc": "Replace only the first occurrence of a string or regex match with replacement.",
+    "origin": "string",
+    "examples": [
+      "(replace-first \"taco cat cat\" \"cat\" \"dog\") ; => \"taco dog cat\"",
+      "(replace-first \"foo-123-456\" /\\d+/ \"***\") ; => \"foo-***-456\""
+    ]
+  },
+  {
+    "name": "require",
+    "signature": "require [lib & opts]",
+    "doc": "Load a namespace or file module. String targets load files, accept the same options, and assign an implicit namespace when the file has no (ns ...) form.",
+    "origin": "special form",
+    "examples": [
+      "(comment (require app::core :as core)) ; => nil ; Load app::core and alias as core",
+      "(comment (require app::string :refer [trim join])) ; => nil ; Refer selected symbols",
+      "(comment (require app::math :as m :refer [add sub])) ; => nil ; Use alias and refer together",
+      "(comment (require \"examples/hello\" :as hello)) ; => nil ; Load a file module by path"
+    ]
+  },
+  {
+    "name": "resolve",
+    "signature": "resolve sym",
+    "doc": "Resolve a symbol to its value in the current namespace.",
+    "origin": "special form",
+    "examples": [
+      "(comment (resolve 'app::core::foo)) ; => nil ; Resolve a symbol in the current namespace"
+    ]
+  },
+  {
+    "name": "rest",
+    "signature": "rest coll",
+    "doc": "Return a sequence of items after the first; empty seq if coll is empty or nil.",
+    "origin": "core",
+    "examples": [
+      "(rest [1 2 3]) ; => [2 3]"
+    ]
+  },
+  {
+    "name": "reverse",
+    "signature": "reverse coll",
+    "doc": "Return the collection's items in reverse order (lists/vectors retain structure, sets/seqs realize into vectors).",
+    "origin": "core",
+    "examples": [
+      "(reverse [1 2 3]) ; => [3 2 1]",
+      "(reverse (list :a :b)) ; => (:b :a)"
+    ]
+  },
+  {
+    "name": "reverse-str",
+    "signature": "reverse-str s",
+    "doc": "Reverse the characters of the string.",
+    "origin": "string",
+    "examples": [
+      "(reverse-str \"clove\") ; => \"evolc\"",
+      "(reverse-str \"😀👍\") ; => \"👍😀\""
+    ]
+  },
+  {
+    "name": "runtime-error",
+    "signature": "runtime-error & parts",
+    "doc": "Concatenate parts into a string and raise a runtime error.",
+    "origin": "core",
+    "examples": [
+      "(try (runtime-error \"boom\") (catch RuntimeError e :failed)) ; => :failed",
+      "(try (runtime-error \"bad\" 42) (catch RuntimeError e e)) ; => \"bad 42\""
+    ]
+  },
+  {
+    "name": "scope-loop",
+    "signature": "scope-loop bindings & body",
+    "doc": "Alias of async::scope-loop; returns nil when the current async-scope is cancelled (body is skipped).",
+    "origin": "special form",
+    "examples": [
+      "(async::scope-loop [n 0] (when (< n 1) (recur (inc n)))) ; => nil"
+    ]
+  },
+  {
+    "name": "second",
+    "signature": "second coll",
+    "doc": "Return the second element of coll (or nil when absent).",
+    "origin": "core",
+    "examples": [
+      "(second [10 20 30]) ; => 20",
+      "(second []) ; => nil"
+    ]
+  },
+  {
+    "name": "select-keys",
+    "signature": "select-keys m keys",
+    "doc": "Return a map containing only the entries whose keys appear in keys.",
+    "origin": "core",
+    "examples": [
+      "(select-keys {:a 1 :b 2 :c 3} [:a :c]) ; => {:a 1 :c 3}",
+      "(select-keys {:x 1} [:missing :x]) ; => {:x 1}"
+    ]
+  },
+  {
+    "name": "seq",
+    "signature": "seq coll",
+    "doc": "Return a sequence view of coll, or nil when coll is empty/nil.",
+    "origin": "core",
+    "examples": [
+      "(seq [1 2]) ; => (1 2)"
+    ]
+  },
+  {
+    "name": "sequential?",
+    "signature": "sequential? x",
+    "doc": "True for list/vector/seq values.",
+    "origin": "core",
+    "examples": [
+      "(sequential? [1 2]) ; => true"
+    ]
+  },
+  {
+    "name": "set!",
+    "signature": "set! var value",
+    "doc": "Mutate an existing var or dynamic var binding.",
+    "origin": "special form",
+    "examples": [
+      "(do (def x 1) (set! x 2) x) ; => 2"
+    ]
+  },
+  {
+    "name": "shuffle",
+    "signature": "shuffle coll",
+    "doc": "Return a random permutation of the items as a vector.",
+    "origin": "core",
+    "examples": [
+      "(vec (sort (shuffle [1 2 3]))) ; => [1 2 3]"
+    ]
+  },
+  {
+    "name": "slurp",
+    "signature": "slurp path",
+    "doc": "Read the entire file at path into a string.",
+    "origin": "core",
+    "examples": [
+      "(comment (slurp \"path/to/file.txt\")) ; => nil ; Read entire file into a string"
+    ]
+  },
+  {
+    "name": "some",
+    "signature": "some pred coll",
+    "doc": "Return the first truthy value of (pred item) across coll, or nil. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(some #{:b} [:a :b :c]) ; => :b",
+      "(some (fn [x] (when (even? x) (* x 10))) [1 3 4 5]) ; => 40",
+      "(some [x [1 3 4 5]] (if (even? x) (* x 10) nil)) ; => 40"
+    ]
+  },
+  {
+    "name": "some->",
+    "signature": "some-> expr & forms",
+    "doc": "Thread expr while it stays non-nil, inserting as first arg.",
+    "origin": "special form",
+    "examples": [
+      "(some-> {:a 1} (get :a) inc) ; => 2"
+    ]
+  },
+  {
+    "name": "some->>",
+    "signature": "some->> expr & forms",
+    "doc": "Thread expr while it stays non-nil, inserting as last arg.",
+    "origin": "special form",
+    "examples": [
+      "(some->> [1 2] (map inc) (first)) ; => 2"
+    ]
+  },
+  {
+    "name": "some?",
+    "signature": "some? x",
+    "doc": "Returns true for any value except nil/false.",
+    "origin": "core",
+    "examples": [
+      "(some? 0) ; => true"
+    ]
+  },
+  {
+    "name": "sort",
+    "signature": "sort coll\nsort comparator coll",
+    "doc": "Strict, stable sort of coll with optional comparator.",
+    "origin": "core",
+    "examples": [
+      "(sort [3 1 2]) ; => [1 2 3]",
+      "(sort #(compare %2 %1) [:c :a :b]) ; => [:c :b :a]"
+    ]
+  },
+  {
+    "name": "sort-by",
+    "signature": "sort-by keyfn coll\nsort-by keyfn comparator coll",
+    "doc": "Strict, stable sort by keyfn with optional comparator. Supports [pat coll] sugar for the 2-arity form.",
+    "origin": "core",
+    "examples": [
+      "(sort-by count [\"aa\" \"b\" \"ccc\"]) ; => [\"b\" \"aa\" \"ccc\"]",
+      "(sort-by first #(> %1 %2) [[1 :a] [3 :b] [2 :c]]) ; => [[3 :b] [2 :c] [1 :a]]",
+      "(sort-by [s [\"aa\" \"b\" \"ccc\"]] (count s)) ; => [\"b\" \"aa\" \"ccc\"]"
+    ]
+  },
+  {
+    "name": "spit",
+    "signature": "spit path content",
+    "doc": "Write content to the file at path. Returns path.",
+    "origin": "core",
+    "examples": [
+      "(let [path (spit \"tmp/doc-spit.txt\" \"hello\")] (fs::delete path) path) ; => \"tmp/doc-spit.txt\""
+    ]
+  },
+  {
+    "name": "split",
+    "signature": "split [s pattern]\nsplit [s pattern limit]",
+    "doc": "Split s around pattern (string or regex); optional limit bounds the number of pieces.",
+    "origin": "string",
+    "examples": [
+      "(split \"a,b,c\" /,/) ; => [\"a\" \"b\" \"c\"]",
+      "(split \"path\" // 2) ; => [\"\" \"path\"]"
+    ]
+  },
+  {
+    "name": "split-lines",
+    "signature": "split-lines s",
+    "doc": "Split the string on newline boundaries and return a vector of lines.",
+    "origin": "string",
+    "examples": [
+      "(split-lines \"a\nb\") ; => [\"a\" \"b\"]",
+      "(split-lines \"one\\r\\ntwo\") ; => [\"one\" \"two\"]"
+    ]
+  },
+  {
+    "name": "starts-with?",
+    "signature": "starts-with? [s prefix]",
+    "doc": "True when the string begins with prefix.",
+    "origin": "string",
+    "examples": [
+      "(starts-with? \"clove\" \"cl\") ; => true",
+      "(starts-with? \"clove\" \"ve\") ; => false"
+    ]
+  },
+  {
+    "name": "str",
+    "signature": "str & values",
+    "doc": "Concatenate the string form of each argument (nil renders as \"nil\").",
+    "origin": "core",
+    "examples": [
+      "(str \"a\" 1) ; => \"a1\""
+    ]
+  },
+  {
+    "name": "str?",
+    "signature": "str? x",
+    "doc": "True when the value is a string.",
+    "origin": "core",
+    "examples": [
+      "(str? \"hi\") ; => true"
+    ]
+  },
+  {
+    "name": "string?",
+    "signature": "string? x",
+    "doc": "True when the value is a string.",
+    "origin": "core",
+    "examples": [
+      "(string? \"hi\") ; => true"
+    ]
+  },
+  {
+    "name": "subs",
+    "signature": "subs s start [end]",
+    "doc": "Return the substring beginning at start (inclusive) and ending at end (exclusive) when provided; indexes are in characters.",
+    "origin": "core",
+    "examples": [
+      "(subs \"clove\" 2) ; => \"ove\"",
+      "(subs \"clove\" 1 4) ; => \"lov\""
+    ]
+  },
+  {
+    "name": "subvec",
+    "signature": "subvec coll start [end]",
+    "doc": "Return a vector of items from coll starting at start (inclusive) up to end (exclusive); end defaults to the length. Indexes must be within bounds and non-negative. Seq inputs are realized before slicing.",
+    "origin": "core",
+    "examples": [
+      "(subvec [0 1 2 3] 1 3) ; => [1 2]",
+      "(subvec [10 20 30] 1) ; => [20 30]"
+    ]
+  },
+  {
+    "name": "symbol",
+    "signature": "symbol x",
+    "doc": "Coerce the value into a symbol.",
+    "origin": "core",
+    "examples": [
+      "(symbol \"foo\") ; => foo",
+      "(symbol :bar) ; => bar"
+    ]
+  },
+  {
+    "name": "symbol?",
+    "signature": "symbol? x",
+    "doc": "True when the value is a symbol.",
+    "origin": "core",
+    "examples": [
+      "(symbol? 'a) ; => true"
+    ]
+  },
+  {
+    "name": "take",
+    "signature": "take n coll",
+    "doc": "Return a vector of the first n items of coll (or fewer if coll is short). When coll is a seq, only up to n elements are pulled before materializing; use core::take if you need to keep the result lazy.",
+    "origin": "core",
+    "examples": [
+      "(take 2 [1 2 3]) ; => [1 2]",
+      "(take 3 (repeatedly (fn [] :tick))) ; => [:tick :tick :tick]"
+    ]
+  },
+  {
+    "name": "take-last",
+    "signature": "take-last n coll",
+    "doc": "Return a vector of the last n items from coll (or all items if n exceeds the length). Seq inputs are fully realized to produce the tail.",
+    "origin": "core",
+    "examples": [
+      "(take-last 2 [1 2 3 4]) ; => [3 4]",
+      "(take-last 3 (range 5)) ; => [2 3 4]"
+    ]
+  },
+  {
+    "name": "take-while",
+    "signature": "take-while pred coll",
+    "doc": "Return a vector of items from the start of coll while pred returns truthy. When coll is a seq, elements are pulled until pred fails or the seq ends; a never-false predicate on an infinite seq will not terminate. Use core::take-while if you need to keep the result lazy. Supports [pat coll] sugar.",
+    "origin": "core",
+    "examples": [
+      "(vec (take-while #(< % 3) [0 1 2 3 0])) ; => [0 1 2]",
+      "(take-while string? [\"x\" \"y\" 1]) ; => [\"x\" \"y\"]",
+      "(take-while #(< % 5) (iterate inc 0)) ; => [0 1 2 3 4]",
+      "(vec (take-while [x [0 1 2 3 0]] (< x 3))) ; => [0 1 2]"
+    ]
+  },
+  {
+    "name": "throw",
+    "signature": "throw value",
+    "doc": "Raise a runtime error with the given value.",
+    "origin": "special form",
+    "examples": [
+      "(try (throw (runtime-error \"boom\")) (catch RuntimeError e e)) ; => \"boom\""
+    ]
+  },
+  {
+    "name": "time",
+    "signature": "time callable",
+    "doc": "Execute the zero-arity callable, returning a map with :result, :elapsed-ms, :avg-ms, and :runs (milliseconds as float).",
+    "origin": "core",
+    "examples": [
+      "(get (time (fn [] (+ 1 2))) :result) ; => 3",
+      "(get (time (fn [] 0)) :runs) ; => 1"
+    ]
+  },
+  {
+    "name": "trim",
+    "signature": "trim [s]",
+    "doc": "Remove leading and trailing Unicode whitespace from the string.",
+    "origin": "string",
+    "examples": [
+      "(trim \"  clove  \") ; => \"clove\"",
+      "(trim \"\nhello\t\") ; => \"hello\""
+    ]
+  },
+  {
+    "name": "trim-newline",
+    "signature": "trim-newline s",
+    "doc": "Remove a single trailing newline (and optional carriage return) from s.",
+    "origin": "string",
+    "examples": [
+      "(trim-newline \"line\n\") ; => \"line\"",
+      "(trim-newline \"line\\r\\n\") ; => \"line\""
+    ]
+  },
+  {
+    "name": "triml",
+    "signature": "triml s",
+    "doc": "Remove leading Unicode whitespace from the string.",
+    "origin": "string",
+    "examples": [
+      "(triml \"  clove\") ; => \"clove\"",
+      "(triml \"\n\tdata\") ; => \"data\""
+    ]
+  },
+  {
+    "name": "trimr",
+    "signature": "trimr s",
+    "doc": "Remove trailing Unicode whitespace from the string.",
+    "origin": "string",
+    "examples": [
+      "(trimr \"clove  \") ; => \"clove\"",
+      "(trimr \"data\n\t\") ; => \"data\""
+    ]
+  },
+  {
+    "name": "true?",
+    "signature": "true? x",
+    "doc": "True only for the literal true.",
+    "origin": "core",
+    "examples": [
+      "(true? true) ; => true"
+    ]
+  },
+  {
+    "name": "try",
+    "signature": "try body* (catch ...) (finally ...) | try body* (err ...) (fin ...) | try body+ on-error | try body+ on-finally | try body+ on-error on-finally | try [bindings] expr on-error on-finally",
+    "doc": "Evaluate expressions with catch/finally blocks, explicit err/fin clauses, or use short forms with handler/finally. Short forms require trailing callable(s) in order [on-error][on-finally].",
+    "origin": "special form",
+    "examples": [
+      "(try (/ 1 0) (catch RuntimeError e :fail)) ; => :fail",
+      "(try (throw 1) (fn [e] 42)) ; => 42",
+      "(try [i 0] (throw 7) (fn [e] (+ i e)) (fn [] i)) ; => 7"
+    ]
+  },
+  {
+    "name": "update",
+    "signature": "update map key f & args",
+    "doc": "Apply f to the existing value (or nil) at key with optional extra args.",
+    "origin": "core",
+    "examples": [
+      "(update {:a 1} :a inc) ; => {:a 2}"
+    ]
+  },
+  {
+    "name": "update-in",
+    "signature": "update-in map path f & args",
+    "doc": "Apply f to the value found at path (creating maps as needed) and assoc the result.",
+    "origin": "core",
+    "examples": [
+      "(update-in {:stats {:views 1}} [:stats :views] + 4) ; => {:stats {:views 5}}",
+      "(update-in {:user {:tags []}} [:user :tags] conj :admin) ; => {:user {:tags [:admin]}}"
+    ]
+  },
+  {
+    "name": "upper-case",
+    "signature": "upper-case [s]",
+    "doc": "Return the upper-case form of the string.",
+    "origin": "string",
+    "examples": [
+      "(upper-case \"clove\") ; => \"CLOVE\"",
+      "(upper-case \"MiXeD\") ; => \"MIXED\""
+    ]
+  },
+  {
+    "name": "use",
+    "signature": "use feature bool | use default-interop/foreign lang",
+    "doc": "Alias of use-syntax; enable or disable a syntax/runtime feature (e.g. dot-chain, foreign-blocks). Also accepts (use default-interop/foreign <lang>) to set the default foreign language for the current file (extension wins with a warning).",
+    "origin": "special form",
+    "examples": [
+      "(use dot-chain true) ; => true",
+      "(use default-interop :py) ; file default for ${...}/$Foo.bar"
+    ]
+  },
+  {
+    "name": "use-syntax",
+    "signature": "use-syntax feature bool",
+    "doc": "Enable or disable a syntax/runtime feature (e.g. dot-chain, foreign-blocks, repl-on-error). Returns the applied boolean.",
+    "origin": "special form",
+    "examples": [
+      "(use-syntax dot-chain true) ; => true",
+      "(use-syntax repl-on-error true) ; => true"
+    ]
+  },
+  {
+    "name": "vals",
+    "signature": "vals [m]",
+    "doc": "Return the values of a map as a sequence.",
+    "origin": "core",
+    "examples": [
+      "(vec (sort (vals {:a 2 :b 1}))) ; => [1 2]"
+    ]
+  },
+  {
+    "name": "vec",
+    "signature": "vec coll",
+    "doc": "Coerce the collection into a vector (maps become vectors of key/value vectors, strings become vectors of one-character strings).",
+    "origin": "core",
+    "examples": [
+      "(vec (list 1 2 3)) ; => [1 2 3]",
+      "(vec {:a 1}) ; => [[:a 1]]"
+    ]
+  },
+  {
+    "name": "vec?",
+    "signature": "vec? x",
+    "doc": "True when the value is a vector.",
+    "origin": "core",
+    "examples": [
+      "(vec? [1]) ; => true"
+    ]
+  },
+  {
+    "name": "vector",
+    "signature": "vector & values",
+    "doc": "Create a vector from the supplied values.",
+    "origin": "core",
+    "examples": [
+      "(vector 1 2) ; => [1 2]"
+    ]
+  },
+  {
+    "name": "vector?",
+    "signature": "vector? x",
+    "doc": "True when the value is a vector.",
+    "origin": "core",
+    "examples": [
+      "(vector? [1]) ; => true"
+    ]
+  },
+  {
+    "name": "when",
+    "signature": "when test body",
+    "doc": "Evaluate body when test is truthy.",
+    "origin": "special form",
+    "examples": [
+      "(when true :ok) ; => :ok"
+    ]
+  },
+  {
+    "name": "when-let",
+    "signature": "when-let [binding test] body",
+    "doc": "Evaluate body with binding when test is truthy; nil stops execution.",
+    "origin": "special form",
+    "examples": [
+      "(when-let [x 1] (+ x 1)) ; => 2"
+    ]
+  },
+  {
+    "name": "when-not",
+    "signature": "when-not test body",
+    "doc": "Evaluate body when test is falsy.",
+    "origin": "special form",
+    "examples": [
+      "(when-not false :ok) ; => :ok"
+    ]
+  },
+  {
+    "name": "while",
+    "signature": "while test body",
+    "doc": "Evaluate body repeatedly while test is truthy; returns nil.",
+    "origin": "special form",
+    "examples": [
+      "(while false (println :nope)) ; => nil"
+    ]
+  },
+  {
+    "name": "with-dyn",
+    "signature": "with-dyn var value body",
+    "doc": "Temporarily bind a dynamic var for the duration of body.",
+    "origin": "special form",
+    "examples": [
+      "(comment (with-dyn *my-var* 1 (println *my-var*))) ; => nil ; Temporarily bind a dynamic var"
+    ]
+  },
+  {
+    "name": "with-open",
+    "signature": "with-open [bindings] & body",
+    "doc": "Evaluate bindings, run body, then close bound resources in reverse order (using :close!/ :close metadata, close!/close in scope, or channel close).",
+    "origin": "special form",
+    "examples": [
+      "(with-open [c (chan)] (chan-put! c :value)) ; => true"
+    ]
+  },
+  {
+    "name": "with-redefs",
+    "signature": "with-redefs [bindings] body",
+    "doc": "Temporarily redefine vars during the execution of body.",
+    "origin": "special form",
+    "examples": [
+      "(with-redefs [println (fn [& _] :mocked)] (println)) ; => :mocked"
+    ]
+  },
+  {
+    "name": "with-redefs-fn",
+    "signature": "with-redefs-fn bindings f",
+    "doc": "Return a function that, when called, executes with temporary var redefinitions applied.",
+    "origin": "special form",
+    "examples": [
+      "((with-redefs-fn [println (fn [& _] :mocked)] println)) ; => :mocked"
+    ]
+  },
+  {
+    "name": "zero?",
+    "signature": "zero? n",
+    "doc": "Return true when the numeric argument is exactly zero.",
+    "origin": "core",
+    "examples": [
+      "(zero? 0) ; => true",
+      "(zero? 0.5) ; => false"
+    ]
+  },
+  {
+    "name": "zip",
+    "signature": "zip a b",
+    "doc": "Pair items from two vectors or strings, truncating to the shortest input.",
+    "origin": "core",
+    "examples": [
+      "(zip [1 2] [3 4 5]) ; => [[1 3] [2 4]]"
+    ]
+  },
+  {
+    "name": "zip-with",
+    "signature": "zip-with f a b",
+    "doc": "Apply f to paired items from two vectors or strings.",
+    "origin": "core",
+    "examples": [
+      "(zip-with + [1 2] [10 20 30]) ; => [11 22]"
+    ]
+  },
+  {
+    "name": "zipmap",
+    "signature": "zipmap keys vals",
+    "doc": "Create a map from keys and vals, truncating to the length of the shorter input.",
+    "origin": "core",
+    "examples": [
+      "(zipmap [:a :b] [1 2]) ; => {:a 1 :b 2}",
+      "(zipmap [:x :y :z] (range 2)) ; => {:x 0 :y 1}"
+    ]
+  }
+]

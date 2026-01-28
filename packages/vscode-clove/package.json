@@ -1,0 +1,166 @@
+{
+  "name": "clove-vscode",
+  "displayName": "Clove",
+  "description": "VS Code tools for the Clove Lisp: syntax highlighting and structural editing for S-expressions.",
+  "version": "0.1.0",
+  "publisher": "clove",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:clove",
+    "onCommand:clove.expandSelection",
+    "onCommand:clove.shrinkSelection",
+    "onCommand:clove.jumpToMatchingBracket",
+    "onCommand:clove.sendSelection",
+    "onCommand:clove.showSelectionDebugLog",
+    "onCommand:clove.formatterPreview",
+    "onCommand:clove.refactor.shortestAccess",
+    "onCommand:clove.refactor.canonicalAccess",
+    "onCommand:clove.refactor.toggleOop",
+    "onCommand:clove.refactor.toggleAccess"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "clove",
+        "aliases": [
+          "Clove",
+          "clove"
+        ],
+        "extensions": [
+          ".clv"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "clove",
+        "scopeName": "source.clove",
+        "path": "./syntaxes/clove.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "clove.expandSelection",
+        "title": "Clove: Expand Selection"
+      },
+      {
+        "command": "clove.shrinkSelection",
+        "title": "Clove: Shrink Selection"
+      },
+      {
+        "command": "clove.jumpToMatchingBracket",
+        "title": "Clove: Jump to Matching Bracket"
+      },
+      {
+        "command": "clove.sendSelection",
+        "title": "Clove: Send Selection to REPL"
+      },
+      {
+        "command": "clove.showSelectionDebugLog",
+        "title": "Clove: Show Selection Debug Log"
+      },
+      {
+        "command": "clove.formatterPreview",
+        "title": "Clove: Formatter Preview"
+      },
+      {
+        "command": "clove.refactor.shortestAccess",
+        "title": "Clove: Refactor - Rewrite to Shortest Access"
+      },
+      {
+        "command": "clove.refactor.canonicalAccess",
+        "title": "Clove: Refactor - Rewrite to Canonical Access"
+      },
+      {
+        "command": "clove.refactor.toggleOop",
+        "title": "Clove: Refactor - Toggle S-exp / OOP (Safe)"
+      },
+      {
+        "command": "clove.refactor.toggleAccess",
+        "title": "Clove: Refactor - Toggle Access Syntax"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "clove.expandSelection",
+        "key": "shift+alt+right",
+        "mac": "shift+alt+right",
+        "when": "editorTextFocus && editorLangId == clove"
+      },
+      {
+        "command": "clove.shrinkSelection",
+        "key": "shift+alt+left",
+        "mac": "shift+alt+left",
+        "when": "editorTextFocus && editorLangId == clove"
+      },
+      {
+        "command": "clove.jumpToMatchingBracket",
+        "key": "ctrl+shift+\\",
+        "mac": "cmd+shift+\\",
+        "when": "editorTextFocus && editorLangId == clove"
+      }
+    ],
+    "configuration": [
+      {
+        "title": "Clove",
+        "properties": {
+          "clove.lsp.serverPath": {
+            "type": "string",
+            "default": "clove-lsp",
+            "description": "Path to the clove-lsp executable. If not found in PATH, set an absolute path here."
+          },
+          "clove.suggest.autoShowDocumentation": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically open VS Code's completion details pane so documentation/examples are visible immediately."
+          },
+          "clove.selection.hyphenExpansion": {
+            "type": "string",
+            "enum": [
+              "segment",
+              "full"
+            ],
+            "default": "segment",
+            "description": "Choose whether hyphenated symbols expand step-by-step (segment) or jump to the full symbol (full)."
+          },
+          "clove.refactor.access.preferKeywordChain": {
+            "type": "boolean",
+            "default": true,
+            "description": "Prefer keyword-chain sugar (m:kw, m:a:b) when rewriting access forms without defaults."
+          }
+        }
+      }
+    ],
+    "themes": [
+      {
+        "label": "Clove Default (LightTable)",
+        "uiTheme": "vs-dark",
+        "path": "./themes/clove-default-color-theme.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "test": "echo \"(tests go here)\""
+  },
+  "devDependencies": {
+    "@types/node": "^18.17.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

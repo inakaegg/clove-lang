@@ -1,0 +1,11 @@
+[package]
+name = "clove-python"
+version = "0.1.0"
+edition = "2021"
+description = "Python embedding adapter for clove"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]
+clove-core = { path = "../clove-core" }
+pyo3 = { version = "0.20", features = ["auto-initialize"] }
+im = "15.1"

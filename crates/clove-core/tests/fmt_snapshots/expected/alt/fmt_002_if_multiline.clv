@@ -1,0 +1,3 @@
+(if very-long-condition-name
+    (do-something-very-long-name arg1 arg2 arg3)
+    (do-something-else-very-long-name arg1 arg2 arg3))

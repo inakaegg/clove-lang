@@ -1,0 +1,43 @@
+version = 1
+
+[line]
+width = 120
+indent = 2
+trailing_newline = true
+line_ending = "auto"
+preserve_blank_lines = false
+
+[inline]
+depth_limit = 3
+map_max_entries = 3
+map_max_entries_relaxed = 4
+vector_max_items = 4
+vector_max_items_relaxed = 6
+set_max_items = 0
+set_max_items_relaxed = 6
+allow_nested_collections = true
+map_allow_complex_values = false
+max_width = 80
+width_ratio = 0.0
+map_inline_max_width = 0
+map_inline_width_ratio = 0.0
+flow_head_policy = "inline_if_fit"
+flow_head_max_width = 80
+flow_head_width_ratio = 0.0
+
+[align]
+let_bindings = true
+maps = true
+cond = true
+match = true
+inline_budget_multiplier = 2
+
+[shorthand]
+map = true
+map_exclude_keys = ["keys", "as"]
+
+[comments]
+preserve_commas = true
+preserve_trailing = true
+dangling_policy = "own_line"
+spacing = "single"

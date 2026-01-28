@@ -1,0 +1,26 @@
+(use oop-syntax true)
+
+;; Example of object methods + self reference
+(let [obj {:x 10
+           :add (method [n] (+ &:x n))
+           :plain (fn [a] (+ a 1))
+           :pack (method [] {:x &:x :self &})}]
+           (repl)
+  (println "add =" (obj.add 5))
+  (println "plain =" (obj.plain 10))
+  (println "pack =" (obj.pack)))
+
+;; Add a method via assoc (method is inferred because & appears in the body)
+(let [base {:canvas 3}
+      r2 (assoc base :set-color (fn [x] (+ &:canvas x)))
+      r3 (dissoc r2 :set-color)]
+  (println "set-color =" (r2.set-color 4))
+  (println "canvas =" (get r3 :canvas)))
+
+;; Example of where + deftype
+(deftype Renderer {canvas: Any}
+  (where
+    (defn clear [] &:canvas)))
+
+(let [r (Renderer canvas: 9)]
+  (println "clear =" (r.clear)))

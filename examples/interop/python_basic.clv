@@ -1,0 +1,10 @@
+(ns examples::interop::python-basic)
+
+(defn py-sqrt [x]
+  $py{
+    import math
+    math.sqrt(x)
+  })
+
+(defn -main []
+  (println (py-sqrt 9)))

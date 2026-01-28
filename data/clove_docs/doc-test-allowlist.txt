@@ -1,0 +1,12 @@
+# List entries to skip in doc_examples_match_actual_results, one per line.
+# Comments (# ...) and blank lines are ignored. By default only * remains and
+# all entries are executed. When adding skips, include the reason in a comment.
+*
+# test::deftest: expectation depends on global runner state (counts aggregated across suites)
+test::deftest
+# term::*: requires a real terminal for key input/raw-mode, so skip doc examples
+term::raw-mode!
+term::read-key
+term::with-raw-mode
+# __DATA__: multi-line data section examples don't have expected values
+__DATA__

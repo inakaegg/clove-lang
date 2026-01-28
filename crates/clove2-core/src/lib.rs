@@ -1,0 +1,19 @@
+pub mod aliases;
+pub mod ast;
+pub mod builtins;
+pub mod codegen;
+pub mod docs;
+pub mod dynamic_detect;
+pub mod error;
+pub mod eval;
+pub mod json_infer;
+pub mod reader;
+pub mod syntax;
+pub mod type_check;
+pub mod type_infer;
+pub mod types;
+pub mod use_directive;
+pub mod value;
+pub mod vm;
+
+pub use regex::Regex;

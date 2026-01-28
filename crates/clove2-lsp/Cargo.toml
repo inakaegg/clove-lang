@@ -1,0 +1,10 @@
+[package]
+name = "clove2-lsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clove2-core = { path = "../clove2-core" }
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
+serde_json = "1"

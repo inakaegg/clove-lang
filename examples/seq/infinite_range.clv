@@ -1,0 +1,16 @@
+(ns examples::seq::infinite-range)
+
+;; Demo: build an infinite Seq and consume only what you need
+
+(def naturals (range))                ;; infinite Seq of 0,1,2,...
+(def squares (map #(* % %) naturals)) ;; map on Seq builds a lazy pipeline
+
+(defn first-n [n s]
+  ;; take keeps a Seq lazy; materialize with into.
+  (into [] (take n s)))
+
+(defn -main []
+  (println "First 10 naturals:" (first-n 10 (range)))
+  (println "First 10 squares:" (first-n 10 squares))
+  (println "Five even numbers from 50:" (into [] (take 5 (drop 50 (range)))))
+  (println "Sum of 1..100:" (reduce + (take 100 (range 1 101)))))

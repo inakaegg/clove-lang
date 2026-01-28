@@ -1,0 +1,14 @@
+[package]
+name = "clove2-lang"
+version = "0.1.0"
+edition = "2021"
+description = "Phase2 CLI for Clove"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]
+clove2-core = { path = "../clove2-core" }
+serde_json = "1.0"
+
+[[bin]]
+name = "clove2"
+path = "src/main.rs"

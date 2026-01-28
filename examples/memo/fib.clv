@@ -1,0 +1,16 @@
+(ns examples::memo::fib)
+
+;; Naive recursive fib
+(defn fib: :int [n: :int]
+  (if (< n 2)
+    n
+    (+ (fib (- n 1))
+       (fib (- n 2)))))
+
+;; Fib with persistent memoization
+(def fast-fib
+  (memo fib {:ttl 1h}))
+
+(defn -main []
+  (println "fib(10) =" (fast-fib 10))
+  (println "fib(40) =" (fast-fib 40)))

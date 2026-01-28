@@ -1,0 +1,30 @@
+(ns examples::concurrency::channels)
+
+;; Sample to quickly check behavior of chan / timeout / select / spawn
+
+(defn -main []
+  (let [c (chan 1)
+        ;; Put one value immediately
+        _ (chan-put! c :first)
+        first (chan-take! c)
+        ;; Default branch on empty channel
+        default (select [c] {:default :idle})
+        ;; Wait only for timeout
+        timed (select [(timeout 5)])
+        ;; Put a value from another thread with spawn, then wait via select
+        _ (spawn (fn [] (chan-put! c :async-value)))
+        taken (select [c])
+        ;; Send using a :put vector
+        ack (chan 1)
+        send-result (select [[:put ack :ack-now]])
+        ack-val (chan-take! ack)
+        ;; Behavior after close
+        _ (chan-close! c)
+        closed? (chan-closed? c)
+        drained (chan-take! c)]
+    (println "first   =" first)
+    (println "default =" default)
+    (println "timed   =" timed)
+    (println "taken   =" taken)
+    (println "send    =" send-result ", ack-val =" ack-val)
+    (println "closed? =" closed? ", drained =" drained)))

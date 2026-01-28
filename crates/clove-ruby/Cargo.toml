@@ -1,0 +1,12 @@
+[package]
+name = "clove-ruby"
+version = "0.1.0"
+edition = "2021"
+description = "Ruby embedding adapter shell for clove"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]
+clove-core = { path = "../clove-core" }
+magnus = { version = "0.8.2", features = ["embed"] }
+rb-sys = { version = "0.9", features = ["stable-api-compiled-fallback"] }
+im = "15.1"

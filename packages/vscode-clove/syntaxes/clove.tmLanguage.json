@@ -1,0 +1,304 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Clove",
+  "scopeName": "source.clove",
+  "patterns": [
+    {
+      "name": "meta.embedded.default.brace.clove",
+      "begin": "\\$\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "applyEndPatternLast": 1,
+      "contentName": "source.ruby",
+      "patterns": [
+        { "include": "#embedded-brace-default" },
+        { "include": "source.ruby" }
+      ]
+    },
+    {
+      "name": "meta.embedded.ruby.brace.clove",
+      "begin": "\\$rb\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "applyEndPatternLast": 1,
+      "contentName": "source.ruby",
+      "patterns": [
+        { "include": "#embedded-ruby-string-double" },
+        { "include": "#embedded-ruby-string-single" },
+        { "include": "#embedded-ruby-comment" },
+        { "include": "#embedded-brace-ruby" },
+        { "include": "source.ruby" }
+      ]
+    },
+    {
+      "name": "meta.embedded.python.brace.clove",
+      "begin": "\\$py\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "applyEndPatternLast": 1,
+      "contentName": "source.python",
+      "patterns": [
+        { "include": "#embedded-brace-python" },
+        { "include": "source.python" }
+      ]
+    },
+    {
+      "name": "comment.line.semicolon.clove",
+      "match": ";.*$"
+    },
+    {
+      "name": "string.quoted.double.clove",
+      "begin": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.clove" }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.clove" }
+      },
+      "patterns": [
+        { "name": "constant.character.escape.clove", "match": "\\\\." }
+      ]
+    },
+    {
+      "name": "constant.numeric.clove",
+      "match": "(?x)\n        (?<![\\w\\-])\n        [+-]?(\\n          0x[0-9a-fA-F]+|\\n          0b[01]+|\\n          (\\d+\\.\\d*|\\d*\\.\\d+)([eE][+-]?\\d+)?|\\n          \\d+([eE][+-]?\\d+)?\\n        )\\n      "
+    },
+    {
+      "include": "#type-hint-angle"
+    },
+    {
+      "include": "#type-hint-colon-param"
+    },
+    {
+      "include": "#type-hint-colon"
+    },
+    {
+      "include": "#type-hint-arrow"
+    },
+    {
+      "name": "keyword.control.clove",
+      "match": "(?<![\\w\\-])(def|defn|fn|deftype|defenum|let|if|do|recur|quote|quasiquote|unquote|macro)(?![\\w\\-])"
+    },
+    {
+      "name": "entity.name.function.clove",
+      "match": "(?<=\\()(defn|fn)\\s+([\\w\\-!?+*<>=]+)",
+      "captures": {
+        "2": { "name": "entity.name.function.clove" }
+      }
+    },
+    {
+      "name": "variable.other.symbol.clove",
+      "match": "(?<![\\w\\-])[\\w\\-!?+*<>=:]+"
+    }
+  ],
+  "repository": {
+    "embedded-paren-default": {
+      "name": "meta.embedded.paren.clove",
+      "begin": "\\(",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "patterns": [
+        { "include": "#embedded-paren-default" },
+        { "include": "source.ruby" }
+      ]
+    },
+    "embedded-brace-default": {
+      "name": "meta.embedded.brace.clove",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "patterns": [
+        { "include": "#embedded-brace-default" },
+        { "include": "source.ruby" }
+      ]
+    },
+    "embedded-paren-ruby": {
+      "name": "meta.embedded.paren.clove",
+      "begin": "\\(",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "patterns": [
+        { "include": "#embedded-ruby-string-double" },
+        { "include": "#embedded-ruby-string-single" },
+        { "include": "#embedded-ruby-comment" },
+        { "include": "#embedded-paren-ruby" }
+      ]
+    },
+    "embedded-brace-ruby": {
+      "name": "meta.embedded.brace.clove",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "patterns": [
+        { "include": "#embedded-ruby-string-double" },
+        { "include": "#embedded-ruby-string-single" },
+        { "include": "#embedded-ruby-comment" },
+        { "include": "#embedded-brace-ruby" },
+        { "include": "source.ruby" }
+      ]
+    },
+    "embedded-paren-python": {
+      "name": "meta.embedded.paren.clove",
+      "begin": "\\(",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "patterns": [
+        { "include": "#embedded-paren-python" },
+        { "include": "source.python" }
+      ]
+    },
+    "embedded-brace-python": {
+      "name": "meta.embedded.brace.clove",
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.clove" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.clove" }
+      },
+      "patterns": [
+        { "include": "#embedded-brace-python" },
+        { "include": "source.python" }
+      ]
+    },
+    "embedded-ruby-string-double": {
+      "name": "string.quoted.double.ruby",
+      "begin": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.ruby" }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.ruby" }
+      },
+      "patterns": [
+        { "name": "constant.character.escape.ruby", "match": "\\\\." }
+      ]
+    },
+    "embedded-ruby-string-single": {
+      "name": "string.quoted.single.ruby",
+      "begin": "'",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.ruby" }
+      },
+      "end": "'",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.ruby" }
+      },
+      "patterns": [
+        { "name": "constant.character.escape.ruby", "match": "\\\\." }
+      ]
+    },
+    "embedded-ruby-comment": {
+      "name": "comment.line.number-sign.ruby",
+      "match": "#.*$"
+    },
+    "type-hint-angle": {
+      "name": "meta.type-hint.angle.clove",
+      "begin": "(?<=[\\w\\-!?+*<>=:\\]\\)\\}])<",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.begin.clove" }
+      },
+      "end": ">",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.end.clove" }
+      },
+      "patterns": [
+        { "include": "#type-hint-angle" },
+        { "include": "#type-name" }
+      ]
+    },
+    "type-hint-colon-param": {
+      "name": "meta.type-hint.colon.clove",
+      "begin": "(?<![\\w\\-])([\\w\\-!?+*<>=]+)\\s*(:)(?=\\s)",
+      "beginCaptures": {
+        "1": { "name": "variable.parameter.clove" },
+        "2": { "name": "punctuation.definition.type-hint.colon.clove" }
+      },
+      "end": "(?=\\s+[\\w\\-!?+*<>=]+\\s*:)|[\\)\\}]|\\](?!\\])|$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.end.clove" }
+      },
+      "patterns": [
+        { "include": "#type-hint-angle" },
+        { "include": "#type-name" }
+      ]
+    },
+    "type-hint-colon": {
+      "name": "meta.type-hint.colon.clove",
+      "begin": ":(?=\\s)",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.colon.clove" }
+      },
+      "end": "(?=\\s+[\\w\\-!?+*<>=]+\\s*:)|[\\)\\}]|\\](?!\\])|$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.end.clove" }
+      },
+      "patterns": [
+        { "include": "#type-hint-angle" },
+        { "include": "#type-name" }
+      ]
+    },
+    "type-hint-arrow": {
+      "name": "meta.type-hint.arrow.clove",
+      "begin": "->(?=\\s)",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.arrow.clove" }
+      },
+      "end": "(?=\\s+[\\w\\-!?+*<>=]+\\s*:)|[\\)\\}]|\\](?!\\])|$",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.type-hint.end.clove" }
+      },
+      "patterns": [
+        { "include": "#type-hint-angle" },
+        { "include": "#type-name" }
+      ]
+    },
+    "type-name": {
+      "name": "entity.name.type.clove",
+      "match": "(?<![\\w\\-])(?:[A-Za-z_][\\w\\-]*::)*[A-Z_][\\w\\-!?+*]*"
+    }
+  }
+}

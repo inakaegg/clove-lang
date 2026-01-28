@@ -1,0 +1,2 @@
+# FnMeta entries that legitimately lack TypeKind information.
+# Remove entries from this list as soon as their overloads are filled in.

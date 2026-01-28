@@ -1,0 +1,7 @@
+;; Built-in defaults for user configuration
+(use dot-chain true)
+(use dot-indexer true)
+(use indexer true)
+(use oop-syntax true)
+(use foreign true)
+(use map-refs true)

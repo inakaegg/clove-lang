@@ -1,0 +1,12 @@
+(use oop-syntax true)
+
+;; Basic OOP-style chaining
+(let [xs (range 10)]
+  (println "top3 descending =" xs.reverse.take(3)))
+
+;; String-oriented chaining
+(let [csv "a,b,c"]
+  (println "reversed parts =" (str csv.string::split(",").reverse)))
+
+;; Only functions with known subject-pos can be chained.
+;; map/take/reverse/split/join are allowed. Custom functions should be (defn f [$coll] ...) or include {:subject-pos n}.

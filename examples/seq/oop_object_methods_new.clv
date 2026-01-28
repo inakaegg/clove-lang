@@ -1,0 +1,33 @@
+(use oop-syntax true)
+
+;; New OOP spec: callable / method / self inside maps
+(let [obj {:x 100
+           :add (method [n] (+ &:x n))
+           :add2 (fn [n] (+ &self[:x] n))
+           :plain (fn [a] (+ a 1))
+           :pack (method [] {:x &:x :self &})}]
+  (println "add =" (obj.add 5))
+  (println "add2 =" (obj.add2 5))
+  (println "plain =" (obj.plain 10))
+  (println "pack =" (obj.pack)))
+
+;; Add a method via assoc (method inferred because & appears in the body)
+(let [base {:canvas 3}
+      r2 (assoc base :set-color (fn [x] (+ &:canvas x)))]
+  (println "set-color =" (r2.set-color 4)))
+
+;; map-refs (only inside map literals)
+(use map-refs true)
+(def cfg {:screen {:h 100}
+          :pipe {:gap 10
+                 :gap-half (int (/ &^:gap 2))
+                 :gap-max (- &:screen:h &^:gap-half)}})
+(println "gap-max =" (get (get cfg :pipe) :gap-max))
+
+(def cfg_ref {:gap 10
+              :gap-half (int (/ (get &ref :gap) 2))})
+(println "gap-half =" (get cfg_ref :gap-half))
+
+(def cfg2 {:a {:x 1
+               :child {:y (+ &^../:x 2)}}})
+(println "parent =" (get (get (get cfg2 :a) :child) :y))

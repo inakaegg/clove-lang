@@ -1,0 +1,44 @@
+(ns examples::types::demo)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Product types (deftype) and enum definitions (defenum)
+;; - HousePets = Dog | Cat
+;; - Mammals   = HousePets | Human
+;; - Animals   = Mammals | Salmon
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(deftype Dog
+  {:name :string :age :int})
+(deftype Cat
+  {:name :string :lives :int})
+(deftype Human
+  {:name :string :role :string})
+(deftype Salmon
+  {:name :string :river :string})
+
+(defenum HousePets
+  Dog
+  Cat)
+
+(defenum Mammals
+  *HousePets
+  Human)
+
+(defenum Animals
+  *Mammals
+  Salmon)
+
+; (defn describe-animal: :string [a: Animals]
+(defn describe-animal [a: Animals] -> Str
+  (match a
+    (Dog {:name n :age age})         (str "Dog " n " (" age " years)")
+    (Cat {:name n :lives lives})     (str "Cat " n " (" lives " lives)")
+    (Human {:name n :role role})     (str "Human " n " (" role ")")
+    (Salmon {:name n :river river})  (str "Salmon " n " from " river)
+    :else                            "Unknown"))
+
+(defn -main
+  []
+  (println (describe-animal (Dog {:name "Pochi" :age 3})))
+  (println (describe-animal (Cat {:name "Tama" :lives 9})))
+  (println (describe-animal (Human {:name "Alice" :role "dev"})))
+  (println (describe-animal (Salmon {:name "Sake" :river "Ishikari"}))))

@@ -1,0 +1,13 @@
+[package]
+name = "clove2-core"
+version = "0.1.0"
+edition = "2021"
+description = "Phase2 core library for Clove"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+rand = "0.8"
+regex = "1.10"

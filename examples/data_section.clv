@@ -1,0 +1,5 @@
+(def data __DATA__)
+data
+__DATA__
+{"a":1,"b":2}
+(unknown-symbol)

@@ -1,0 +1,11 @@
+[package]
+name = "clove-plugin-api"
+version = "0.1.0"
+edition = "2021"
+description = "C ABI definitions for Clove native plugins"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]

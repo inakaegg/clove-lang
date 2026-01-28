@@ -1,0 +1,322 @@
+; =============================================================================
+; fmt_all_syntax.clv
+;   Formatter / Reader coverage fixture (single big file).
+;   - Contains "ugly" spacing on purpose in a few spots (regression cases).
+; =============================================================================
+
+(use oop-syntax true) ; regression: foreign + ruby-suffix + oop-syntax
+; (use auto-partial true) ; (OK for fmt coverage even if not implemented)
+
+; -----------------------------------------------------------------------------
+; 0) ns / require (also tested as plain forms)
+; -----------------------------------------------------------------------------
+(ns fmt::all-syntax
+  {:doc "Formatter coverage fixture: touch as many syntaxes as possible."}
+  (:require
+    [std :as std]
+    [async :as async]
+    [time :as time]
+    [process :as process]))
+
+; -----------------------------------------------------------------------------
+; 1) Scalars (nil/bool/int/float/duration)
+; -----------------------------------------------------------------------------
+(def nil0 nil)
+(def b0 true)
+(def b1 false)
+(def i0 0)
+(def i1 42)
+(def i2 -12345)
+(def f0 0.0)
+(def f1 0.125)
+(def d0 16ms)
+(def d1 1s)
+(def d2 2m)
+(def d3 1h)
+
+; -----------------------------------------------------------------------------
+; 2) Strings / escapes / interpolated strings
+; -----------------------------------------------------------------------------
+(def s0 "")
+(def s1 "hello\nworld\t\"quote\"\\slash\rand\reol")
+(def s2 "ESC=\e (0x1b) and unicode-ish stays as-is")
+(def name "clove")
+(def s3 "interpolated: name=#{name}, i1=#{i1}, (+ 1 2)=#{(+ 1 2)}, (str ...)=#{(str \"x\" i1)}")
+
+; -----------------------------------------------------------------------------
+; 3) Regex literals (/.../ and #/.../)
+; -----------------------------------------------------------------------------
+(def re0 #/\d+/)
+(def re1 /foo\/bar/)
+
+; -----------------------------------------------------------------------------
+; 4) Keywords / keyword-as-fn / symbols
+; -----------------------------------------------------------------------------
+(def kw0 :a)
+(def kw1 :fmt::all-syntax)
+(def m0 {:a 1 :b 2 :fmt::k 3})
+(def v-by-kw0 (:a m0))
+(def v-by-kw1 (:missing m0))
+(def v-by-kw2 (:fmt::k m0))
+
+; -----------------------------------------------------------------------------
+; 5) Lists / vectors / sets / maps (+ commas as whitespace)
+; -----------------------------------------------------------------------------
+(def xs [1 2 3, 4, 5])
+(def ys #{:a :b :c,})
+(def m1 {:x 1, :y 2, :z 3,})
+(def nested
+  {:k1 [1 2 {:inner #{:a :b}}]
+   :k2 (list :a :b :c)
+   :k3 "long long long long long long long long long long long long string"
+   :k4 {:deep {:deeper {:deepest [:ok]}}}})
+
+; -----------------------------------------------------------------------------
+; 6) Map shorthand (keyword-only / label-ish key / trailing commas)
+; -----------------------------------------------------------------------------
+(def now "2025-12-17T00:00:00+09:00")
+(def shorthand-a {:time, :key,})          ; => {:time time :key key} (reader shorthand)
+(def shorthand-b {time:, key:,})          ; => {:time time :key key}
+(def shorthand-c {:only-one,})            ; => {:only-one only-one}
+(def shorthand-d {:a 1 :b 2 :time,})      ; mix
+
+; -----------------------------------------------------------------------------
+; 7) Spread forms (vector/set/map)
+; -----------------------------------------------------------------------------
+(def extra {:e 9 :f 10})
+(def merged1 {*extra :a 1 :b 2})          ; map spread by *sym
+(def merged2 {* {:c 3 :d 4} :a 1})        ; map spread by "*" then expr
+(def vec2 [0 *xs 99])                     ; vector spread (symbol token)
+(def set2 #{*ys :z})                      ; set spread
+
+; -----------------------------------------------------------------------------
+; 8) Quote / discard / deref / short-fn
+; -----------------------------------------------------------------------------
+(def q0 'sym)
+(def q1 '(+ 1 2))
+(def q2 '[:a {:b 2} #{:c}])
+
+(def discard-example #_(+ 1 2) 42)        ; #_ discards next form
+
+(def p0 (promise))
+(def deref0 @p0)                          ; reader desugars to (deref p0)
+(def deref1 @(promise-catch p0 (fn [_] :recovered))) ; from existing reader test shape
+
+(def sf0 #(+ %1 ?2))                      ; short-fn supports % and ?
+
+; -----------------------------------------------------------------------------
+; 9) Type-hint-ish symbols (reader keeps as type_hint; semantics may vary)
+; -----------------------------------------------------------------------------
+(def nums<Int[]> [1 2 3])
+(defn id<T> [x<T>] x)
+(defn pair<A,B> [a<A> b<B>] [a b])
+
+; -----------------------------------------------------------------------------
+; 10) Thread macros heads (-> / ->> / as-> / cond-> / cond->>)
+; -----------------------------------------------------------------------------
+(defn thread-demo [x]
+  (-> x
+      (inc)
+      (str "v=")))
+
+(defn thread-demo2 [xs]
+  (->> xs
+       (map inc)
+       (take 3)
+       (vec)))
+
+(defn thread-demo3 [x]
+  (as-> x it
+    (inc it)
+    (str "it=" it)))
+
+(defn thread-demo4 [m]
+  (cond-> m
+    true  (assoc :ok true)
+    false (assoc :ng true)))
+
+; -----------------------------------------------------------------------------
+; 11) Control forms: let/loop/when/if/cond/case/try/catch/finally/doseq/for
+; -----------------------------------------------------------------------------
+(defn control-demo [x]
+  (let [a  1
+        b  2
+        ; comment inside bindings
+        c  (+ a b)
+        _  nil]
+    (when (> x 0)
+      (if (odd? x)
+        (cond
+          (= x 1) :one
+          (= x 3) :three
+          :else   :odd)
+        (case x
+          0 :zero
+          2 :two
+          4 :four
+          :many)))
+    (try
+      (doseq [i (range 3)]
+        (println "i=" i))
+      (for [i (range 3) j (range 2)]
+        [i j])
+      (catch RuntimeError e
+        (println "caught:" e)
+        :recovered)
+      (finally
+        (println "finally")))))
+
+; -----------------------------------------------------------------------------
+; 12) Indexer syntax + default (regression uses || inside [])
+; -----------------------------------------------------------------------------
+(defn indexer-demo [options frame state]
+  (let [render-interval  options[:render-interval || 33ms]
+        lines0           frame[:lines || []]
+        st0              frame[:state || {}]
+        gameover?        (:gameover @state)]
+    {:render-interval render-interval
+     :lines           lines0
+     :state           st0
+     :gameover?       gameover?}))
+
+; -----------------------------------------------------------------------------
+; 13) Formatter regression cases copied/condensed from fmt01.md
+; -----------------------------------------------------------------------------
+
+; 13-1) let bindings: comment-at-top / trailing comment position
+(defn start-terminal-app-handle! [options]
+  (let [;render-fn        options[:render-fn]
+        ;reducer          options[:input-reducer]
+        ;initial-state    options[:initial-state || {}]
+        ;stop-keys        options[:stop-keys || ["q"]]
+        ;stop-set         (make-stop-set stop-keys)
+        ;stop-predicate   options[:stop-predicate]
+        ;key-timeout-ms   options[:key-timeout || 16]
+        ;render-interval  options[:render-interval || 33ms]
+        ;event-buffer     options[:event-buffer || 128]
+        ;frame-buffer     options[:frame-buffer || 1]
+        ;show-fps?        options[:show-fps? || true]
+        ;fps-key          options[:fps-key || nil]
+        ;event-ch         (chan event-buffer)
+        ;state-ch         (chan 1)
+        ;frame-ch         (chan frame-buffer)
+        ;out-ch           (chan frame-buffer)
+        _ nil
+        ]
+    (println "start" options)
+    :ok))
+
+; 13-2) defn args vector: tends to drift like "out gets misaligned here"
+(defn run-fps-stage!
+  [in
+  out ; <- reported spot where alignment drifts
+   {:keys [show-fps? fps-key]}]
+  (loop [m  (fps-meter-init)]
+    (when (not (scope-cancelled?))
+      (let [[tag frame]  (take-or-cancel! in)]
+        (when (= tag :ok)
+          (when (some? frame)
+            (let [[m' fps]  (fps-meter-on-frame m)
+                  lines0    frame[:lines || []]
+                  lines1    (if show-fps?
+                             (conj lines0 (str "FPS: " fps))
+                             lines0)
+                  frame'    (if (nil? fps-key)
+                             (assoc frame :lines lines1 :fps fps)
+                             (let [st  (frame[:state || {}])]
+                               (assoc frame :lines lines1 :fps fps :state (assoc st fps-key fps))))]
+              (put-latest! out frame')
+              (recur m')))
+          (recur m))))))
+
+; 13-3) async-loop: body should not collapse
+(defn run-render-loop! [state-ch frame-ch initial-state render-fn render-interval]
+  (async-loop [state initial-state]
+    (let [pair  (async-select [state-ch] {:timeout render-interval})]
+      ; ...
+      (render-fn pair state)
+      (recur state))))
+
+; 13-4) scope-loop: line breaks should not collapse excessively
+(defn tick-event-loop [event-ch key-timeout-ms]
+  (scope-loop []
+    (let [_  (scope-select [(timeout 16ms)])]
+      (put! event-ch :tick))
+    (recur)))
+
+; 13-5) go-loop: avoid over-compressing right after when-not
+(defn event-loop1 [event-ch]
+  (go-loop []
+    (when-not (async::scope-cancelled?)
+      (repl)
+      (let [evt  (async::scope-select [event-ch])]
+        (repl)
+        (println evt)
+        (recur)))))
+
+; 13-6) let[...] without spaces (token boundary) should not be collapsed into a weird single line
+(defn let-no-space-demo []
+  (let[ evt1 (KeyEvent {:key "x"})
+         evt2 (TickEvent {:time "tick"})]
+    (match evt1
+      KeyEvent "k"
+      TickEvent "t"
+      _ nil)))
+
+; 13-7) match: don't force :when and :as into vertical layout (keep single-line when OK)
+(defn match-when-as-demo [evt state]
+  (match evt
+    (TickEvent {:time,})  (agent-send! state (update ? :tick (fnil inc 0)))
+    (KeyEvent {:key,}) :when (= key "q") :as whole  (agent-send! state (assoc ? :gameover true))
+    (KeyEvent {:key,})    (agent-send! state (update ? :key (fnil conj []) key))
+    _                     (agent-send! state (update ? :nil (fnil inc 0)))))
+
+; 13-8) async::scope + commented futures: comments should not spill or move
+(defn scope-demo [event-ch state]
+  (let [{:cancel!, :await, :cancelled?, :children,}  (async::scope
+                                                       [(future (fn [] (key-event-loop event-ch)))
+                                                        ;(future (fn [] (key-event-loop1 event-ch)))
+                                                        (future (fn [] (tick-event-loop event-ch)))
+                                                        ;(future (fn [] (tick-event-loop1 event-ch)))
+                                                        (future (fn [] (event-loop event-ch)))]
+                                                       ;(future (fn [] (event-loop1 event-ch))) <- tends to spill
+                                                       (loop []
+                                                         (when-not (:gameover @state)
+                                                           (let [cc      (async::cancel-chan)
+                                                                 [v ch]  (select
+                                                                           [cc
+                                                                            (timeout 16ms)])]
+                                                             (when (not= ch cc)
+                                                               (print-for-terminal (str @state))
+                                                               (recur))))))]
+    (println children)
+    (await)))
+
+; -----------------------------------------------------------------------------
+; 14) Foreign forms ($...): symbol/raw + ruby suffix (fmt tends to reshape these)
+; -----------------------------------------------------------------------------
+(defn foreign-demo []
+  ${require "nokogiri"}
+  (let [html  "<h1>Hi</h1>"]
+    (println $Foo.bar)
+    (println $rb:Foo.bar)
+    ; From existing reader test: tagged + ruby suffix becomes ForeignRaw
+    (println $rb:Nokogiri::HTML.parse(html).search("h1").text)
+    ; Suffix can appear without a tag (fmt tends to normalize to ${...})
+    (println $Nokogiri::HTML.parse(html).search("h1").text)
+    ; This often gets auto-transformed (kept as a regression check)
+    (println ${Nokogiri::HTML.parse(html).search("h1").text}))))
+
+; -----------------------------------------------------------------------------
+; 15) Entry point-ish
+; -----------------------------------------------------------------------------
+(defn -main []
+  (println "fmt fixture loaded")
+  (foreign-demo)
+  :ok)
+
+; -----------------------------------------------------------------------------
+; 16) (Optional / commented out) syntax examples that might be unsupported
+; -----------------------------------------------------------------------------
+; (map /*block comment*/ inc (range 10))
+; $rb{ puts "hello from braced foreign block"; 123 }   ; If ForeignBlock exists, this form should be supported

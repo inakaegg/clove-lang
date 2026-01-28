@@ -1,0 +1,5 @@
+(ns dag)
+
+(defenum Result
+  Ok {:value :any}
+  Err {:error :any})

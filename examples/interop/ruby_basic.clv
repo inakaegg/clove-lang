@@ -1,0 +1,13 @@
+(ns examples::interop::ruby-basic)
+
+(defn ruby-version []
+  $rb{
+    RUBY_VERSION
+  })
+
+(defn upcase [s]
+  $rb{String(s).upcase})
+
+(defn -main []
+  (println "Ruby version:" (ruby-version))
+  (println (upcase "hello from clove")))

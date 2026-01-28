@@ -1,0 +1,17 @@
+; formatter fixture: includes vector/map alignment cases
+(ns examples::terminal1)
+
+(def app-options
+  {:initial-state {:key-history [] :input nil}
+   :poll-interval 33ms})
+
+(defn render-key-history-lines [state]
+  (let [history (:key-history state)
+        latest  (last history)]
+    ["Key history (oldest -> newest):"
+     (str "  " history)
+     ""
+     "Latest state:"
+     (str state)
+     (str "Latest key: " (or latest "<none>"))]))
+

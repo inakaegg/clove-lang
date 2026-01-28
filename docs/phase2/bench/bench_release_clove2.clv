@@ -1,0 +1,62 @@
+(def reps-fast: Int 3000000)
+(def reps-mid: Int 400000)
+(def reps-slow: Int 200)
+
+;; map / filter / reduce
+(def xs: [Int] (range reps-fast))
+(def sum-map: Int (reduce + 0 (map inc xs)))
+(def sum-filter: Int (reduce + 0 (filter even? xs)))
+
+;; hash-map / conj / nth / rest / interleave / count / empty?
+(def sum-collections: Int
+  (reduce
+    +
+    0
+    (map
+      (fn [x: Int]
+        (let [m (hash-map :a x :b x)
+              v (conj [x] x)
+              n0 (nth v 0)
+              r (rest v)
+              i (interleave v r)
+              c (count i)]
+          (if (empty? m) 0 (+ c n0))))
+      (range reps-mid))))
+
+;; remove / drop-while / keep / keep-indexed
+(def rm: [Int] (remove odd? (range reps-mid)))
+(def dw: [Int] (drop-while (fn [x: Int] (< x 10)) rm))
+(def kp: [Int] (keep (fn [x: Int] (when (even? x) x)) dw))
+(def kpi: [Int] (keep-indexed (fn [i: Int x: Int] (when (even? i) x)) kp))
+(def sum-keep: Int (reduce + 0 kpi))
+
+;; sort / sort-by / some
+(def small: [Int] (range 20000))
+(def sum-sort: Int
+  (reduce
+    +
+    0
+    (map
+      (fn [i: Int]
+        (let [sorted (sort small)
+              sortby (sort-by (fn [x: Int] (- 0 x)) small)
+              somev (some (fn [x: Int] (when (even? x) x)) small)
+              some-flag (if somev 1 0)]
+          (+ (count sorted) (count sortby) some-flag)))
+      (range reps-slow))))
+
+;; split / join
+(def text: Str "a,b,c,d,e,f,g,h,i,j")
+(def sum-text: Int
+  (reduce
+    +
+    0
+    (map
+      (fn [i: Int]
+        (let [parts (split text ",")
+              joined (join parts "|")]
+          (+ (count joined) (count parts))))
+      (range reps-mid))))
+
+(def total: Int (+ sum-map sum-filter sum-collections sum-keep sum-sort sum-text))
+(println total)

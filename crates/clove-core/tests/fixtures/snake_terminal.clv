@@ -1,0 +1,311 @@
+; snake_terminal.clv (terminal control / loop boilerplate)
+; Note: both use ns game::snake_single_state,
+; so they are expected to be loaded into the same ns (e.g., :load snake_state.clv -> :load snake_terminal.clv).
+(ns game::snake_terminal)
+(require game::snake_state refer *)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; snake_terminal.clv
+;; -----------------------------------------------------------
+;; This file handles only the boilerplate layer (terminal control / loop handling).
+;; - Core logic such as GameState / World / tick / input-*
+;;   is fully centralized in snake_state.clv.
+;; - Here we keep exactly one GameState and update it via pure functions
+;;   while implementing only I/O and concurrency.
+;;
+;; Note: by sharing the same namespace (game::snake_single_state) as snake_state.clv,
+;;   you can run it by simply loading both with :load.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 1. Terminal helpers: raw mode / alt screen / cursor / key mapping
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Common prefix for ANSI escape sequences
+(def esc "")
+
+;; Alt screen ON/OFF
+(def alt-on  (str esc "[?1049h"))
+(def alt-off (str esc "[?1049l"))
+
+(defn enter-alt-screen []
+  ;; Switch to alt screen (always call leave-alt-screen on exit)
+  (printf "{}" alt-on))
+
+(defn leave-alt-screen []
+  ;; Return to normal screen
+  (printf "{}" alt-off))
+
+(defn hide-cursor []
+  ;; Hide the cursor
+  (printf "{}[?25l" esc))
+
+(defn show-cursor []
+  ;; Show the cursor again
+  (printf "{}[?25h" esc))
+
+(defn terminal-enable-raw-mode! []
+  ;; Enable raw mode to read input per key instead of per line
+  (term::raw-mode! true))
+
+(defn terminal-disable-raw-mode! []
+  ;; Disable raw mode and restore normal terminal state
+  (term::raw-mode! false))
+
+(defn terminal-read-key []
+  ;; Convert raw key names from term::read-key to
+  ;; symbol-like strings for this game (arrow-up / escape / enter / ...).
+  (let [k (term::read-key)]
+    (cond
+      (= k nil)      nil
+      (= k "up")     "arrow-up"
+      (= k "down")   "arrow-down"
+      (= k "left")   "arrow-left"
+      (= k "right")  "arrow-right"
+      (= k "esc")    "escape"
+      (= k "enter")  "enter"
+      :else          k)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 2. Agent and runner holding GameState
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; run-loop-flag is only used to stop the outer while.
+;; Whether the game is running lives in GameState :running?.
+; (def run-loop-flag (atom true))
+(def running (atom true))
+
+(defn running? []
+  ;; Flag read by input/render/tick loops.
+  ;; - When false, each loop ends.
+  ;; - Duplicated with GameState :running?, but
+  ;;   here it's treated as a coarse cross-thread stop flag.
+  @running)
+
+; (defn make-state-agent [config]
+;   ;; Initialize GameState from GameConfig and wrap it in an Agent.
+;   ;; - The game's single state lives only inside this Agent.
+;   (let [initial (initial-game-state config)]
+;     (agent initial)))
+; (agent (initial-game-state config))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 3. Direction key mapping
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn direction-from-key [key]
+  ;; Determine Direction* from key strings.
+  ;; - Accept both WASD and arrow keys.
+  (cond
+    (or (= key "arrow-up")   (= key "w") (= key "W"))  (DirectionUp)
+    (or (= key "arrow-down") (= key "s") (= key "S"))  (DirectionDown)
+    (or (= key "arrow-left") (= key "a") (= key "A"))  (DirectionLeft)
+    (or (= key "arrow-right") (= key "d") (= key "D")) (DirectionRight)
+    :else                                              nil))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 4. Input loop: key input -> GameState update
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn stop-game! [state-agent]
+  ;; Helper to stop the game from outside.
+  ;; - Set run-loop-flag to false,
+  ;; - Also send input-quit to GameState.
+  (when @running
+    (atom-set! running false)
+    (agent-send! state-agent
+      (fn [s] (input-quit s)))))
+
+(defn handle-input-key! [state-agent key]
+  ;; Convert one key input into GameState updates.
+  (let [direction (direction-from-key key)]
+    (cond
+      ;; Direction input
+      direction
+      (agent-send! state-agent
+        (fn [s] (input-direction s direction)))
+
+      ;; Pause / resume
+      (or (= key "p") (= key "P") (= key " "))
+      (agent-send! state-agent
+        (fn [s] (input-pause-resume s)))
+
+      ;; Restart
+      (or (= key "r") (= key "R") (= key "enter"))
+      (agent-send! state-agent
+        (fn [s] (input-restart s)))
+
+      ;; Quit (Ctrl+C / Ctrl+D / q / esc, etc.)
+      (or (= key "ctrl-c")
+          (= key "ctrl-d")
+          (= key "q") (= key "Q")
+          (= key "escape"))
+      (stop-game! state-agent)
+
+      ;; Ignore other keys
+      :else
+      nil)))
+
+(defn input-loop! [state-agent]
+  ;; Main input loop.
+  ;; - Use both run-loop-flag and GameState :running? to decide continue/stop.
+  (loop []
+    (when (and (running?)
+               (:running? @state-agent))
+      (let [key (terminal-read-key)]
+        (when (some? key)
+          (handle-input-key! state-agent key))
+        (recur)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 5. Rendering (World + EventBusState) and UI loop
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn render-cell-char [kind dir]
+  ;; Choose the character for one cell.
+  ;; - For now: head="@", body="o", food="*", empty=" "
+  ;; - dir is accepted for future extensions (e.g., oriented head).
+  (match kind
+    CellSnakeHead "@"
+    CellSnakeBody "o"
+    CellFood      "*"
+    CellEmpty     " "))
+
+(defn join-lines [lines]
+  ;; Helper to join ["foo" "bar" "baz"] -> "foo\r\nbar\r\nbaz".
+  ;; - Rendering is faster when you printf a single big string.
+  (if (empty? lines)
+    ""
+    (reduce
+      (fn [acc line] (str acc "\r\n" line))
+      (first lines)
+      (rest lines))))
+
+(defn render-world-only [world]
+  ;; Build the "score + snake board" string from World only.
+  ;; - Do not include bus or detailed debug info.
+  (let [config      (:config world)
+        board       (:board config)
+        snake       (:snake world)
+        food        (:food world)
+        w           (:width board)
+        h           (:height board)
+        phase       (:phase world)
+        header      (str "Score: " (:score world)
+                         "  Phase: " phase)
+        board-lines (vec
+                      (for [y (range 0 h)]
+                        (let [line (apply str
+                                           (for [x (range 0 w)]
+                                             (let [pos  (Position {:x x :y y})
+                                                   kind (cell-kind-at pos snake food)]
+                                               (render-cell-char kind (:dir snake)))))]
+                          line)))]
+    (join-lines (into [header] board-lines))))
+
+(defn render-debug-panel [state]
+  ;; Render GameState (:world / :bus) into simple text.
+  ;; - Make it easy to glance at EventBusState queue / per-kind.
+  (let [world      (:world state)
+        bus        (:bus state)
+        snake      (:snake world)
+        head       (snake-head snake)
+        board      (:board (:config world))
+        food       (:food world)
+        queue      (:queue bus)
+        total      (:total-count bus)
+        per-kind   (:per-kind bus)
+        snake-len  (count (:body snake))
+        w          (:width board)
+        h          (:height board)
+        base-lines ["" 
+                    "---------------- DEBUG STATE ----------------"
+                    "World:"
+                    (str "  phase       = " (:phase world)
+                         "  score = " (:score world))
+                    (str "  snake-len   = " snake-len
+                         "  head = " (:x head) "," (:y head))
+                    (str "  food-pos    = " (:x (:pos food))
+                         "," (:y (:pos food)))
+                    ""
+                    "EventBusState:"
+                    (str "  total-events = " total
+                         "  queue-len = " (count queue))
+                    "  per-kind:"]
+        per-kind-lines (vec
+                         (for [[k v] per-kind]
+                           (str "    " k " : " v)))
+        event-lines    (vec
+                         (for [ev queue]
+                           (str "    - " (event-kind-key ev))))
+        footer-lines   ["(queue is oldest -> newest)"
+                        "---------------------------------------------"]]
+    (join-lines (-> base-lines
+                    (into per-kind-lines)
+                    (into event-lines)
+                    (into footer-lines)))))
+
+(defn render-full-frame [state]
+  ;; Build one frame of text from GameState.
+  ;; - Top: score + snake board
+  ;; - Bottom: debug panel (event history, etc.)
+  (let [world-str (render-world-only (:world state))
+        debug-str (render-debug-panel state)]
+    (str world-str "\r\n" debug-str)))
+
+(defn ui-loop! [state-agent]
+  ;; Render loop.
+  ;; - Read GameState at fixed intervals and render the full frame.
+  ;; - Move cursor to top-left to overwrite the full frame.
+  (loop []
+    (when (and (running?)
+               (:running? @state-agent))
+      (let [state  @state-agent
+            frame  (render-full-frame state)]
+        ;; Move cursor to top-left and overwrite the full frame
+        (printf "{}[H{}" esc frame)
+        ;; Use a light render interval (a bit shorter than tick-ms is OK)
+        (sleep 30ms)
+        (recur)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 6. Tick loop: send tick to GameState at fixed intervals
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn tick-loop! [state-agent tick-ms]
+  ;; Apply tick to GameState every tick-ms.
+  (loop []
+    (when (and (running?)
+               (:running? @state-agent))
+      (agent-send! state-agent
+        (fn [s] (tick s tick-ms)))
+      (sleep tick-ms)
+      (recur))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; 7. Startup function (entry point)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn start-snake-terminal! []
+  ;; High-level function to start the snake game in the terminal.
+  ;; - Manage alt screen / raw mode / cursor visibility here.
+  ;; - Start the Agent, input loop, tick loop, and UI loop.
+  (enter-alt-screen)
+  (hide-cursor)
+  (terminal-enable-raw-mode!)
+  (try
+    (let [config      (GameConfig {:board   (Board {:width 20
+                                                    :height 15})
+                                   :tick-ms 120ms})
+          state-agent (agent (initial-game-state config))]
+      ;; Run render loop and tick loop asynchronously via future
+      (future (fn [] (ui-loop! state-agent)))
+      (future (fn [] (tick-loop! state-agent (:tick-ms config))))
+      ;; Block on the input loop inside this function
+      (input-loop! state-agent))
+    (finally
+      ;; Always restore terminal state in finally
+      (terminal-disable-raw-mode!)
+      (show-cursor)
+      (leave-alt-screen)
+      (printf "snake single-state demo finished.\r\n"))))

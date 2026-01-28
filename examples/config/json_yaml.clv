@@ -1,0 +1,17 @@
+(ns examples::config::json-yaml)
+
+(def config-json
+  #json{
+    "host": "localhost",
+    "port": 8080
+  })
+
+(def config-yaml
+  #yaml{
+    host: localhost
+    port: 8080
+  })
+
+(defn -main []
+  (println "json host =" config-json[:host])
+  (println "yaml host =" config-yaml[:host]))

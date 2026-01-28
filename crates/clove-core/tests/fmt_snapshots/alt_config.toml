@@ -1,0 +1,18 @@
+version = 1
+
+[line]
+width = 60
+indent = 4
+
+[inline]
+depth_limit = 6
+map_max_entries = 4
+vector_max_items_relaxed = 8
+
+[align]
+let_bindings = false
+maps = false
+
+[shorthand]
+map = false
+map_exclude_keys = ["keys", "as"]

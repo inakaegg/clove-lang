@@ -1,0 +1,20 @@
+(use oop-syntax true)
+
+;; Load Nokogiri
+$rb{require "nokogiri"}
+
+;; If default tag is rb (e.g., *.rb.clv or REPL :lang rb), `$Nokogiri::...` runs as Ruby
+(let [html "<h1>Hi</h1>"]
+  (println "h1 text =" $Nokogiri::HTML.parse(html).search("h1").text))
+
+;; Use this when the default tag is not set
+(let [html "<h1>Hi</h1>"]
+  (println "h1 text =" $rb:Nokogiri::HTML.parse(html).search("h1").text))
+
+;; Or this form
+(let [html "<h1>Hi</h1>"]
+  (println "h1 text =" $rb{Nokogiri::HTML.parse(html).search("h1").text}))
+
+;; If you need to touch the document tree multiple times, finish the expression on the Ruby side
+(def headlines $rb{Nokogiri::HTML.parse("<h1>A</h1><h1>B</h1>").search("h1").map(&:text)})
+(println "all headlines =" headlines)

@@ -1,0 +1,8 @@
+(glob* "lib/data/*.json")
+.(map
+    (fn [path]
+        (println path)
+        (println path)
+        path)
+    ?)
+.(take 3 ?)

@@ -1,0 +1,16 @@
+; formatter fixture: formatted variant
+(ns examples::terminal1)
+
+(def config {:width 20 :height 15})
+
+(defn append-key [history key]
+  (let [base (conj history key)]
+    (if (> (count base) 3)
+      (rest base)
+      base)))
+
+(defn handle-key [state key]
+  (match key
+    "q" (assoc state :running? false)
+    _   (update state :history append-key key)))
+

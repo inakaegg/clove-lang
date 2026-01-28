@@ -1,0 +1,127 @@
+(ns set)
+
+(defn- ensure-set {:subject-pos 1}
+  [value]
+  (cond
+    (nil? value) #{}
+    (set? value) value
+    :else (core::into #{} value)))
+
+(defn union {:subject-pos 1}
+  "Return the union of the given sets."
+  [& sets]
+  (reduce (fn [acc s] (core::into acc (ensure-set s))) #{} sets))
+
+(defn intersection {:subject-pos 1}
+  "Return the intersection of the given sets."
+  [& sets]
+  (if (empty? sets)
+    #{}
+    (reduce
+      (fn [acc s]
+        (core::into #{} (filter (fn [x] (contains? s x)) acc)))
+      (ensure-set (first sets))
+      (map ensure-set (rest sets)))))
+
+(defn difference {:subject-pos 1}
+  "Return the difference of set and the rest."
+  [s & sets]
+  (reduce
+    (fn [acc other]
+      (core::into #{} (filter (fn [x] (not (contains? other x))) acc)))
+    (ensure-set s)
+    (map ensure-set sets)))
+
+(defn select {:subject-pos :last}
+  "Return the elements of set for which pred is true."
+  [pred s]
+  (core::into #{} (filter pred (ensure-set s))))
+
+(defn- select-keys {:subject-pos 1}
+  "Return a map containing only entries for keys."
+  [m ks]
+  (let [path (core::vec ks)
+        total (count path)]
+    (loop [idx 0 acc {}]
+      (if (>= idx total)
+        acc
+        (let [k (nth path idx)]
+          (recur
+            (inc idx)
+            (if (and (map? m) (contains? m k))
+              (assoc acc k (get m k))
+              acc)))))))
+
+(defn project {:subject-pos 1}
+  "For a set of maps, return a set of maps with only the given keys."
+  [xrel ks]
+  (core::into #{} (map #(select-keys % ks) xrel)))
+
+(defn rename-keys {:subject-pos 1}
+  "Rename keys in map m according to keymap."
+  [m keymap]
+  (reduce
+    (fn [acc entry]
+      (let [old (first entry)
+            new (second entry)
+            val (get acc old)]
+        (-> acc (dissoc old) (assoc new val))))
+    m
+    keymap))
+
+(defn rename {:subject-pos 1}
+  "For a set of maps, rename keys according to keymap."
+  [xrel keymap]
+  (core::into #{} (map #(rename-keys % keymap) xrel)))
+
+(defn index {:subject-pos 1}
+  "Create an index of xrel on keys ks."
+  [xrel ks]
+  (reduce
+    (fn [m x]
+      (let [ik (select-keys x ks)
+            bucket (get m ik #{})]
+        (assoc m ik (conj bucket x))))
+    {}
+    xrel))
+
+(defn map-invert {:subject-pos 1}
+  "Invert a map's keys and values."
+  [m]
+  (reduce (fn [acc entry] (assoc acc (second entry) (first entry))) {} m))
+
+(defn join {:subject-pos 1}
+  "Natural join of relations xrel and yrel; optional keymap for key renames."
+  [xrel yrel & rest]
+  (let [keymap (if (empty? rest) {} (first rest))
+        ks (if (empty? keymap)
+             (intersection (core::into #{} (keys (first xrel))) (core::into #{} (keys (first yrel))))
+             (core::into #{} (vals keymap)))
+        x-smaller? (<= (count xrel) (count yrel))
+        idx (if x-smaller? (index xrel ks) (index yrel ks))
+        r (if x-smaller? yrel xrel)
+        km (if x-smaller? keymap (map-invert keymap))]
+    (reduce
+      (fn [ret x]
+        (let [lookup (select-keys x (if (empty? km) ks (keys km)))
+              mapped (if (empty? km) lookup (rename-keys lookup km))
+              found (get idx mapped)]
+          (if found
+            (core::into ret (map #(merge % x) found))
+            ret)))
+      #{}
+      r)))
+
+(defn subset? {:subject-pos 1}
+  "Is set1 a subset of set2?"
+  [set1 set2]
+  (let [set1 (ensure-set set1)
+        set2 (ensure-set set2)]
+    (every? #(contains? set2 %) set1)))
+
+(defn superset? {:subject-pos 1}
+  "Is set1 a superset of set2?"
+  [set1 set2]
+  (let [set1 (ensure-set set1)
+        set2 (ensure-set set2)]
+    (every? #(contains? set1 %) set2)))

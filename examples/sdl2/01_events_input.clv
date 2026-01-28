@@ -1,0 +1,31 @@
+(ns examples::sdl2::events-input)
+
+(require-native "clove-sdl2")
+(require clove-sdl2)
+
+(defn -main []
+  (clove-sdl2::with-init
+    (fn []
+      (let [{:keys [canvas]}
+            (clove-sdl2::window+canvas
+              "Events/Input"
+              640
+              480
+              {:accelerated true :vsync true})]
+        (sdl2::start-text-input)
+        (sdl2::show-cursor true)
+        ; Set IME candidate window position
+        (sdl2::set-text-input-rect {:x 16 :y 16 :w 200 :h 32})
+        (try
+          (loop []
+            (let [events (sdl2::poll-events)
+                  keys (clove-sdl2::events->keys events)
+                  _ (sdl2::get-keyboard-state)
+                  _ (sdl2::mouse-state)]
+              (when (not (clove-sdl2::quit? events))
+                (when (contains? keys :escape)
+                  (sdl2::set-window-title canvas "Events/Input (ESC pressed)"))
+                (sdl2::delay-ms 16)
+                (recur))))
+          (finally
+            (sdl2::stop-text-input)))))))

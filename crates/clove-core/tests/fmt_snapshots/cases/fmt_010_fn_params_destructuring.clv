@@ -1,0 +1,2 @@
+(defn f [{:keys [a b c d e f g] :as m} [x y z] & rest]
+  [m x y z rest])

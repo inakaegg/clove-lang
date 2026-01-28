@@ -1,0 +1,19 @@
+(use oop-syntax true)
+
+;; Example to verify builtin subject-pos registrations
+(let [xs [1 2 3]
+      ys [10 20 30]]
+  (println "1.inc =>" 1.inc)
+  (println "map with two colls =>" xs.map(+ ys))
+  (println "reduce (last receiver) =>" xs.reduce(+))
+  (println "reduce with init (last receiver) =>" xs.reduce(+ 0))
+  (println "dorun no-arg =>" xs.dorun())
+  (println "dorun with n =>" xs.dorun(2)))
+
+;; Example: add :last to a custom function (attr-map can be before/after doc)
+(defn append-last "doc" {:subject-pos :last} [x coll] (conj coll x))
+(println "append-last =>" [1 2].append-last(3))
+
+;; Known meta without subject-pos will error
+(defn noop [x] x)           ;; subject-pos unknown (no meta)
+;; (1.noop()) ; => error: cannot decide subject-pos (FnMeta exists but no position)
