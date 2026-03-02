@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use clove2_core::type_check::{as_type, expect_type, matches_type};
-use clove2_core::types::Type;
-use clove2_core::value::{Key, Value};
+use clove_build_core::type_check::{as_type, expect_type, matches_type};
+use clove_build_core::types::Type;
+use clove_build_core::value::{Key, Value};
 
 #[test]
 fn matches_optional_union() {

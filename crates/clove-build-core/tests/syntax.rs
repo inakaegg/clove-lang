@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use clove2_core::ast::{Expr, ExprKind, Literal};
-use clove2_core::reader::read_all;
-use clove2_core::syntax::{
+use clove_build_core::ast::{Expr, ExprKind, Literal};
+use clove_build_core::reader::read_all;
+use clove_build_core::syntax::{
     parse_forms, AstExpr, Binding, ForeignCode, ForeignDecl, ForeignOptions, Param, TopLevel,
 };
-use clove2_core::types::Type;
+use clove_build_core::types::Type;
 
 fn list_symbols(expr: &Expr) -> Vec<String> {
     match &expr.kind {

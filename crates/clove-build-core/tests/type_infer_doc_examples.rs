@@ -1,7 +1,7 @@
-use clove2_core::reader::read_all;
-use clove2_core::syntax::parse_forms;
-use clove2_core::type_infer::{check_program, DiagnosticLevel};
-use clove2_core::use_directive::NativeLevel;
+use clove_build_core::reader::read_all;
+use clove_build_core::syntax::parse_forms;
+use clove_build_core::type_infer::{check_program, DiagnosticLevel};
+use clove_build_core::use_directive::NativeLevel;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};

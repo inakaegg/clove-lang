@@ -1,5 +1,5 @@
-use clove2_core::reader::read_all;
-use clove2_core::use_directive::{parse_use_directives, Mode, NativeLevel};
+use clove_build_core::reader::read_all;
+use clove_build_core::use_directive::{parse_use_directives, Mode, NativeLevel};
 
 #[test]
 fn parse_use_directives_basic() {

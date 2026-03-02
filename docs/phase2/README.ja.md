@@ -12,7 +12,7 @@
 
 - Clojure 系の S 式言語（Lisp 方言）
 - REPL / スクリプト実行と、ネイティブビルド（高速実行）を両立したい言語
-- 実装は Rust を前提にしており、最終的には Rust ネイティブ化を目標にしている
+- コンパイラ/ツール実装は Rust で、ネイティブビルド出力は C バックエンド経由で生成する
 
 ---
 
@@ -28,16 +28,16 @@
 ## 3. Phase2 とは？
 
 - **再設計・再実装**の世代（Native-first を最優先）
-- 型情報を前提に Rust ネイティブ化を行う
+- 型情報を前提に C バックエンドへ lowering/codegen し、ネイティブバイナリを生成する
 - Dynamic 機能は「開発時のみ」に限定し、ビルド時は静的に解決する
 - `mut` をデフォルト（build時）。`imut` は観測不変、`mut` は in-place 必須（共有があればエラー）
-- 主要コード: [crates/clove2-core](/crates/clove2-core), [crates/clove2-lang](/crates/clove2-lang), [crates/clove2-lsp](/crates/clove2-lsp)
+- 主要コード: [crates/clove-build-core](/crates/clove-build-core), [crates/clove-build-front](/crates/clove-build-front), [crates/clove-build-backend-c](/crates/clove-build-backend-c), [crates/clove-build-runtime-c](/crates/clove-build-runtime-c)
 
 ---
 
 ## 4. Phase1 との違い（要点）
 
-- Native-first（Rust 化）を最優先し、Dynamic は縮退
+- Native-first（C バックエンド経路）を最優先し、Dynamic は縮退
 - `Any` を極力排除し、`Dyn` は **境界に限定**して使う
 - `mut/imut` の文脈で **同一関数が最適化の可否を変える**（mut は in-place 必須）
 - Native ビルドでは **動的評価/ロードや再定義を禁止**する
@@ -49,7 +49,7 @@
 
 ## 5. 現在の進捗（概要）
 
-- `clove2` の `run`/`build`/`check` が動作
+- `clove` の `run`/`build`/`check` が動作（build は phase2 C backend 経路に統合済み）
 - `--native` / `--mode` / `--mut` を CLI から上書き可能
 - `time` / `bench` を eval に追加（戻り型は関数の戻り値に追随）
 - LSP: 診断 + 補完 + hover + 定義ジャンプ + シンボル一覧（トップレベル）
@@ -68,25 +68,25 @@
 ## 7. 主要コマンド
 
 ```bash
-# ビルド
-cargo install --path crates/clove2-lang
+# Build/Run CLI
+cargo install --path crates/clove-lang
 
 # 実行
-clove2 run path/to/a.clv
+clove path/to/a.clv
 
 # ビルド（ネイティブ）
-clove2 build path/to/a.clv --out target/clove2/bin/a
+clove build path/to/a.clv --out target/clove/bin/a
 
 # 型チェック（strict/warn/allow 切替可）
-clove2 check path/to/a.clv --native=strict
+clove check path/to/a.clv --native=strict
 
 # LSP
-cargo install --path crates/clove2-lsp
+cargo install --path crates/clove-lsp
 ```
 
 補足:
 
-- clove2 の **デフォルトは strict**（CLI/LSP ともに同じ）
+- clove の **デフォルトは strict**（CLI/LSP ともに同じ）
 - `use native :warn` / `:allow` または `--native=warn` / `--native=allow` で緩められる
 
 ---

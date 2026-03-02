@@ -1,8 +1,8 @@
-use clove2_core::ast::{Literal, Span};
-use clove2_core::syntax::{AstExpr, TopLevel};
-use clove2_core::use_directive::MutMode;
-use clove2_core::value::Value;
-use clove2_core::vm::run_program_vm;
+use clove_build_core::ast::{Literal, Span};
+use clove_build_core::syntax::{AstExpr, TopLevel};
+use clove_build_core::use_directive::MutMode;
+use clove_build_core::value::Value;
+use clove_build_core::vm::run_program_vm;
 
 #[test]
 fn vm_add_ints() {
@@ -25,7 +25,7 @@ fn vm_add_ints() {
 #[test]
 fn vm_let_if() {
     let expr = AstExpr::Let {
-        bindings: vec![clove2_core::syntax::Binding {
+        bindings: vec![clove_build_core::syntax::Binding {
             name: "a".to_string(),
             ty: None,
             value: AstExpr::Literal(Literal::Int(10)),

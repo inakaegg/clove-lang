@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use clove2_core::builtins::BUILTIN_NAMES;
-use clove2_core::docs::doc_entries;
+use clove_build_core::builtins::BUILTIN_NAMES;
+use clove_build_core::docs::doc_entries;
 
 #[test]
 fn clove2_docs_cover_builtins() {

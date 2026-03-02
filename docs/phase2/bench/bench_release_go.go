@@ -6,6 +6,18 @@ import (
     "strings"
 )
 
+func interleave(left []int64, right []int64) []int64 {
+    length := len(left)
+    if len(right) < length {
+        length = len(right)
+    }
+    out := make([]int64, 0, length*2)
+    for i := 0; i < length; i++ {
+        out = append(out, left[i], right[i])
+    }
+    return out
+}
+
 func main() {
     repsFast := int64(3000000)
     repsMid := int64(400000)
@@ -24,9 +36,22 @@ func main() {
     // hash-map / conj / nth / rest / interleave / count / empty?
     var sumCollections int64 = 0
     for x := int64(0); x < repsMid; x++ {
-        n0 := x
-        c := int64(2)
-        sumCollections += c + n0
+        m := map[string]int64{"a": x, "b": x}
+        keys := make([]string, 0, len(m))
+        for k := range m {
+            keys = append(keys, k)
+        }
+        sort.Strings(keys)
+        v := []int64{x, x}
+        n0 := v[0]
+        r := append([]int64{}, v[1:]...)
+        i := interleave(v, r)
+        c := int64(len(i))
+        if len(m) == 0 {
+            sumCollections += 0
+        } else {
+            sumCollections += c + n0
+        }
     }
 
     // remove / drop-while / keep / keep-indexed
@@ -52,7 +77,13 @@ func main() {
         sort.Ints(sorted)
         sortby := append([]int(nil), small...)
         sort.Slice(sortby, func(i, j int) bool { return sortby[i] > sortby[j] })
-        someFlag := int64(1)
+        someFlag := int64(0)
+        for _, v := range small {
+            if v%2 == 0 {
+                someFlag = 1
+                break
+            }
+        }
         sumSort += int64(len(sorted)+len(sortby)) + someFlag
     }
 

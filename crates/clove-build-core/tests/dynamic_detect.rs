@@ -1,5 +1,5 @@
-use clove2_core::dynamic_detect::contains_dynamic;
-use clove2_core::reader::read_all;
+use clove_build_core::dynamic_detect::contains_dynamic;
+use clove_build_core::reader::read_all;
 
 #[test]
 fn detect_dynamic_calls() {

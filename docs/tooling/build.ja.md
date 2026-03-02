@@ -1,8 +1,10 @@
 # Build（`clove build`）
 
-- 更新日: 2025-12-21
+英語版: [build.md](build.md)
 
-`clove build` は Clove ファイルから **Rust プロジェクト** を生成します。
+- 更新日: 2026-03-02
+
+`clove build` は現在の C バックエンドで Clove ソースをコンパイルし、ネイティブバイナリを生成します。
 
 ## 1. 使い方
 
@@ -10,40 +12,40 @@
 clove build path/to/app.clv
 ```
 
-生成されたディレクトリ（例: `build/`）で
+デフォルト出力先:
 
-```bash
-cargo build --release
+```text
+target/clove/bin/<file-stem>
 ```
 
-を実行すると実行可能ファイルができます。
+## 2. ビルドオプション
 
-## 2. `--opt=typed`
+```bash
+clove build path/to/app.clv --out ./bin/app
+clove build path/to/app.clv --emit-c
+```
 
-`--opt=typed` は typed IR を使って “より静的なコード生成” を行うモードです。
+- `--out PATH`
+  - 生成するバイナリの出力先。
+- `--emit-c`
+  - バイナリは通常どおり生成した上で、表示をバイナリパスではなく生成 C ファイルパス（`<out>.c`）に切り替えます。
+- `-o`, `--output`
+  - `--out` の別名。
 
-- 現段階では “実験的” として扱い、
-  `hm` の互換性警告が出ることがあります。
+## 3. 旧オプション（未対応）
 
-## 3. 静的リンク / 埋め込み
+以下の旧 `clove build` オプションは現在は使用できません。
 
-- `--static` は Linux musl 前提の静的リンクを作るためのオプションです。
-- `--embed-ruby` / `--embed-python` は foreign engine を同梱するためのオプションです。
+- `--opt`
+- `--static`
+- `--embed-ruby`
+- `--embed-python`
+- `--strict-types`
+- `--emit-typed-ir`
+- `--allow-native-plugins`
+- `--plugin-dir`
 
-> 制約:
-> - 現状 `--embed-*` は `--static` を要求します。
-> - foreign blocks があるスクリプトを “非 embed” の static build にするとエラーになります。
-
-## 4. ネイティブプラグイン
-
-生成物は `--allow-native-plugins` / `--plugin-dir` を受け取ります。
-デフォルトは信頼ディレクトリのみ許可で、pkg 配下は lock の sha256 一致が必須です。
-（同梱 plugins だけに固定するなど、運用設計が重要です。）
-
-## 5. よくある落とし穴
-
-- `--main` の有無で `-main` を呼ぶ/呼ばないが変わる
-- foreign blocks を含むときは embed か実行環境の engine 設定が必要
+実行時の設定は `clove` 側のランタイムオプションを使用し、最新の仕様は `clove --help` / `clove build --help` を参照してください。
 
 ---
 <!-- NAV:START -->

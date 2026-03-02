@@ -1,7 +1,7 @@
-use clove2_core::codegen::emit_rust_program;
-use clove2_core::reader::read_all;
-use clove2_core::syntax::parse_forms;
-use clove2_core::use_directive::MutMode;
+use clove_build_core::codegen::emit_rust_program;
+use clove_build_core::reader::read_all;
+use clove_build_core::syntax::parse_forms;
+use clove_build_core::use_directive::MutMode;
 
 #[test]
 fn codegen_reduce_is_typed() {

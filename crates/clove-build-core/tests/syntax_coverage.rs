@@ -1,8 +1,8 @@
-use clove2_core::eval::Runtime;
-use clove2_core::reader::read_all;
-use clove2_core::syntax::{parse_forms, TopLevel};
-use clove2_core::use_directive::parse_use_directives;
-use clove2_core::value::{Key, Value};
+use clove_build_core::eval::Runtime;
+use clove_build_core::reader::read_all;
+use clove_build_core::syntax::{parse_forms, TopLevel};
+use clove_build_core::use_directive::parse_use_directives;
+use clove_build_core::value::{Key, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 

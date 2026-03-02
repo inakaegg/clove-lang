@@ -1,0 +1,9 @@
+(def item-ids (range 0 200000))
+(def gross-amounts (map (fn [x] (+ x 100)) item-ids))
+(def net-amounts (map (fn [x] (- x 10)) gross-amounts))
+(def high-value-amounts (filter (fn [x] (< 50000 x)) net-amounts))
+(def high-value-count (count high-value-amounts))
+(def high-value-total (reduce + 0 high-value-amounts))
+
+(println (str "high-value-count=" high-value-count))
+(println (str "high-value-total=" high-value-total))

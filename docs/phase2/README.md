@@ -11,7 +11,7 @@ It is organized so that a Codex agent can operate by reading only this file.
 
 - An S-expression language in the Clojure family (a Lisp dialect)
 - Aims to support both REPL/script usage and native builds (fast execution)
-- The implementation is in Rust, with a long-term goal of Rust-native output
+- The compiler/tooling implementation is in Rust, and native build output is generated through the C backend
 
 ---
 
@@ -27,16 +27,16 @@ It is organized so that a Codex agent can operate by reading only this file.
 ## 3. What is Phase2?
 
 - A **redesign / reimplementation** generation (native-first is the priority)
-- Rust-native output based on type information
+- Type-informed lowering/codegen through the C backend (native binary output)
 - Dynamic features are allowed **only for development**; build-time is static
 - `mut` is the default (for build). `imut` means observational immutability; `mut` requires in-place updates (error if shared)
-- Main code: [crates/clove2-core](/crates/clove2-core), [crates/clove2-lang](/crates/clove2-lang), [crates/clove2-lsp](/crates/clove2-lsp)
+- Main code: [crates/clove-build-core](/crates/clove-build-core), [crates/clove-build-front](/crates/clove-build-front), [crates/clove-build-backend-c](/crates/clove-build-backend-c), [crates/clove-build-runtime-c](/crates/clove-build-runtime-c)
 
 ---
 
 ## 4. Key Differences from Phase1
 
-- Native-first (Rust) is the top priority; Dynamic is intentionally reduced
+- Native-first (C backend path) is the top priority; Dynamic is intentionally reduced
 - Avoid `Any`; use `Dyn` **only at boundaries**
 - The same function can be optimized or not depending on `mut/imut`
 - Native builds **forbid** dynamic eval/load and redefinition
@@ -48,7 +48,7 @@ It is organized so that a Codex agent can operate by reading only this file.
 
 ## 5. Current Status (Summary)
 
-- `clove2` supports `run` / `build` / `check`
+- `clove` supports `run` / `build` / `check` (build is integrated with the phase2 C backend path)
 - CLI flags: `--native`, `--mode`, `--mut` can be overridden
 - `time` / `bench` added to eval (return type follows the wrapped function)
 - LSP: diagnostics + completion + hover + go-to-definition + symbol list (top-level)
@@ -67,25 +67,25 @@ Detailed tracking is omitted from public docs.
 ## 7. Core Commands
 
 ```bash
-# Build
-cargo install --path crates/clove2-lang
+# Build/Run CLI
+cargo install --path crates/clove-lang
 
 # Run
-clove2 run path/to/a.clv
+clove path/to/a.clv
 
 # Build (native)
-clove2 build path/to/a.clv --out target/clove2/bin/a
+clove build path/to/a.clv --out target/clove/bin/a
 
 # Type check (strict/warn/allow)
-clove2 check path/to/a.clv --native=strict
+clove check path/to/a.clv --native=strict
 
 # LSP
-cargo install --path crates/clove2-lsp
+cargo install --path crates/clove-lsp
 ```
 
 Notes:
 
-- clove2 defaults to **strict** (both CLI and LSP)
+- clove defaults to **strict** (both CLI and LSP)
 - `use native :warn` / `:allow` or `--native=warn` / `--native=allow` relaxes it
 
 ---

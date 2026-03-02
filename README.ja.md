@@ -196,11 +196,46 @@ cargo install --path crates/clove-lang --force
 clove --repl
 ```
 
+LSP（補完/型ヒント等）も使う場合:
+
+```bash
+cargo install --path crates/clove-lsp --force
+```
+
+### clone 後にまず実行する手順（REPL / run / build）
+
+```bash
+git clone https://github.com/inakaegg/clove-lang clove
+cd clove
+
+# CLI + LSP サーバーをPATHへ
+cargo install --path crates/clove-lang --force
+cargo install --path crates/clove-lsp --force
+
+# REPL
+clove --repl
+
+# スクリプト実行
+clove examples/hello.clv
+
+# ネイティブバイナリ生成（phase2 C backend 経路）
+clove build examples/build/high_value_report.clv --out target/clove/bin/high_value_report
+./target/clove/bin/high_value_report
+```
+
+`clove-lsp` は stdio で動く言語サーバーです。通常はエディタ拡張/クライアントから起動します（ターミナル直接起動は想定外）。
+
 ### Rust が入っているなら（clone せずに）
 
 ```bash
 cargo install --git https://github.com/inakaegg/clove-lang --locked --package clove-lang --bin clove
 ```
+
+## build確認済みサンプル（ベンチ以外）
+
+`examples/build/high_value_report.clv` は `clove build` での生成・実行を確認済みの、簡単な売上集計サンプルです。
+
+注意: 現在の `examples/` には「インタプリタ向け例」と「build向け例」が混在しており、すべての例が `clove build` を通る状態ではありません。
 
 ### Ruby 埋め込みを使う場合の注意
 

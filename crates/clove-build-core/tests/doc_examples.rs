@@ -1,5 +1,5 @@
-use clove2_core::eval::run_str;
-use clove2_core::value::{Key, Value};
+use clove_build_core::eval::run_str;
+use clove_build_core::value::{Key, Value};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};

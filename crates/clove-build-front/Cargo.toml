@@ -1,0 +1,9 @@
+[package]
+name = "clove-build-front"
+version = "0.1.0"
+edition = "2021"
+description = "phase2 C frontend skeleton"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]
+clove-build-core = { path = "../clove-build-core" }

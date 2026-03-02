@@ -1,3 +1,15 @@
+use std::collections::BTreeMap;
+
+fn interleave(left: &[i64], right: &[i64]) -> Vec<i64> {
+    let len = left.len().min(right.len());
+    let mut out: Vec<i64> = Vec::with_capacity(len * 2);
+    for idx in 0..len {
+        out.push(left[idx]);
+        out.push(right[idx]);
+    }
+    out
+}
+
 fn main() {
     let reps_fast: i64 = 3_000_000;
     let reps_mid: i64 = 400_000;
@@ -16,9 +28,15 @@ fn main() {
     // hash-map / conj / nth / rest / interleave / count / empty?
     let mut sum_collections: i64 = 0;
     for x in 0..reps_mid {
-        let n0 = x;
-        let c = 2;
-        sum_collections += c + n0;
+        let mut m: BTreeMap<&str, i64> = BTreeMap::new();
+        m.insert("a", x);
+        m.insert("b", x);
+        let v = vec![x, x];
+        let n0 = v[0];
+        let r = v[1..].to_vec();
+        let i = interleave(&v, &r);
+        let c = i.len() as i64;
+        sum_collections += if m.is_empty() { 0 } else { c + n0 };
     }
 
     // remove / drop-while / keep / keep-indexed

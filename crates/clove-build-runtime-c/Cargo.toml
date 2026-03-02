@@ -1,0 +1,8 @@
+[package]
+name = "clove-build-runtime-c"
+version = "0.1.0"
+edition = "2021"
+description = "phase2 C C runtime integration skeleton"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]

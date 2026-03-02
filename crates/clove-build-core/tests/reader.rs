@@ -1,5 +1,5 @@
-use clove2_core::ast::{Expr, Literal};
-use clove2_core::reader::read_all;
+use clove_build_core::ast::{Expr, Literal};
+use clove_build_core::reader::read_all;
 
 #[test]
 fn read_list_and_vector() {

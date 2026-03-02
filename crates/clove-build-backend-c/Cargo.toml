@@ -1,0 +1,10 @@
+[package]
+name = "clove-build-backend-c"
+version = "0.1.0"
+edition = "2021"
+description = "phase2 C C backend skeleton"
+authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
+
+[dependencies]
+clove-build-front = { path = "../clove-build-front" }
+clove-build-runtime-c = { path = "../clove-build-runtime-c" }

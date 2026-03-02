@@ -198,11 +198,46 @@ cargo install --path crates/clove-lang --force
 clove --repl
 ```
 
+If you also want editor completion/LSP support:
+
+```bash
+cargo install --path crates/clove-lsp --force
+```
+
+### After clone: practical commands
+
+```bash
+git clone https://github.com/inakaegg/clove-lang clove
+cd clove
+
+# Install CLI + LSP server into PATH
+cargo install --path crates/clove-lang --force
+cargo install --path crates/clove-lsp --force
+
+# REPL
+clove --repl
+
+# Run a script
+clove examples/hello.clv
+
+# Build native binary (phase2 C backend path)
+clove build examples/build/high_value_report.clv --out target/clove/bin/high_value_report
+./target/clove/bin/high_value_report
+```
+
+`clove-lsp` is a stdio language server process (normally launched by your editor extension/client, not directly from terminal).
+
 ### If Rust is installed (without cloning)
 
 ```bash
 cargo install --git https://github.com/inakaegg/clove-lang --locked --package clove-lang --bin clove
 ```
+
+## Build-ready example (non-benchmark)
+
+`examples/build/high_value_report.clv` is a verified `clove build` sample that computes a simple high-value sales summary.
+
+Note: `examples/` currently contains mixed targets (interpreter-oriented and build-oriented), so not every example is guaranteed to pass `clove build` yet.
 
 ---
 

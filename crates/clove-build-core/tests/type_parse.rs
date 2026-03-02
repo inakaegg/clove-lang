@@ -1,4 +1,4 @@
-use clove2_core::types::Type;
+use clove_build_core::types::Type;
 
 #[test]
 fn parse_primitives() {

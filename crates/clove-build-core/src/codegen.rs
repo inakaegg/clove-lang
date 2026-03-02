@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::aliases;
 use crate::ast::{Expr, ExprKind, Literal};
@@ -45,6 +45,14 @@ struct TypedExpr {
     code: String,
     kind: TypedKind,
     is_symbol: bool,
+    can_move: bool,
+}
+
+#[derive(Clone)]
+struct RangeSpec {
+    start: String,
+    end: String,
+    step: String,
 }
 
 #[derive(Clone)]
@@ -88,6 +96,8 @@ struct TypedContext {
     regex_literal_idx: usize,
     regex_literals: Vec<RegexLiteralDef>,
     regex_literal_map: HashMap<String, String>,
+    use_counts: Vec<HashMap<String, usize>>,
+    range_defs: HashMap<String, RangeSpec>,
 }
 
 impl TypedContext {
@@ -100,6 +110,8 @@ impl TypedContext {
             regex_literal_idx: 0,
             regex_literals: Vec::new(),
             regex_literal_map: HashMap::new(),
+            use_counts: vec![HashMap::new()],
+            range_defs: HashMap::new(),
         }
     }
 
@@ -138,6 +150,32 @@ impl TypedContext {
             pattern: pattern.to_string(),
         });
         name
+    }
+
+    fn push_use_scope(&mut self) {
+        self.use_counts.push(HashMap::new());
+    }
+
+    fn pop_use_scope(&mut self) {
+        self.use_counts.pop();
+    }
+
+    fn bind_with_uses(&mut self, name: &str, uses: usize) {
+        if let Some(scope) = self.use_counts.last_mut() {
+            scope.insert(name.to_string(), uses);
+        }
+    }
+
+    fn consume_use(&mut self, name: &str) -> Option<bool> {
+        for scope in self.use_counts.iter_mut().rev() {
+            if let Some(uses) = scope.get_mut(name) {
+                if *uses > 0 {
+                    *uses -= 1;
+                }
+                return Some(*uses == 0);
+            }
+        }
+        None
     }
 }
 
@@ -216,6 +254,222 @@ fn typed_kind_from_type(ty: &Type) -> Option<TypedKind> {
         }
         _ => None,
     }
+}
+
+#[derive(Default)]
+struct RangeUsage {
+    safe: usize,
+    unsafe_: usize,
+}
+
+fn is_range_call(expr: &AstExpr) -> bool {
+    let AstExpr::Call { callee, args } = expr else {
+        return false;
+    };
+    let AstExpr::Symbol(sym) = callee.as_ref() else {
+        return false;
+    };
+    let canonical = aliases::resolve_alias(sym);
+    canonical == "range" && !args.is_empty() && args.len() <= 3
+}
+
+fn record_range_usage(
+    expr: &AstExpr,
+    range_defs: &HashSet<String>,
+    usage: &mut HashMap<String, RangeUsage>,
+    safe_ctx: bool,
+) {
+    match expr {
+        AstExpr::Symbol(sym) => {
+            if range_defs.contains(sym) {
+                let entry = usage.entry(sym.clone()).or_default();
+                if safe_ctx {
+                    entry.safe += 1;
+                } else {
+                    entry.unsafe_ += 1;
+                }
+            }
+        }
+        AstExpr::Call { callee, args } => {
+            if let AstExpr::Symbol(sym) = callee.as_ref() {
+                if range_defs.contains(sym) {
+                    let entry = usage.entry(sym.clone()).or_default();
+                    entry.unsafe_ += 1;
+                }
+                let canonical = aliases::resolve_alias(sym);
+                let mut handled = false;
+                if args.len() == 2 && matches!(canonical, "map" | "filter") {
+                    for (idx, arg) in args.iter().enumerate() {
+                        record_range_usage(arg, range_defs, usage, idx == 1);
+                    }
+                    handled = true;
+                } else if canonical == "reduce" && args.len() == 3 {
+                    for (idx, arg) in args.iter().enumerate() {
+                        record_range_usage(arg, range_defs, usage, idx == 2);
+                    }
+                    handled = true;
+                }
+                if handled {
+                    return;
+                }
+            }
+            for arg in args {
+                record_range_usage(arg, range_defs, usage, false);
+            }
+        }
+        AstExpr::Vector(items) | AstExpr::Set(items) => {
+            for item in items {
+                record_range_usage(item, range_defs, usage, false);
+            }
+        }
+        AstExpr::Map(entries) => {
+            for (key, value) in entries {
+                record_range_usage(key, range_defs, usage, false);
+                record_range_usage(value, range_defs, usage, false);
+            }
+        }
+        AstExpr::If {
+            cond,
+            then_expr,
+            else_expr,
+        } => {
+            record_range_usage(cond, range_defs, usage, false);
+            record_range_usage(then_expr, range_defs, usage, false);
+            if let Some(expr) = else_expr.as_deref() {
+                record_range_usage(expr, range_defs, usage, false);
+            }
+        }
+        AstExpr::Let { bindings, body } => {
+            for binding in bindings {
+                record_range_usage(&binding.value, range_defs, usage, false);
+            }
+            for expr in body {
+                record_range_usage(expr, range_defs, usage, false);
+            }
+        }
+        AstExpr::Fn { body, .. } => {
+            for expr in body {
+                record_range_usage(expr, range_defs, usage, false);
+            }
+        }
+        AstExpr::SetVar { value, .. } => {
+            record_range_usage(value, range_defs, usage, false);
+        }
+        AstExpr::Quote(_) => {}
+        AstExpr::ForeignBlock { .. } => {}
+        AstExpr::Keyword(_) | AstExpr::Literal(_) => {}
+    }
+}
+
+fn record_range_usage_unsafe(
+    expr: &AstExpr,
+    range_defs: &HashSet<String>,
+    usage: &mut HashMap<String, RangeUsage>,
+) {
+    match expr {
+        AstExpr::Symbol(sym) => {
+            if range_defs.contains(sym) {
+                let entry = usage.entry(sym.clone()).or_default();
+                entry.unsafe_ += 1;
+            }
+        }
+        AstExpr::Call { callee, args } => {
+            if let AstExpr::Symbol(sym) = callee.as_ref() {
+                if range_defs.contains(sym) {
+                    let entry = usage.entry(sym.clone()).or_default();
+                    entry.unsafe_ += 1;
+                }
+            }
+            for arg in args {
+                record_range_usage_unsafe(arg, range_defs, usage);
+            }
+        }
+        AstExpr::Vector(items) | AstExpr::Set(items) => {
+            for item in items {
+                record_range_usage_unsafe(item, range_defs, usage);
+            }
+        }
+        AstExpr::Map(entries) => {
+            for (key, value) in entries {
+                record_range_usage_unsafe(key, range_defs, usage);
+                record_range_usage_unsafe(value, range_defs, usage);
+            }
+        }
+        AstExpr::If {
+            cond,
+            then_expr,
+            else_expr,
+        } => {
+            record_range_usage_unsafe(cond, range_defs, usage);
+            record_range_usage_unsafe(then_expr, range_defs, usage);
+            if let Some(expr) = else_expr.as_deref() {
+                record_range_usage_unsafe(expr, range_defs, usage);
+            }
+        }
+        AstExpr::Let { bindings, body } => {
+            for binding in bindings {
+                record_range_usage_unsafe(&binding.value, range_defs, usage);
+            }
+            for expr in body {
+                record_range_usage_unsafe(expr, range_defs, usage);
+            }
+        }
+        AstExpr::Fn { body, .. } => {
+            for expr in body {
+                record_range_usage_unsafe(expr, range_defs, usage);
+            }
+        }
+        AstExpr::SetVar { value, .. } => {
+            record_range_usage_unsafe(value, range_defs, usage);
+        }
+        AstExpr::Quote(_) => {}
+        AstExpr::ForeignBlock { .. } => {}
+        AstExpr::Keyword(_) | AstExpr::Literal(_) => {}
+    }
+}
+
+fn collect_range_inline_defs(items: &[TopLevel]) -> HashSet<String> {
+    let mut range_defs = HashSet::new();
+    for item in items {
+        if let TopLevel::Def { name, value, .. } = item {
+            if is_range_call(value) {
+                range_defs.insert(name.clone());
+            }
+        }
+    }
+    if range_defs.is_empty() {
+        return range_defs;
+    }
+    let mut usage: HashMap<String, RangeUsage> = HashMap::new();
+    for name in &range_defs {
+        usage.insert(name.clone(), RangeUsage::default());
+    }
+    for item in items {
+        match item {
+            TopLevel::Def { value, .. } => {
+                record_range_usage(value, &range_defs, &mut usage, false);
+            }
+            TopLevel::Expr { expr, .. } => {
+                record_range_usage(expr, &range_defs, &mut usage, false);
+            }
+            TopLevel::Defn { body, .. } => {
+                for expr in body {
+                    record_range_usage_unsafe(expr, &range_defs, &mut usage);
+                }
+            }
+            TopLevel::DefType { .. } | TopLevel::DefForeign { .. } => {}
+        }
+    }
+    range_defs
+        .into_iter()
+        .filter(|name| {
+            if let Some(entry) = usage.get(name) {
+                entry.safe > 0 && entry.unsafe_ == 0
+            } else {
+                false
+            }
+        })
+        .collect()
 }
 
 fn typed_kind_is_copy(kind: &TypedKind) -> bool {
@@ -356,7 +610,11 @@ fn emit_typed_regex_truthy(
             text_ref = text_ref
         )
     } else {
-        format!("{regex_var}.is_match({text_ref})", regex_var = regex_var, text_ref = text_ref)
+        format!(
+            "{regex_var}.is_match({text_ref})",
+            regex_var = regex_var,
+            text_ref = text_ref
+        )
     };
     Some((prelude, check))
 }
@@ -405,12 +663,12 @@ pub fn emit_rust_program(items: &[TopLevel], default_mut_mode: MutMode) -> Resul
     let mut out = String::new();
     out.push_str("#![allow(unused_imports)]\n");
     out.push_str("#![allow(unused_assignments)]\n");
-    out.push_str("use clove2_core::ast::{Expr, ExprKind, Literal, Span};\n");
-    out.push_str("use clove2_core::error::Clove2Error;\n");
-    out.push_str("use clove2_core::eval::{is_truthy, NativeEnv, Runtime};\n");
-    out.push_str("use clove2_core::syntax::{AstExpr, Param};\n");
-    out.push_str("use clove2_core::use_directive::MutMode;\n");
-    out.push_str("use clove2_core::value::{Key, Value};\n");
+    out.push_str("use clove_build_core::ast::{Expr, ExprKind, Literal, Span};\n");
+    out.push_str("use clove_build_core::error::Clove2Error;\n");
+    out.push_str("use clove_build_core::eval::{is_truthy, NativeEnv, Runtime};\n");
+    out.push_str("use clove_build_core::syntax::{AstExpr, Param};\n");
+    out.push_str("use clove_build_core::use_directive::MutMode;\n");
+    out.push_str("use clove_build_core::value::{Key, Value};\n");
     out.push_str("use std::collections::BTreeMap;\n");
     let mut idx = 0usize;
     while idx < ctx.native_fns.len() {
@@ -437,9 +695,25 @@ fn emit_typed_program(items: &[TopLevel]) -> Option<String> {
     let mut fns: HashMap<String, TypedFnSig> = HashMap::new();
     let mut fn_defs: Vec<String> = Vec::new();
     let mut main_body = String::new();
+    let range_inline = collect_range_inline_defs(items);
     for item in items {
         match item {
             TopLevel::Def { name, value, .. } => {
+                if range_inline.contains(name) {
+                    if let AstExpr::Call { callee, args } = value {
+                        if let AstExpr::Symbol(sym) = callee.as_ref() {
+                            let canonical = aliases::resolve_alias(sym);
+                            if canonical == "range" {
+                                if let Some(spec) =
+                                    range_spec_from_args(&mut ctx, &env, &fns, &HashMap::new(), args)
+                                {
+                                    ctx.range_defs.insert(name.clone(), spec);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
                 let locals: HashMap<String, TypedKind> = HashMap::new();
                 let typed = match emit_typed_expr(&mut ctx, &env, &fns, &locals, value) {
                     Some(typed) => typed,
@@ -500,8 +774,8 @@ fn emit_typed_program(items: &[TopLevel]) -> Option<String> {
     let mut out = String::new();
     out.push_str("#![allow(unused_imports)]\n");
     out.push_str("use std::collections::BTreeMap;\n");
-    out.push_str("use clove2_core::value::Key;\n");
-    out.push_str("use clove2_core::Regex;\n");
+    out.push_str("use clove_build_core::value::Key;\n");
+    out.push_str("use clove_build_core::Regex;\n");
     out.push_str("#[derive(Clone, Debug)]\n");
     out.push_str("enum Union2<A, B> {\n    A(A),\n    B(B),\n}\n");
     if !ctx.key_literals.is_empty() {
@@ -576,27 +850,32 @@ fn emit_typed_expr(
             code: format!("{}i64", value),
             kind: TypedKind::Int,
             is_symbol: false,
+            can_move: true,
         }),
         AstExpr::Literal(Literal::Float(value)) => Some(TypedExpr {
             code: format!("{}f64", value),
             kind: TypedKind::Float,
             is_symbol: false,
+            can_move: true,
         }),
         AstExpr::Literal(Literal::Nil) => None,
         AstExpr::Literal(Literal::Bool(value)) => Some(TypedExpr {
             code: format!("{}", value),
             kind: TypedKind::Bool,
             is_symbol: false,
+            can_move: true,
         }),
         AstExpr::Literal(Literal::Str(value)) => Some(TypedExpr {
             code: format!("String::from({})", emit_string_literal(value)),
             kind: TypedKind::Str,
             is_symbol: false,
+            can_move: true,
         }),
         AstExpr::Keyword(value) => Some(TypedExpr {
             code: format!("String::from({})", emit_string_literal(value)),
             kind: TypedKind::Keyword,
             is_symbol: false,
+            can_move: true,
         }),
         AstExpr::If {
             cond,
@@ -605,11 +884,20 @@ fn emit_typed_expr(
         } => emit_typed_if(ctx, env, fns, locals, cond, then_expr, else_expr.as_deref()),
         AstExpr::Let { bindings, body } => emit_typed_let(ctx, env, fns, locals, bindings, body),
         AstExpr::Symbol(sym) => {
-            if let Some(kind) = locals.get(sym).or_else(|| env.get(sym)) {
+            if let Some(kind) = locals.get(sym) {
+                let can_move = ctx.consume_use(sym).unwrap_or(false);
                 Some(TypedExpr {
                     code: rust_ident(sym),
                     kind: kind.clone(),
                     is_symbol: true,
+                    can_move,
+                })
+            } else if let Some(kind) = env.get(sym) {
+                Some(TypedExpr {
+                    code: rust_ident(sym),
+                    kind: kind.clone(),
+                    is_symbol: true,
+                    can_move: false,
                 })
             } else {
                 typed_debug(&format!("symbol not found: {}", sym));
@@ -722,6 +1010,7 @@ fn emit_typed_defn(
     let mut param_kinds = Vec::new();
     let mut rest_kind: Option<TypedKind> = None;
     let mut rust_params = Vec::new();
+    let body_refs: Vec<&AstExpr> = body.iter().collect();
     for param in params {
         let ty = param.ty.as_ref()?;
         let kind = typed_kind_from_type(ty)?;
@@ -741,7 +1030,14 @@ fn emit_typed_defn(
         }
         locals.insert(param.name.clone(), kind);
     }
-    let body_expr = emit_typed_block_expr(ctx, env, fns, &locals, body)?;
+    ctx.push_use_scope();
+    for param in params {
+        let count = count_symbol_uses_in_exprs(&body_refs, &param.name);
+        ctx.bind_with_uses(&param.name, count);
+    }
+    let body_expr = emit_typed_block_expr(ctx, env, fns, &locals, body);
+    ctx.pop_use_scope();
+    let body_expr = body_expr?;
     let ret_kind = match ret {
         Some(ty) => {
             let annotated = typed_kind_from_type(ty)?;
@@ -797,6 +1093,7 @@ fn emit_typed_block_expr(
         code: out,
         kind: last_expr.kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -826,6 +1123,7 @@ fn emit_typed_vector(
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -860,6 +1158,7 @@ fn emit_typed_vector_call(
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1033,6 +1332,7 @@ fn emit_typed_map_literal(
         code: out,
         kind: map_type,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1069,6 +1369,7 @@ fn emit_typed_if(
             code,
             kind: then_expr.kind,
             is_symbol: false,
+            can_move: true,
         });
     }
     let (then_code, result_kind) = match then_expr.kind {
@@ -1088,6 +1389,7 @@ fn emit_typed_if(
         code,
         kind: result_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1101,6 +1403,7 @@ fn emit_typed_let(
 ) -> Option<TypedExpr> {
     let mut scoped = locals.clone();
     let mut out = String::new();
+    let body_refs: Vec<&AstExpr> = body.iter().collect();
     out.push_str("{\n");
     for binding in bindings {
         let typed = emit_typed_expr(ctx, env, fns, &scoped, &binding.value)?;
@@ -1111,13 +1414,21 @@ fn emit_typed_let(
         out.push_str(&typed.code);
         out.push_str(";\n");
     }
-    let body_expr = emit_typed_block_expr(ctx, env, fns, &scoped, body)?;
+    ctx.push_use_scope();
+    for binding in bindings {
+        let count = count_symbol_uses_in_exprs(&body_refs, &binding.name);
+        ctx.bind_with_uses(&binding.name, count);
+    }
+    let body_expr = emit_typed_block_expr(ctx, env, fns, &scoped, body);
+    ctx.pop_use_scope();
+    let body_expr = body_expr?;
     out.push_str(&indent(&body_expr.code, 4));
     out.push_str("\n}");
     Some(TypedExpr {
         code: out,
         kind: body_expr.kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1166,6 +1477,7 @@ fn emit_typed_when(
         code,
         kind: result_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1210,6 +1522,7 @@ fn emit_typed_call_function(
         code: format!("{}({})", rust_ident(name), arg_codes.join(", ")),
         kind: sig.ret.clone(),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1596,11 +1909,13 @@ fn emit_typed_arith(
                 code: "0i64".to_string(),
                 kind: TypedKind::Int,
                 is_symbol: false,
+                can_move: true,
             }),
             "*" => Some(TypedExpr {
                 code: "1i64".to_string(),
                 kind: TypedKind::Int,
                 is_symbol: false,
+                can_move: true,
             }),
             _ => None,
         };
@@ -1658,6 +1973,7 @@ fn emit_typed_arith(
         code: format!("({})", code),
         kind: result_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1691,6 +2007,7 @@ fn emit_typed_bitwise(
         code: format!("({})", code),
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1712,6 +2029,7 @@ fn emit_typed_bit_not(
         code: format!("!({})", typed.code),
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1740,6 +2058,7 @@ fn emit_typed_bit_shift(
         code: format!("({} {} {})", left.code, rust_op, right.code),
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1807,6 +2126,7 @@ fn emit_typed_min_max(
         code: out,
         kind: result_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1836,6 +2156,7 @@ fn emit_typed_unary_arith(
         code,
         kind: typed.kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1883,6 +2204,7 @@ fn emit_typed_compare(
         code,
         kind: TypedKind::Bool,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1954,6 +2276,7 @@ fn emit_typed_compare_fn(
         code,
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -1981,6 +2304,7 @@ fn emit_typed_parity(
         code: expr,
         kind: TypedKind::Bool,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2002,6 +2326,7 @@ fn emit_typed_not(
         code: format!("!({})", typed.code),
         kind: TypedKind::Bool,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2035,13 +2360,15 @@ fn emit_typed_range(
     let step_var = ctx.temp("step");
     let value_var = ctx.temp("value");
     let out_var = ctx.temp("out");
+    let len_var = ctx.temp("len");
     let code = format!(
-        "{{\n        let {start_var} = {start};\n        let {end_var} = {end};\n        let {step_var} = {step};\n        if {step_var} == 0 {{\n            panic!(\"range expects non-zero step\");\n        }}\n        let mut {out_var}: Vec<i64> = Vec::new();\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n                {out_var}.push({value_var});\n                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n                {out_var}.push({value_var});\n                {value_var} += {step_var};\n            }}\n        }}\n        {out_var}\n    }}",
+        "{{\n        let {start_var} = {start};\n        let {end_var} = {end};\n        let {step_var} = {step};\n        if {step_var} == 0 {{\n            panic!(\"range expects non-zero step\");\n        }}\n        let {len_var}: usize = if {step_var} > 0 {{\n            if {end_var} <= {start_var} {{\n                0\n            }} else {{\n                let diff = {end_var} - {start_var};\n                let step = {step_var};\n                ((diff + step - 1) / step) as usize\n            }}\n        }} else {{\n            if {end_var} >= {start_var} {{\n                0\n            }} else {{\n                let diff = {start_var} - {end_var};\n                let step = -{step_var};\n                ((diff + step - 1) / step) as usize\n            }}\n        }};\n        let mut {out_var}: Vec<i64> = Vec::with_capacity({len_var});\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n                {out_var}.push({value_var});\n                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n                {out_var}.push({value_var});\n                {value_var} += {step_var};\n            }}\n        }}\n        {out_var}\n    }}",
         start_var = start_var,
         end_var = end_var,
         step_var = step_var,
         value_var = value_var,
         out_var = out_var,
+        len_var = len_var,
         start = start,
         end = end,
         step = step
@@ -2050,6 +2377,326 @@ fn emit_typed_range(
         code,
         kind: TypedKind::Vec(Box::new(TypedKind::Int)),
         is_symbol: false,
+        can_move: true,
+    })
+}
+
+enum PipelineOp<'a> {
+    Map(&'a AstExpr),
+    Filter(&'a AstExpr),
+    Keep(&'a AstExpr),
+    KeepIndexed(&'a AstExpr),
+    Remove(&'a AstExpr),
+    DropWhile(&'a AstExpr),
+}
+
+fn collect_pipeline_ops<'a>(
+    expr: &'a AstExpr,
+    ops: &mut Vec<PipelineOp<'a>>,
+) -> Option<&'a AstExpr> {
+    let AstExpr::Call { callee, args } = expr else {
+        return Some(expr);
+    };
+    let AstExpr::Symbol(sym) = callee.as_ref() else {
+        return Some(expr);
+    };
+    let canonical = aliases::resolve_alias(sym);
+    match canonical {
+        "map" => {
+            if args.len() != 2 {
+                return None;
+            }
+            let source = collect_pipeline_ops(&args[1], ops)?;
+            ops.push(PipelineOp::Map(&args[0]));
+            Some(source)
+        }
+        "filter" => {
+            if args.len() != 2 {
+                return None;
+            }
+            let source = collect_pipeline_ops(&args[1], ops)?;
+            ops.push(PipelineOp::Filter(&args[0]));
+            Some(source)
+        }
+        "keep" => {
+            if args.len() != 2 {
+                return None;
+            }
+            let source = collect_pipeline_ops(&args[1], ops)?;
+            ops.push(PipelineOp::Keep(&args[0]));
+            Some(source)
+        }
+        "keep-indexed" => {
+            if args.len() != 2 {
+                return None;
+            }
+            let source = collect_pipeline_ops(&args[1], ops)?;
+            ops.push(PipelineOp::KeepIndexed(&args[0]));
+            Some(source)
+        }
+        "remove" => {
+            if args.len() != 2 {
+                return None;
+            }
+            let source = collect_pipeline_ops(&args[1], ops)?;
+            ops.push(PipelineOp::Remove(&args[0]));
+            Some(source)
+        }
+        "drop-while" => {
+            if args.len() != 2 {
+                return None;
+            }
+            let source = collect_pipeline_ops(&args[1], ops)?;
+            ops.push(PipelineOp::DropWhile(&args[0]));
+            Some(source)
+        }
+        _ => Some(expr),
+    }
+}
+
+fn emit_typed_pipeline(
+    ctx: &mut TypedContext,
+    env: &HashMap<String, TypedKind>,
+    fns: &HashMap<String, TypedFnSig>,
+    locals: &HashMap<String, TypedKind>,
+    root_op: PipelineOp<'_>,
+    source_expr: &AstExpr,
+) -> Option<TypedExpr> {
+    let mut ops: Vec<PipelineOp<'_>> = Vec::new();
+    let source = collect_pipeline_ops(source_expr, &mut ops)?;
+    ops.push(root_op);
+    if ops.len() <= 1 {
+        return None;
+    }
+    let range_spec = range_spec_from_ast(ctx, env, fns, locals, source);
+    let (coll, mut elem_kind) = if range_spec.is_some() {
+        (None, TypedKind::Int)
+    } else {
+        let coll = emit_typed_expr(ctx, env, fns, locals, source)?;
+        let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
+            return None;
+        };
+        (Some(coll), *elem_kind)
+    };
+    let has_index = ops
+        .iter()
+        .any(|op| matches!(op, PipelineOp::KeepIndexed(_)));
+    let idx_var = if has_index { Some(ctx.temp("idx")) } else { None };
+    let mut drop_flags: Vec<String> = Vec::new();
+    let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
+    let coll_var = ctx.temp("coll");
+    let coll_ref = ctx.temp("coll_ref");
+    let out_var = ctx.temp("out");
+    let mut current_var = value_var.clone();
+    let mut current_kind = elem_kind.clone();
+    let mut step_body = String::new();
+    let idx_inc = if let Some(idx_var) = &idx_var {
+        format!("            {idx} += 1i64;\n", idx = idx_var)
+    } else {
+        String::new()
+    };
+    for op in ops {
+        match op {
+            PipelineOp::Map(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let next_var = ctx.temp("map_val");
+                step_body.push_str(&indent(&inline.prelude, 12));
+                step_body.push_str(&format!("            let {next_var} = {expr};\n", next_var = next_var, expr = inline.expr));
+                current_var = next_var;
+                current_kind = inline.kind;
+            }
+            PipelineOp::Filter(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                if inline.kind != TypedKind::Bool {
+                    return None;
+                }
+                step_body.push_str(&indent(&inline.prelude, 12));
+                step_body.push_str(&format!(
+                    "            if !({pred}) {{\n{idx_inc}                continue;\n            }}\n",
+                    pred = inline.expr,
+                    idx_inc = idx_inc
+                ));
+            }
+            PipelineOp::Remove(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                if inline.kind != TypedKind::Bool {
+                    return None;
+                }
+                step_body.push_str(&indent(&inline.prelude, 12));
+                step_body.push_str(&format!(
+                    "            if {pred} {{\n{idx_inc}                continue;\n            }}\n",
+                    pred = inline.expr,
+                    idx_inc = idx_inc
+                ));
+            }
+            PipelineOp::DropWhile(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                if inline.kind != TypedKind::Bool {
+                    return None;
+                }
+                let flag = ctx.temp("dropping");
+                drop_flags.push(flag.clone());
+                step_body.push_str(&format!(
+                    "            if {flag} {{\n{inline_prelude}                if {pred} {{\n{idx_inc}                    continue;\n                }}\n                {flag} = false;\n            }}\n",
+                    flag = flag,
+                    inline_prelude = indent(&inline.prelude, 16),
+                    pred = inline.expr,
+                    idx_inc = idx_inc
+                ));
+            }
+            PipelineOp::Keep(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let TypedKind::Optional(inner_kind) = inline.kind else {
+                    return None;
+                };
+                let opt_var = ctx.temp("opt");
+                let next_var = ctx.temp("keep_val");
+                step_body.push_str(&indent(&inline.prelude, 12));
+                step_body.push_str(&format!("            let {opt_var} = {expr};\n", opt_var = opt_var, expr = inline.expr));
+                step_body.push_str(&format!(
+                    "            let {next_var} = match {opt_var} {{\n                Some(value) => value,\n                None => {{\n{idx_inc}                    continue;\n                }}\n            }};\n",
+                    next_var = next_var,
+                    opt_var = opt_var,
+                    idx_inc = idx_inc
+                ));
+                current_var = next_var;
+                current_kind = *inner_kind;
+            }
+            PipelineOp::KeepIndexed(func) => {
+                let idx_var = idx_var.as_ref()?;
+                let inline = emit_typed_binary_inline_mixed(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &TypedKind::Int,
+                    &current_kind,
+                    idx_var,
+                    &current_var,
+                )?;
+                let TypedKind::Optional(inner_kind) = inline.kind else {
+                    return None;
+                };
+                let opt_var = ctx.temp("opt");
+                let next_var = ctx.temp("keep_idx_val");
+                step_body.push_str(&indent(&inline.prelude, 12));
+                step_body.push_str(&format!("            let {opt_var} = {expr};\n", opt_var = opt_var, expr = inline.expr));
+                step_body.push_str(&format!(
+                    "            let {next_var} = match {opt_var} {{\n                Some(value) => value,\n                None => {{\n{idx_inc}                    continue;\n                }}\n            }};\n",
+                    next_var = next_var,
+                    opt_var = opt_var,
+                    idx_inc = idx_inc
+                ));
+                current_var = next_var;
+                current_kind = *inner_kind;
+            }
+        }
+    }
+    let out_elem_ty = typed_kind_to_rust(&current_kind)?;
+    let push_line = format!("            {out_var}.push({value});\n", out_var = out_var, value = current_var);
+    let index_init = if let Some(idx_var) = &idx_var {
+        format!("        let mut {idx_var}: i64 = 0;\n", idx_var = idx_var)
+    } else {
+        String::new()
+    };
+    let drop_init = if drop_flags.is_empty() {
+        String::new()
+    } else {
+        drop_flags
+            .iter()
+            .map(|flag| format!("        let mut {flag} = true;\n", flag = flag))
+            .collect::<String>()
+    };
+    let loop_body = format!("{steps}{push}{idx_inc}", steps = step_body, push = push_line, idx_inc = idx_inc);
+    let code = if let Some(spec) = range_spec {
+        let (vars, prelude) = emit_range_prelude(ctx, &spec);
+        let idx_init = format!("{index_init}{drop_init}", index_init = index_init, drop_init = drop_init);
+        let loop_body = format!(
+            "        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_var});\n{idx_init}        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{loop_body}                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{loop_body}                {value_var} += {step_var};\n            }}\n        }}\n        {out_var}\n",
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_var = vars.len_var,
+            idx_init = idx_init,
+            step_var = vars.step_var,
+            value_var = value_var,
+            start_var = vars.start_var,
+            end_var = vars.end_var,
+            loop_body = loop_body
+        );
+        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
+    } else {
+        let coll = coll?;
+        let can_move_coll = !coll.is_symbol || coll.can_move;
+        let coll_bind = if can_move_coll {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        } else if coll.is_symbol {
+            format!(
+                "        let {coll_ref} = &{coll};\n",
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        } else {
+            format!(
+                "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
+                coll_var = coll_var,
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        };
+        let len_expr = if can_move_coll {
+            format!("{coll_var}.len()", coll_var = coll_var)
+        } else {
+            format!("{coll_ref}.len()", coll_ref = coll_ref)
+        };
+        let value_expr = if typed_kind_is_copy(&elem_kind) {
+            format!("*{}", value_ref)
+        } else {
+            format!("{}.clone()", value_ref)
+        };
+        let idx_init = format!("{index_init}{drop_init}", index_init = index_init, drop_init = drop_init);
+        let loop_body = if can_move_coll {
+            format!(
+                "        for {value_var} in {coll_var}.into_iter() {{\n{loop_body}        }}\n",
+                value_var = value_var,
+                coll_var = coll_var,
+                loop_body = loop_body
+            )
+        } else {
+            format!(
+                "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{loop_body}        }}\n",
+                value_ref = value_ref,
+                coll_ref = coll_ref,
+                value_var = value_var,
+                value_expr = value_expr,
+                loop_body = loop_body
+            )
+        };
+        format!(
+            "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_expr});\n{idx_init}{loop_body}        {out_var}\n    }}",
+            coll_bind = coll_bind,
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_expr = len_expr,
+            idx_init = idx_init,
+            loop_body = loop_body
+        )
+    };
+    Some(TypedExpr {
+        code,
+        kind: TypedKind::Vec(Box::new(current_kind)),
+        is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2064,22 +2711,33 @@ fn emit_typed_map(
         typed_debug("map: expected 2 args");
         return None;
     }
-    let coll = match emit_typed_expr(ctx, env, fns, locals, &args[1]) {
-        Some(expr) => expr,
-        None => {
-            typed_debug("map: collection expr failed");
+    if let Some(pipeline) =
+        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::Map(&args[0]), &args[1])
+    {
+        return Some(pipeline);
+    }
+    let range_spec = range_spec_from_ast(ctx, env, fns, locals, &args[1]);
+    let (coll, elem_kind) = if range_spec.is_some() {
+        (None, TypedKind::Int)
+    } else {
+        let coll = match emit_typed_expr(ctx, env, fns, locals, &args[1]) {
+            Some(expr) => expr,
+            None => {
+                typed_debug("map: collection expr failed");
+                return None;
+            }
+        };
+        let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
+            typed_debug("map: collection is not Vec");
             return None;
-        }
+        };
+        (Some(coll), *elem_kind)
     };
-    let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
-        typed_debug("map: collection is not Vec");
-        return None;
-    };
-    let elem_kind = *elem_kind;
     let coll_var = ctx.temp("coll");
     let coll_ref = ctx.temp("coll_ref");
     let out_var = ctx.temp("out");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let inline =
         match emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var) {
             Some(expr) => expr,
@@ -2093,34 +2751,89 @@ fn emit_typed_map(
         TypedKind::Vec(inner) => inner.as_ref(),
         _ => return None,
     })?;
-    let coll_bind = if coll.is_symbol {
-        format!(
-            "        let {coll_ref} = &{coll};\n",
-            coll_ref = coll_ref,
-            coll = coll.code
-        )
+    let code = if let Some(spec) = range_spec {
+        let (vars, prelude) = emit_range_prelude(ctx, &spec);
+        let loop_body = format!(
+            "        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_var});\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{inline_prelude}                {out_var}.push({inline_expr});\n                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{inline_prelude}                {out_var}.push({inline_expr});\n                {value_var} += {step_var};\n            }}\n        }}\n        {out_var}\n",
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_var = vars.len_var,
+            step_var = vars.step_var,
+            value_var = value_var,
+            start_var = vars.start_var,
+            end_var = vars.end_var,
+            inline_prelude = indent(&inline.prelude, 16),
+            inline_expr = inline.expr
+        );
+        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
     } else {
+        let coll = coll?;
+        let can_move_coll = !coll.is_symbol || coll.can_move;
+        let coll_bind = if can_move_coll {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        } else if coll.is_symbol {
+            format!(
+                "        let {coll_ref} = &{coll};\n",
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        } else {
+            format!(
+                "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
+                coll_var = coll_var,
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        };
+        let len_expr = if can_move_coll {
+            format!("{coll_var}.len()", coll_var = coll_var)
+        } else {
+            format!("{coll_ref}.len()", coll_ref = coll_ref)
+        };
+        let value_expr = if typed_kind_is_copy(&elem_kind) {
+            format!("*{}", value_ref)
+        } else {
+            format!("{}.clone()", value_ref)
+        };
+        let loop_body = if can_move_coll {
+            format!(
+                "        for {value_var} in {coll_var}.into_iter() {{\n{inline_prelude}            {out_var}.push({inline_expr});\n        }}\n",
+                value_var = value_var,
+                coll_var = coll_var,
+                inline_prelude = indent(&inline.prelude, 12),
+                out_var = out_var,
+                inline_expr = inline.expr
+            )
+        } else {
+            format!(
+                "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{inline_prelude}            {out_var}.push({inline_expr});\n        }}\n",
+                value_ref = value_ref,
+                coll_ref = coll_ref,
+                value_var = value_var,
+                value_expr = value_expr,
+                inline_prelude = indent(&inline.prelude, 12),
+                out_var = out_var,
+                inline_expr = inline.expr
+            )
+        };
         format!(
-            "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
-            coll_var = coll_var,
-            coll_ref = coll_ref,
-            coll = coll.code
+            "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_expr});\n{loop_body}        {out_var}\n    }}",
+            coll_bind = coll_bind,
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_expr = len_expr,
+            loop_body = loop_body
         )
     };
-    let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({coll_ref}.len());\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            {out_var}.push({inline_expr});\n        }}\n        {out_var}\n    }}",
-        coll_bind = coll_bind,
-        coll_ref = coll_ref,
-        out_var = out_var,
-        value_var = value_var,
-        out_elem_ty = out_elem_ty,
-        inline_prelude = indent(&inline.prelude, 12),
-        inline_expr = inline.expr
-    );
     Some(TypedExpr {
         code,
         kind: output_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2134,48 +2847,108 @@ fn emit_typed_filter(
     if args.len() != 2 {
         return None;
     }
-    let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
-    let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
-        return None;
+    if let Some(pipeline) =
+        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::Filter(&args[0]), &args[1])
+    {
+        return Some(pipeline);
+    }
+    let range_spec = range_spec_from_ast(ctx, env, fns, locals, &args[1]);
+    let (coll, elem_kind) = if range_spec.is_some() {
+        (None, TypedKind::Int)
+    } else {
+        let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
+        let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
+            return None;
+        };
+        (Some(coll), *elem_kind)
     };
-    let elem_kind = *elem_kind;
     let coll_var = ctx.temp("coll");
     let coll_ref = ctx.temp("coll_ref");
     let out_var = ctx.temp("out");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let inline = emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var)?;
     if inline.kind != TypedKind::Bool {
         return None;
     }
-    let coll_bind = if coll.is_symbol {
-        format!(
-            "        let {coll_ref} = &{coll};\n",
-            coll_ref = coll_ref,
-            coll = coll.code
-        )
+    let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
+    let code = if let Some(spec) = range_spec {
+        let (vars, prelude) = emit_range_prelude(ctx, &spec);
+        let loop_body = format!(
+            "        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_var});\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{inline_prelude}                if {inline_expr} {{\n                    {out_var}.push({value_var});\n                }}\n                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{inline_prelude}                if {inline_expr} {{\n                    {out_var}.push({value_var});\n                }}\n                {value_var} += {step_var};\n            }}\n        }}\n        {out_var}\n",
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_var = vars.len_var,
+            step_var = vars.step_var,
+            value_var = value_var,
+            start_var = vars.start_var,
+            end_var = vars.end_var,
+            inline_prelude = indent(&inline.prelude, 16),
+            inline_expr = inline.expr
+        );
+        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
     } else {
+        let coll = coll?;
+        let can_move_coll = !coll.is_symbol || coll.can_move;
+        let coll_bind = if can_move_coll {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        } else if coll.is_symbol {
+            format!(
+                "        let {coll_ref} = &{coll};\n",
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        } else {
+            format!(
+                "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
+                coll_var = coll_var,
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        };
+        let value_expr = if typed_kind_is_copy(&elem_kind) {
+            format!("*{}", value_ref)
+        } else {
+            format!("{}.clone()", value_ref)
+        };
+        let loop_body = if can_move_coll {
+            format!(
+                "        for {value_var} in {coll_var}.into_iter() {{\n{inline_prelude}            if {inline_expr} {{\n                {out_var}.push({value_var});\n            }}\n        }}\n",
+                value_var = value_var,
+                coll_var = coll_var,
+                inline_prelude = indent(&inline.prelude, 12),
+                inline_expr = inline.expr,
+                out_var = out_var
+            )
+        } else {
+            format!(
+                "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{inline_prelude}            if {inline_expr} {{\n                {out_var}.push({value_var});\n            }}\n        }}\n",
+                value_ref = value_ref,
+                coll_ref = coll_ref,
+                value_var = value_var,
+                value_expr = value_expr,
+                inline_prelude = indent(&inline.prelude, 12),
+                inline_expr = inline.expr,
+                out_var = out_var
+            )
+        };
         format!(
-            "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
-            coll_var = coll_var,
-            coll_ref = coll_ref,
-            coll = coll.code
+            "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n{loop_body}        {out_var}\n    }}",
+            coll_bind = coll_bind,
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            loop_body = loop_body
         )
     };
-    let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
-    let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            if {inline_expr} {{\n                {out_var}.push({value_var});\n            }}\n        }}\n        {out_var}\n    }}",
-        coll_bind = coll_bind,
-        coll_ref = coll_ref,
-        out_var = out_var,
-        value_var = value_var,
-        out_elem_ty = out_elem_ty,
-        inline_prelude = indent(&inline.prelude, 12),
-        inline_expr = inline.expr
-    );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2189,6 +2962,11 @@ fn emit_typed_some(
     if args.len() != 2 {
         return None;
     }
+    if let Some(pipeline) =
+        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::Keep(&args[0]), &args[1])
+    {
+        return Some(pipeline);
+    }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
     match coll.kind.clone() {
         TypedKind::Vec(elem_kind) => {
@@ -2197,6 +2975,7 @@ fn emit_typed_some(
             let coll_ref = ctx.temp("coll_ref");
             let out_var = ctx.temp("out");
             let value_var = ctx.temp("value");
+            let value_ref = ctx.temp("value_ref");
             let cand_var = ctx.temp("cand");
             let inline =
                 emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var)?;
@@ -2208,7 +2987,14 @@ fn emit_typed_some(
                 other => TypedKind::Optional(Box::new(other.clone())),
             };
             let out_ty = typed_kind_to_rust(&result_kind)?;
-            let coll_bind = if coll.is_symbol {
+            let can_move_coll = !coll.is_symbol || coll.can_move;
+            let coll_bind = if can_move_coll {
+                format!(
+                    "        let mut {coll_var} = {coll};\n",
+                    coll_var = coll_var,
+                    coll = coll.code
+                )
+            } else if coll.is_symbol {
                 format!(
                     "        let {coll_ref} = &{coll};\n",
                     coll_ref = coll_ref,
@@ -2251,20 +3037,42 @@ fn emit_typed_some(
                     ));
                 }
             }
+            let value_expr = if typed_kind_is_copy(&elem_kind) {
+                format!("*{}", value_ref)
+            } else {
+                format!("{}.clone()", value_ref)
+            };
+            let loop_body = if can_move_coll {
+                format!(
+                    "        for {value_var} in {coll_var}.into_iter() {{\n{inline_prelude}{body}        }}\n",
+                    value_var = value_var,
+                    coll_var = coll_var,
+                    inline_prelude = indent(&inline_prelude, 12),
+                    body = indent(&body, 12)
+                )
+            } else {
+                format!(
+                    "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{inline_prelude}{body}        }}\n",
+                    value_ref = value_ref,
+                    coll_ref = coll_ref,
+                    value_var = value_var,
+                    value_expr = value_expr,
+                    inline_prelude = indent(&inline_prelude, 12),
+                    body = indent(&body, 12)
+                )
+            };
             let code = format!(
-                "{{\n{coll_bind}        let mut {out_var}: {out_ty} = None;\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}{body}        }}\n        {out_var}\n    }}",
+                "{{\n{coll_bind}        let mut {out_var}: {out_ty} = None;\n{loop_body}        {out_var}\n    }}",
                 coll_bind = coll_bind,
-                coll_ref = coll_ref,
                 out_var = out_var,
                 out_ty = out_ty,
-                value_var = value_var,
-                inline_prelude = indent(&inline_prelude, 12),
-                body = indent(&body, 12)
+                loop_body = loop_body
             );
             Some(TypedExpr {
                 code,
                 kind: result_kind,
                 is_symbol: false,
+                can_move: true,
             })
         }
         TypedKind::Str => {
@@ -2347,6 +3155,7 @@ fn emit_typed_some(
                 code,
                 kind: result_kind,
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -2363,6 +3172,11 @@ fn emit_typed_remove(
     if args.len() != 2 {
         return None;
     }
+    if let Some(pipeline) =
+        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::Remove(&args[0]), &args[1])
+    {
+        return Some(pipeline);
+    }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
     let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
         return None;
@@ -2372,11 +3186,19 @@ fn emit_typed_remove(
     let coll_ref = ctx.temp("coll_ref");
     let out_var = ctx.temp("out");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let inline = emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var)?;
     if inline.kind != TypedKind::Bool {
         return None;
     }
-    let coll_bind = if coll.is_symbol {
+    let can_move_coll = !coll.is_symbol || coll.can_move;
+    let coll_bind = if can_move_coll {
+        format!(
+            "        let mut {coll_var} = {coll};\n",
+            coll_var = coll_var,
+            coll = coll.code
+        )
+    } else if coll.is_symbol {
         format!(
             "        let {coll_ref} = &{coll};\n",
             coll_ref = coll_ref,
@@ -2391,20 +3213,44 @@ fn emit_typed_remove(
         )
     };
     let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
+    let value_expr = if typed_kind_is_copy(&elem_kind) {
+        format!("*{}", value_ref)
+    } else {
+        format!("{}.clone()", value_ref)
+    };
+    let loop_body = if can_move_coll {
+        format!(
+            "        for {value_var} in {coll_var}.into_iter() {{\n{inline_prelude}            if !{inline_expr} {{\n                {out_var}.push({value_var});\n            }}\n        }}\n",
+            value_var = value_var,
+            coll_var = coll_var,
+            inline_prelude = indent(&inline.prelude, 12),
+            inline_expr = inline.expr,
+            out_var = out_var
+        )
+    } else {
+        format!(
+            "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{inline_prelude}            if !{inline_expr} {{\n                {out_var}.push({value_var});\n            }}\n        }}\n",
+            value_ref = value_ref,
+            coll_ref = coll_ref,
+            value_var = value_var,
+            value_expr = value_expr,
+            inline_prelude = indent(&inline.prelude, 12),
+            inline_expr = inline.expr,
+            out_var = out_var
+        )
+    };
     let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            if !{inline_expr} {{\n                {out_var}.push({value_var});\n            }}\n        }}\n        {out_var}\n    }}",
+        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n{loop_body}        {out_var}\n    }}",
         coll_bind = coll_bind,
-        coll_ref = coll_ref,
         out_var = out_var,
-        value_var = value_var,
         out_elem_ty = out_elem_ty,
-        inline_prelude = indent(&inline.prelude, 12),
-        inline_expr = inline.expr
+        loop_body = loop_body
     );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2418,6 +3264,11 @@ fn emit_typed_drop_while(
     if args.len() != 2 {
         return None;
     }
+    if let Some(pipeline) =
+        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::DropWhile(&args[0]), &args[1])
+    {
+        return Some(pipeline);
+    }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
     let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
         return None;
@@ -2427,11 +3278,19 @@ fn emit_typed_drop_while(
     let coll_ref = ctx.temp("coll_ref");
     let out_var = ctx.temp("out");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let inline = emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var)?;
     if inline.kind != TypedKind::Bool {
         return None;
     }
-    let coll_bind = if coll.is_symbol {
+    let can_move_coll = !coll.is_symbol || coll.can_move;
+    let coll_bind = if can_move_coll {
+        format!(
+            "        let mut {coll_var} = {coll};\n",
+            coll_var = coll_var,
+            coll = coll.code
+        )
+    } else if coll.is_symbol {
         format!(
             "        let {coll_ref} = &{coll};\n",
             coll_ref = coll_ref,
@@ -2447,21 +3306,46 @@ fn emit_typed_drop_while(
     };
     let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
     let dropping_var = ctx.temp("dropping");
+    let value_expr = if typed_kind_is_copy(&elem_kind) {
+        format!("*{}", value_ref)
+    } else {
+        format!("{}.clone()", value_ref)
+    };
+    let loop_body = if can_move_coll {
+        format!(
+            "        let mut {dropping_var} = true;\n        for {value_var} in {coll_var}.into_iter() {{\n            if {dropping_var} {{\n{inline_prelude}                if {inline_expr} {{\n                    continue;\n                }}\n                {dropping_var} = false;\n            }}\n            {out_var}.push({value_var});\n        }}\n",
+            dropping_var = dropping_var,
+            value_var = value_var,
+            coll_var = coll_var,
+            inline_prelude = indent(&inline.prelude, 16),
+            inline_expr = inline.expr,
+            out_var = out_var
+        )
+    } else {
+        format!(
+            "        let mut {dropping_var} = true;\n        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n            if {dropping_var} {{\n{inline_prelude}                if {inline_expr} {{\n                    continue;\n                }}\n                {dropping_var} = false;\n            }}\n            {out_var}.push({value_var});\n        }}\n",
+            dropping_var = dropping_var,
+            value_ref = value_ref,
+            coll_ref = coll_ref,
+            value_var = value_var,
+            value_expr = value_expr,
+            inline_prelude = indent(&inline.prelude, 16),
+            inline_expr = inline.expr,
+            out_var = out_var
+        )
+    };
     let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n        let mut {dropping_var} = true;\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n            if {dropping_var} {{\n{inline_prelude}                if {inline_expr} {{\n                    continue;\n                }}\n                {dropping_var} = false;\n            }}\n            {out_var}.push({value_var});\n        }}\n        {out_var}\n    }}",
+        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n{loop_body}        {out_var}\n    }}",
         coll_bind = coll_bind,
-        coll_ref = coll_ref,
         out_var = out_var,
-        value_var = value_var,
         out_elem_ty = out_elem_ty,
-        dropping_var = dropping_var,
-        inline_prelude = indent(&inline.prelude, 16),
-        inline_expr = inline.expr
+        loop_body = loop_body
     );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2484,12 +3368,20 @@ fn emit_typed_keep(
     let coll_ref = ctx.temp("coll_ref");
     let out_var = ctx.temp("out");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let inline = emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var)?;
     let TypedKind::Optional(inner_kind) = inline.kind else {
         return None;
     };
     let out_elem_ty = typed_kind_to_rust(&inner_kind)?;
-    let coll_bind = if coll.is_symbol {
+    let can_move_coll = !coll.is_symbol || coll.can_move;
+    let coll_bind = if can_move_coll {
+        format!(
+            "        let mut {coll_var} = {coll};\n",
+            coll_var = coll_var,
+            coll = coll.code
+        )
+    } else if coll.is_symbol {
         format!(
             "        let {coll_ref} = &{coll};\n",
             coll_ref = coll_ref,
@@ -2504,21 +3396,46 @@ fn emit_typed_keep(
         )
     };
     let keep_var = ctx.temp("keep");
+    let value_expr = if typed_kind_is_copy(&elem_kind) {
+        format!("*{}", value_ref)
+    } else {
+        format!("{}.clone()", value_ref)
+    };
+    let loop_body = if can_move_coll {
+        format!(
+            "        for {value_var} in {coll_var}.into_iter() {{\n{inline_prelude}            let {keep_var} = {inline_expr};\n            if let Some(value) = {keep_var} {{\n                {out_var}.push(value);\n            }}\n        }}\n",
+            value_var = value_var,
+            coll_var = coll_var,
+            inline_prelude = indent(&inline.prelude, 12),
+            inline_expr = inline.expr,
+            keep_var = keep_var,
+            out_var = out_var
+        )
+    } else {
+        format!(
+            "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{inline_prelude}            let {keep_var} = {inline_expr};\n            if let Some(value) = {keep_var} {{\n                {out_var}.push(value);\n            }}\n        }}\n",
+            value_ref = value_ref,
+            coll_ref = coll_ref,
+            value_var = value_var,
+            value_expr = value_expr,
+            inline_prelude = indent(&inline.prelude, 12),
+            inline_expr = inline.expr,
+            keep_var = keep_var,
+            out_var = out_var
+        )
+    };
     let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            let {keep_var} = {inline_expr};\n            if let Some(value) = {keep_var} {{\n                {out_var}.push(value);\n            }}\n        }}\n        {out_var}\n    }}",
+        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n{loop_body}        {out_var}\n    }}",
         coll_bind = coll_bind,
-        coll_ref = coll_ref,
         out_var = out_var,
-        value_var = value_var,
         out_elem_ty = out_elem_ty,
-        inline_prelude = indent(&inline.prelude, 12),
-        inline_expr = inline.expr,
-        keep_var = keep_var
+        loop_body = loop_body
     );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(inner_kind),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2542,6 +3459,7 @@ fn emit_typed_keep_indexed(
     let out_var = ctx.temp("out");
     let idx_var = ctx.temp("idx");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let inline = emit_typed_binary_inline_mixed(
         ctx,
         env,
@@ -2557,7 +3475,14 @@ fn emit_typed_keep_indexed(
         return None;
     };
     let out_elem_ty = typed_kind_to_rust(&inner_kind)?;
-    let coll_bind = if coll.is_symbol {
+    let can_move_coll = !coll.is_symbol || coll.can_move;
+    let coll_bind = if can_move_coll {
+        format!(
+            "        let mut {coll_var} = {coll};\n",
+            coll_var = coll_var,
+            coll = coll.code
+        )
+    } else if coll.is_symbol {
         format!(
             "        let {coll_ref} = &{coll};\n",
             coll_ref = coll_ref,
@@ -2572,22 +3497,48 @@ fn emit_typed_keep_indexed(
         )
     };
     let keep_var = ctx.temp("keep");
+    let value_expr = if typed_kind_is_copy(&elem_kind) {
+        format!("*{}", value_ref)
+    } else {
+        format!("{}.clone()", value_ref)
+    };
+    let loop_body = if can_move_coll {
+        format!(
+            "        for ({idx_var}, {value_var}) in {coll_var}.into_iter().enumerate() {{\n            let {idx_var} = {idx_var} as i64;\n{inline_prelude}            let {keep_var} = {inline_expr};\n            if let Some(value) = {keep_var} {{\n                {out_var}.push(value);\n            }}\n        }}\n",
+            idx_var = idx_var,
+            value_var = value_var,
+            coll_var = coll_var,
+            inline_prelude = indent(&inline.prelude, 12),
+            inline_expr = inline.expr,
+            keep_var = keep_var,
+            out_var = out_var
+        )
+    } else {
+        format!(
+            "        for ({idx_var}, {value_ref}) in {coll_ref}.iter().enumerate() {{\n            let {idx_var} = {idx_var} as i64;\n            let {value_var} = {value_expr};\n{inline_prelude}            let {keep_var} = {inline_expr};\n            if let Some(value) = {keep_var} {{\n                {out_var}.push(value);\n            }}\n        }}\n",
+            idx_var = idx_var,
+            value_ref = value_ref,
+            coll_ref = coll_ref,
+            value_var = value_var,
+            value_expr = value_expr,
+            inline_prelude = indent(&inline.prelude, 12),
+            inline_expr = inline.expr,
+            keep_var = keep_var,
+            out_var = out_var
+        )
+    };
     let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n        for ({idx_var}, {value_var}) in {coll_ref}.iter().enumerate() {{\n            let {idx_var} = {idx_var} as i64;\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            let {keep_var} = {inline_expr};\n            if let Some(value) = {keep_var} {{\n                {out_var}.push(value);\n            }}\n        }}\n        {out_var}\n    }}",
+        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n{loop_body}        {out_var}\n    }}",
         coll_bind = coll_bind,
-        coll_ref = coll_ref,
         out_var = out_var,
-        idx_var = idx_var,
-        value_var = value_var,
         out_elem_ty = out_elem_ty,
-        inline_prelude = indent(&inline.prelude, 12),
-        inline_expr = inline.expr,
-        keep_var = keep_var
+        loop_body = loop_body
     );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(inner_kind),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2612,18 +3563,23 @@ fn emit_typed_reduce(
             return None;
         }
     };
-    let coll = match emit_typed_expr(ctx, env, fns, locals, &args[2]) {
-        Some(expr) => expr,
-        None => {
-            typed_debug("reduce: collection expr failed");
+    let range_spec = range_spec_from_ast(ctx, env, fns, locals, &args[2]);
+    let (coll, elem_kind) = if range_spec.is_some() {
+        (None, TypedKind::Int)
+    } else {
+        let coll = match emit_typed_expr(ctx, env, fns, locals, &args[2]) {
+            Some(expr) => expr,
+            None => {
+                typed_debug("reduce: collection expr failed");
+                return None;
+            }
+        };
+        let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
+            typed_debug("reduce: collection is not Vec");
             return None;
-        }
+        };
+        (Some(coll), *elem_kind)
     };
-    let TypedKind::Vec(elem_kind) = coll.kind.clone() else {
-        typed_debug("reduce: collection is not Vec");
-        return None;
-    };
-    let elem_kind = *elem_kind;
     if init.kind != elem_kind {
         typed_debug("reduce: init kind mismatch");
         return None;
@@ -2632,6 +3588,7 @@ fn emit_typed_reduce(
     let coll_ref = ctx.temp("coll_ref");
     let acc_var = ctx.temp("acc");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let init_kind = init.kind.clone();
     let init_code = init.code.clone();
     let inline = match emit_typed_binary_inline(
@@ -2647,34 +3604,82 @@ fn emit_typed_reduce(
         typed_debug("reduce: inline kind mismatch");
         return None;
     }
-    let coll_bind = if coll.is_symbol {
-        format!(
-            "        let {coll_ref} = &{coll};\n",
-            coll_ref = coll_ref,
-            coll = coll.code
-        )
+    let code = if let Some(spec) = range_spec {
+        let (vars, prelude) = emit_range_prelude(ctx, &spec);
+        let loop_body = format!(
+            "        let mut {acc_var} = {init};\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{inline_prelude}                {acc_var} = {inline_expr};\n                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{inline_prelude}                {acc_var} = {inline_expr};\n                {value_var} += {step_var};\n            }}\n        }}\n        {acc_var}\n",
+            acc_var = acc_var,
+            init = init_code,
+            step_var = vars.step_var,
+            value_var = value_var,
+            start_var = vars.start_var,
+            end_var = vars.end_var,
+            inline_prelude = indent(&inline.prelude, 16),
+            inline_expr = inline.expr
+        );
+        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
     } else {
+        let coll = coll?;
+        let can_move_coll = !coll.is_symbol || coll.can_move;
+        let coll_bind = if can_move_coll {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        } else if coll.is_symbol {
+            format!(
+                "        let {coll_ref} = &{coll};\n",
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        } else {
+            format!(
+                "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
+                coll_var = coll_var,
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        };
+        let value_expr = if typed_kind_is_copy(&elem_kind) {
+            format!("*{}", value_ref)
+        } else {
+            format!("{}.clone()", value_ref)
+        };
+        let loop_body = if can_move_coll {
+            format!(
+                "        for {value_var} in {coll_var}.into_iter() {{\n{inline_prelude}            {acc_var} = {inline_expr};\n        }}\n",
+                value_var = value_var,
+                coll_var = coll_var,
+                inline_prelude = indent(&inline.prelude, 12),
+                acc_var = acc_var,
+                inline_expr = inline.expr
+            )
+        } else {
+            format!(
+                "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{inline_prelude}            {acc_var} = {inline_expr};\n        }}\n",
+                value_ref = value_ref,
+                coll_ref = coll_ref,
+                value_var = value_var,
+                value_expr = value_expr,
+                inline_prelude = indent(&inline.prelude, 12),
+                acc_var = acc_var,
+                inline_expr = inline.expr
+            )
+        };
         format!(
-            "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
-            coll_var = coll_var,
-            coll_ref = coll_ref,
-            coll = coll.code
+            "{{\n{coll_bind}        let mut {acc_var} = {init};\n{loop_body}        {acc_var}\n    }}",
+            coll_bind = coll_bind,
+            acc_var = acc_var,
+            init = init_code,
+            loop_body = loop_body
         )
     };
-    let code = format!(
-        "{{\n{coll_bind}        let mut {acc_var} = {init};\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            {acc_var} = {inline_expr};\n        }}\n        {acc_var}\n    }}",
-        coll_bind = coll_bind,
-        acc_var = acc_var,
-        value_var = value_var,
-        coll_ref = coll_ref,
-        init = init_code,
-        inline_prelude = indent(&inline.prelude, 12),
-        inline_expr = inline.expr
-    );
     Some(TypedExpr {
         code,
         kind: init_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -2769,6 +3774,7 @@ fn emit_typed_apply(
                 code: out,
                 kind: result_kind,
                 is_symbol: false,
+                can_move: true,
             });
         }
 
@@ -2808,6 +3814,7 @@ fn emit_typed_apply(
                 code: out,
                 kind: TypedKind::Vec(Box::new(elem_kind)),
                 is_symbol: false,
+                can_move: true,
             });
         }
 
@@ -2859,6 +3866,7 @@ fn emit_typed_apply(
                     code: out,
                     kind: sig.ret.clone(),
                     is_symbol: false,
+                    can_move: true,
                 });
             }
 
@@ -2937,6 +3945,7 @@ fn emit_typed_apply(
                 code: out,
                 kind: sig.ret.clone(),
                 is_symbol: false,
+                can_move: true,
             });
         }
     }
@@ -2947,6 +3956,10 @@ fn emit_typed_apply(
 enum ReduceOp {
     Map(AstExpr),
     Filter(AstExpr),
+    Remove(AstExpr),
+    DropWhile(AstExpr),
+    Keep(AstExpr),
+    KeepIndexed(AstExpr),
 }
 
 fn collect_reduce_ops(expr: &AstExpr) -> (AstExpr, Vec<ReduceOp>) {
@@ -2960,12 +3973,21 @@ fn collect_reduce_ops(expr: &AstExpr) -> (AstExpr, Vec<ReduceOp>) {
             break;
         };
         let canonical = crate::aliases::resolve_alias(sym);
-        if args.len() == 2 && (canonical == "map" || canonical == "filter") {
+        if args.len() == 2
+            && matches!(
+                canonical,
+                "map" | "filter" | "remove" | "drop-while" | "keep" | "keep-indexed"
+            )
+        {
             let func_expr = args[0].clone();
-            if canonical == "map" {
-                ops.push(ReduceOp::Map(func_expr));
-            } else {
-                ops.push(ReduceOp::Filter(func_expr));
+            match canonical {
+                "map" => ops.push(ReduceOp::Map(func_expr)),
+                "filter" => ops.push(ReduceOp::Filter(func_expr)),
+                "remove" => ops.push(ReduceOp::Remove(func_expr)),
+                "drop-while" => ops.push(ReduceOp::DropWhile(func_expr)),
+                "keep" => ops.push(ReduceOp::Keep(func_expr)),
+                "keep-indexed" => ops.push(ReduceOp::KeepIndexed(func_expr)),
+                _ => {}
             }
             cur = args[1].clone();
             continue;
@@ -2987,11 +4009,13 @@ fn emit_range_bounds(
         code: "1i64".to_string(),
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     };
     let zero = TypedExpr {
         code: "0i64".to_string(),
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     };
     match args.len() {
         1 => {
@@ -3025,6 +4049,78 @@ fn emit_range_bounds(
     }
 }
 
+fn range_spec_from_args(
+    ctx: &mut TypedContext,
+    env: &HashMap<String, TypedKind>,
+    fns: &HashMap<String, TypedFnSig>,
+    locals: &HashMap<String, TypedKind>,
+    args: &[AstExpr],
+) -> Option<RangeSpec> {
+    let (start, end, step) = emit_range_bounds(ctx, env, fns, locals, args)?;
+    Some(RangeSpec {
+        start: start.code,
+        end: end.code,
+        step: step.code,
+    })
+}
+
+fn range_spec_from_ast(
+    ctx: &mut TypedContext,
+    env: &HashMap<String, TypedKind>,
+    fns: &HashMap<String, TypedFnSig>,
+    locals: &HashMap<String, TypedKind>,
+    expr: &AstExpr,
+) -> Option<RangeSpec> {
+    match expr {
+        AstExpr::Call { callee, args } => {
+            let AstExpr::Symbol(sym) = callee.as_ref() else {
+                return None;
+            };
+            let canonical = aliases::resolve_alias(sym);
+            if canonical != "range" {
+                return None;
+            }
+            range_spec_from_args(ctx, env, fns, locals, args)
+        }
+        AstExpr::Symbol(sym) => ctx.range_defs.get(sym).cloned(),
+        _ => None,
+    }
+}
+
+
+struct RangeVars {
+    start_var: String,
+    end_var: String,
+    step_var: String,
+    len_var: String,
+}
+
+fn emit_range_prelude(ctx: &mut TypedContext, spec: &RangeSpec) -> (RangeVars, String) {
+    let start_var = ctx.temp("start");
+    let end_var = ctx.temp("end");
+    let step_var = ctx.temp("step");
+    let len_var = ctx.temp("len");
+    let code = format!(
+        "        let {start_var} = {start};\n        let {end_var} = {end};\n        let {step_var} = {step};\n        if {step_var} == 0 {{\n            panic!(\"range expects non-zero step\");\n        }}\n        let {len_var}: usize = if {step_var} > 0 {{\n            if {end_var} <= {start_var} {{\n                0\n            }} else {{\n                let diff = {end_var} - {start_var};\n                let step = {step_var};\n                ((diff + step - 1) / step) as usize\n            }}\n        }} else {{\n            if {end_var} >= {start_var} {{\n                0\n            }} else {{\n                let diff = {start_var} - {end_var};\n                let step = -{step_var};\n                ((diff + step - 1) / step) as usize\n            }}\n        }};\n",
+        start_var = start_var,
+        end_var = end_var,
+        step_var = step_var,
+        len_var = len_var,
+        start = spec.start,
+        end = spec.end,
+        step = spec.step
+    );
+    (
+        RangeVars {
+            start_var,
+            end_var,
+            step_var,
+            len_var,
+        },
+        code,
+    )
+}
+
 fn emit_typed_reduce_fused(
     ctx: &mut TypedContext,
     env: &HashMap<String, TypedKind>,
@@ -3050,34 +4146,30 @@ fn emit_typed_reduce_fused(
     let value_var = ctx.temp("value");
 
     let mut range_loop = None;
-    if let AstExpr::Call { callee, args } = &base_expr {
-        if let AstExpr::Symbol(sym) = callee.as_ref() {
-            let canonical = crate::aliases::resolve_alias(sym);
-            if canonical == "range" {
-                if let Some((start, end, step)) = emit_range_bounds(ctx, env, fns, locals, args) {
-                    let start_var = ctx.temp("start");
-                    let end_var = ctx.temp("end");
-                    let step_var = ctx.temp("step");
-                    base_kind = TypedKind::Int;
-                    base_loop = format!(
-                        "        let {start_var} = {start};\n        let {end_var} = {end};\n        let {step_var} = {step};\n        if {step_var} == 0 {{\n            panic!(\"range expects non-zero step\");\n        }}\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{body}                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{body}                {value_var} += {step_var};\n            }}\n        }}\n",
-                        start_var = start_var,
-                        end_var = end_var,
-                        step_var = step_var,
-                        start = start.code,
-                        end = end.code,
-                        step = step.code,
-                        value_var = value_var,
-                        body = "{{body}}\n",
-                    );
-                    range_loop = Some(());
-                }
-            }
-        }
+    let mut range_step_var: Option<String> = None;
+    if let Some(spec) = range_spec_from_ast(ctx, env, fns, locals, &base_expr) {
+        let start_var = ctx.temp("start");
+        let end_var = ctx.temp("end");
+        let step_var = ctx.temp("step");
+        base_kind = TypedKind::Int;
+        range_step_var = Some(step_var.clone());
+        base_loop = format!(
+            "        let {start_var} = {start};\n        let {end_var} = {end};\n        let {step_var} = {step};\n        if {step_var} == 0 {{\n            panic!(\"range expects non-zero step\");\n        }}\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{body}                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{body}                {value_var} += {step_var};\n            }}\n        }}\n",
+            start_var = start_var,
+            end_var = end_var,
+            step_var = step_var,
+            start = spec.start,
+            end = spec.end,
+            step = spec.step,
+            value_var = value_var,
+            body = "{{body}}\n",
+        );
+        range_loop = Some(());
     }
 
     let coll_var = ctx.temp("coll");
     let coll_ref = ctx.temp("coll_ref");
+    let value_ref = ctx.temp("value_ref");
     if range_loop.is_none() {
         let coll = match emit_typed_expr(ctx, env, fns, locals, &base_expr) {
             Some(expr) => expr,
@@ -3091,7 +4183,14 @@ fn emit_typed_reduce_fused(
             return None;
         };
         base_kind = *elem_kind;
-        let coll_bind = if coll.is_symbol {
+        let can_move_coll = !coll.is_symbol || coll.can_move;
+        let coll_bind = if can_move_coll {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        } else if coll.is_symbol {
             format!(
                 "        let {coll_ref} = &{coll};\n",
                 coll_ref = coll_ref,
@@ -3105,18 +4204,62 @@ fn emit_typed_reduce_fused(
                 coll = coll.code
             )
         };
-        base_loop = format!(
-            "{coll_bind}        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{body}        }}\n",
-            coll_bind = coll_bind,
-            value_var = value_var,
-            coll_ref = coll_ref,
-            body = "{{body}}\n",
-        );
+        let value_expr = if typed_kind_is_copy(&base_kind) {
+            format!("*{}", value_ref)
+        } else {
+            format!("{}.clone()", value_ref)
+        };
+        let loop_body = if can_move_coll {
+            format!(
+                "        for {value_var} in {coll_var}.into_iter() {{\n{body}        }}\n",
+                value_var = value_var,
+                coll_var = coll_var,
+                body = "{{body}}\n",
+            )
+        } else {
+            format!(
+                "        for {value_ref} in {coll_ref}.iter() {{\n            let {value_var} = {value_expr};\n{body}        }}\n",
+                value_ref = value_ref,
+                coll_ref = coll_ref,
+                value_var = value_var,
+                value_expr = value_expr,
+                body = "{{body}}\n",
+            )
+        };
+        base_loop = format!("{coll_bind}{loop_body}", coll_bind = coll_bind, loop_body = loop_body);
     }
 
     let mut cur_kind = base_kind.clone();
     let mut cur_var = value_var.clone();
     let mut loop_body = String::new();
+    let needs_drop = ops.iter().any(|op| matches!(op, ReduceOp::DropWhile(_)));
+    let needs_index = ops.iter().any(|op| matches!(op, ReduceOp::KeepIndexed(_)));
+    let drop_var = if needs_drop {
+        Some(ctx.temp("dropping"))
+    } else {
+        None
+    };
+    let idx_var = if needs_index {
+        Some(ctx.temp("idx"))
+    } else {
+        None
+    };
+    let mut pre_loop = String::new();
+    if let Some(var) = drop_var.as_ref() {
+        pre_loop.push_str(&format!("        let mut {var} = true;\n"));
+    }
+    if let Some(var) = idx_var.as_ref() {
+        pre_loop.push_str(&format!("        let mut {var}: i64 = 0;\n"));
+    }
+    let continue_stmt = if let Some(step_var) = range_step_var.as_ref() {
+        format!(
+            "{value_var} += {step_var};\n                continue;",
+            value_var = value_var,
+            step_var = step_var
+        )
+    } else {
+        "continue;".to_string()
+    };
     for op in ops.iter() {
         match op {
             ReduceOp::Map(func) => {
@@ -3140,9 +4283,116 @@ fn emit_typed_reduce_fused(
                 }
                 loop_body.push_str(&indent(&inline.prelude, 12));
                 loop_body.push_str(&format!(
-                    "            if !({expr}) {{\n                continue;\n            }}\n",
-                    expr = inline.expr
+                    "            if !({expr}) {{\n                {cont}\n            }}\n",
+                    expr = inline.expr,
+                    cont = continue_stmt
                 ));
+            }
+            ReduceOp::Remove(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &cur_kind, &cur_var)?;
+                if inline.kind != TypedKind::Bool {
+                    return None;
+                }
+                loop_body.push_str(&indent(&inline.prelude, 12));
+                loop_body.push_str(&format!(
+                    "            if {expr} {{\n                {cont}\n            }}\n",
+                    expr = inline.expr,
+                    cont = continue_stmt
+                ));
+            }
+            ReduceOp::DropWhile(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &cur_kind, &cur_var)?;
+                if inline.kind != TypedKind::Bool {
+                    return None;
+                }
+                let drop_var = drop_var.as_ref()?;
+                loop_body.push_str(&format!(
+                    "            if {drop_var} {{\n{inline_prelude}                if {inline_expr} {{\n                    {cont}\n                }}\n                {drop_var} = false;\n            }}\n",
+                    drop_var = drop_var,
+                    inline_prelude = indent(&inline.prelude, 16),
+                    inline_expr = inline.expr,
+                    cont = continue_stmt
+                ));
+            }
+            ReduceOp::Keep(func) => {
+                let inline =
+                    emit_typed_unary_inline(ctx, env, fns, locals, func, &cur_kind, &cur_var)?;
+                match inline.kind {
+                    TypedKind::Optional(inner_kind) => {
+                        let keep_var = ctx.temp("keep");
+                        let next_var = ctx.temp("tmp");
+                        loop_body.push_str(&indent(&inline.prelude, 12));
+                        loop_body.push_str(&format!(
+                            "            let {keep_var} = {expr};\n            let {next_var} = match {keep_var} {{\n                Some(value) => value,\n                None => {{ {cont} }}\n            }};\n",
+                            keep_var = keep_var,
+                            next_var = next_var,
+                            expr = inline.expr,
+                            cont = continue_stmt
+                        ));
+                        cur_var = next_var;
+                        cur_kind = *inner_kind;
+                    }
+                    other_kind => {
+                        let next_var = ctx.temp("tmp");
+                        loop_body.push_str(&indent(&inline.prelude, 12));
+                        loop_body.push_str(&format!(
+                            "            let {next_var} = {expr};\n",
+                            next_var = next_var,
+                            expr = inline.expr
+                        ));
+                        cur_var = next_var;
+                        cur_kind = other_kind;
+                    }
+                }
+            }
+            ReduceOp::KeepIndexed(func) => {
+                let idx_var = idx_var.as_ref()?;
+                let idx_local = ctx.temp("idx_val");
+                let inline = emit_typed_binary_inline_mixed(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &TypedKind::Int,
+                    &cur_kind,
+                    &idx_local,
+                    &cur_var,
+                )?;
+                loop_body.push_str(&format!(
+                    "            let {idx_local} = {idx_var};\n            {idx_var} += 1;\n",
+                    idx_local = idx_local,
+                    idx_var = idx_var
+                ));
+                match inline.kind {
+                    TypedKind::Optional(inner_kind) => {
+                        let keep_var = ctx.temp("keep");
+                        let next_var = ctx.temp("tmp");
+                        loop_body.push_str(&indent(&inline.prelude, 12));
+                        loop_body.push_str(&format!(
+                            "            let {keep_var} = {expr};\n            let {next_var} = match {keep_var} {{\n                Some(value) => value,\n                None => {{ {cont} }}\n            }};\n",
+                            keep_var = keep_var,
+                            next_var = next_var,
+                            expr = inline.expr,
+                            cont = continue_stmt
+                        ));
+                        cur_var = next_var;
+                        cur_kind = *inner_kind;
+                    }
+                    other_kind => {
+                        let next_var = ctx.temp("tmp");
+                        loop_body.push_str(&indent(&inline.prelude, 12));
+                        loop_body.push_str(&format!(
+                            "            let {next_var} = {expr};\n",
+                            next_var = next_var,
+                            expr = inline.expr
+                        ));
+                        cur_var = next_var;
+                        cur_kind = other_kind;
+                    }
+                }
             }
         }
     }
@@ -3168,12 +4418,17 @@ fn emit_typed_reduce_fused(
         "{{\n        let mut {acc_var} = {init};\n{loop}\n        {acc_var}\n    }}",
         acc_var = acc_var,
         init = init.code,
-        loop = base_loop.replace("{body}", &loop_body),
+        loop = format!(
+            "{pre}{base}",
+            pre = pre_loop,
+            base = base_loop.replace("{body}", &loop_body)
+        ),
     );
     Some(TypedExpr {
         code,
         kind: init.kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -3209,33 +4464,71 @@ fn emit_typed_rest(
     let coll_ref = ctx.temp("coll_ref");
     let out_var = ctx.temp("out");
     let value_var = ctx.temp("value");
+    let value_ref = ctx.temp("value_ref");
     let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
-    let coll_bind = if coll.is_symbol {
+    let can_move_coll = !coll.is_symbol || coll.can_move;
+    let code = if can_move_coll {
+        let coll_bind = if coll.is_symbol {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        } else {
+            format!(
+                "        let mut {coll_var} = {coll};\n",
+                coll_var = coll_var,
+                coll = coll.code
+            )
+        };
+        let len_expr = format!("{coll_var}.len().saturating_sub(1)", coll_var = coll_var);
         format!(
-            "        let {coll_ref} = &{coll};\n",
-            coll_ref = coll_ref,
-            coll = coll.code
+            "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_expr});\n        for {value_var} in {coll_var}.into_iter().skip(1) {{\n            {out_var}.push({value_var});\n        }}\n        {out_var}\n    }}",
+            coll_bind = coll_bind,
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_expr = len_expr,
+            value_var = value_var,
+            coll_var = coll_var
         )
     } else {
+        let coll_bind = if coll.is_symbol {
+            format!(
+                "        let {coll_ref} = &{coll};\n",
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        } else {
+            format!(
+                "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
+                coll_var = coll_var,
+                coll_ref = coll_ref,
+                coll = coll.code
+            )
+        };
+        let len_expr = format!("{coll_ref}.len().saturating_sub(1)", coll_ref = coll_ref);
+        let value_expr = if typed_kind_is_copy(&elem_kind) {
+            format!("*{}", value_ref)
+        } else {
+            format!("{}.clone()", value_ref)
+        };
         format!(
-            "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
-            coll_var = coll_var,
-            coll_ref = coll_ref,
-            coll = coll.code
+            "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_expr});\n        for {value_ref} in {coll_ref}.iter().skip(1) {{\n            let {value_var} = {value_expr};\n            {out_var}.push({value_var});\n        }}\n        {out_var}\n    }}",
+            coll_bind = coll_bind,
+            out_var = out_var,
+            out_elem_ty = out_elem_ty,
+            len_expr = len_expr,
+            value_ref = value_ref,
+            value_var = value_var,
+            value_expr = value_expr,
+            coll_ref = coll_ref
         )
     };
-    let code = format!(
-        "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::new();\n        for {value_var} in {coll_ref}.iter().skip(1) {{\n            let {value_var} = {value_var}.clone();\n            {out_var}.push({value_var});\n        }}\n        {out_var}\n    }}",
-        coll_bind = coll_bind,
-        out_var = out_var,
-        out_elem_ty = out_elem_ty,
-        coll_ref = coll_ref,
-        value_var = value_var
-    );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -3290,6 +4583,7 @@ fn emit_typed_conj(
         code: out,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -3320,6 +4614,7 @@ fn emit_typed_empty_pred(
                 code,
                 kind: TypedKind::Bool,
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -3383,6 +4678,7 @@ fn emit_typed_hash_map(
         code: out,
         kind: map_type,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -3439,20 +4735,33 @@ fn emit_typed_interleave(
                     right = right.code
                 )
             };
+            let left_push = if typed_kind_is_copy(&elem_kind) {
+                format!("{left_ref}[idx]", left_ref = left_ref)
+            } else {
+                format!("{left_ref}[idx].clone()", left_ref = left_ref)
+            };
+            let right_push = if typed_kind_is_copy(&elem_kind) {
+                format!("{right_ref}[idx]", right_ref = right_ref)
+            } else {
+                format!("{right_ref}[idx].clone()", right_ref = right_ref)
+            };
             let code = format!(
-                "{{\n{left_bind}{right_bind}        let {len_var} = {left_ref}.len().min({right_ref}.len());\n        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_var} * 2);\n        for idx in 0..{len_var} {{\n            {out_var}.push({left_ref}[idx].clone());\n            {out_var}.push({right_ref}[idx].clone());\n        }}\n        {out_var}\n    }}",
+                "{{\n{left_bind}{right_bind}        let {len_var} = {left_ref}.len().min({right_ref}.len());\n        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_var} * 2);\n        for idx in 0..{len_var} {{\n            {out_var}.push({left_push});\n            {out_var}.push({right_push});\n        }}\n        {out_var}\n    }}",
                 left_bind = left_bind,
                 right_bind = right_bind,
                 len_var = len_var,
                 left_ref = left_ref,
                 right_ref = right_ref,
                 out_var = out_var,
-                out_elem_ty = out_elem_ty
+                out_elem_ty = out_elem_ty,
+                left_push = left_push,
+                right_push = right_push
             );
             Some(TypedExpr {
                 code,
                 kind: TypedKind::Vec(Box::new(elem_kind)),
                 is_symbol: false,
+                can_move: true,
             })
         }
         (TypedKind::Str, TypedKind::Str) => {
@@ -3507,6 +4816,7 @@ fn emit_typed_interleave(
                 code,
                 kind: TypedKind::Str,
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -3522,6 +4832,29 @@ fn emit_typed_sort(
 ) -> Option<TypedExpr> {
     if args.len() != 1 && args.len() != 2 {
         return None;
+    }
+    if args.len() == 1 {
+        if let Some(spec) = range_spec_from_ast(ctx, env, fns, locals, &args[0]) {
+            let (vars, prelude) = emit_range_prelude(ctx, &spec);
+            let value_var = ctx.temp("value");
+            let out_var = ctx.temp("out");
+            let code = format!(
+                "{{\n{prelude}        let mut {out_var}: Vec<i64> = Vec::with_capacity({len_var});\n        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n                {out_var}.push({value_var});\n                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n                {out_var}.push({value_var});\n                {value_var} += {step_var};\n            }}\n            {out_var}.sort();\n        }}\n        {out_var}\n    }}",
+                prelude = prelude,
+                out_var = out_var,
+                len_var = vars.len_var,
+                step_var = vars.step_var,
+                value_var = value_var,
+                start_var = vars.start_var,
+                end_var = vars.end_var
+            );
+            return Some(TypedExpr {
+                code,
+                kind: TypedKind::Vec(Box::new(TypedKind::Int)),
+                is_symbol: false,
+                can_move: true,
+            });
+        }
     }
     let coll_arg = if args.len() == 2 { &args[1] } else { &args[0] };
     let coll = emit_typed_expr(ctx, env, fns, locals, coll_arg)?;
@@ -3559,6 +4892,7 @@ fn emit_typed_sort(
                 code,
                 kind: TypedKind::Str,
                 is_symbol: false,
+                can_move: true,
             });
         }
         TypedKind::Vec(elem_kind) => {
@@ -3576,10 +4910,11 @@ fn emit_typed_sort(
                 return None;
             }
             let out_var = ctx.temp("out");
-            let coll_init = if coll.is_symbol {
-                format!("{}.clone()", coll.code)
-            } else {
+            let can_move = !coll.is_symbol || coll.can_move;
+            let coll_init = if can_move {
                 coll.code
+            } else {
+                format!("{}.clone()", coll.code)
             };
             let sort_body = if args.len() == 1 {
                 if elem_kind == TypedKind::Float {
@@ -3661,6 +4996,7 @@ fn emit_typed_sort(
                 code,
                 kind: TypedKind::Vec(Box::new(elem_kind)),
                 is_symbol: false,
+                can_move: true,
             });
         }
         _ => None,
@@ -3683,6 +5019,7 @@ fn emit_typed_sort_by(
         return None;
     };
     let elem_kind = *elem_kind;
+    let can_move = !coll.is_symbol || coll.can_move;
     let value_var = ctx.temp("value");
     let key_inline =
         emit_typed_unary_inline(ctx, env, fns, locals, &args[0], &elem_kind, &value_var)?;
@@ -3705,27 +5042,12 @@ fn emit_typed_sort_by(
     if !key_is_orderable {
         return None;
     }
-    let coll_var = ctx.temp("coll");
-    let coll_ref = ctx.temp("coll_ref");
-    let keyed_var = ctx.temp("keyed");
-    let key_var = ctx.temp("key");
     let out_var = ctx.temp("out");
-    let coll_bind = if coll.is_symbol {
-        format!(
-            "        let {coll_ref} = &{coll};\n",
-            coll_ref = coll_ref,
-            coll = coll.code
-        )
+    let out_init = if can_move {
+        coll.code
     } else {
-        format!(
-            "        let {coll_var} = {coll};\n        let {coll_ref} = &{coll_var};\n",
-            coll_var = coll_var,
-            coll_ref = coll_ref,
-            coll = coll.code
-        )
+        format!("{}.clone()", coll.code)
     };
-    let key_ty = typed_kind_to_rust(&key_kind)?;
-    let value_ty = typed_kind_to_rust(&elem_kind)?;
     let cmp_block = if args.len() == 3 {
         let inline =
             emit_typed_binary_inline(ctx, env, fns, locals, &args[1], &key_kind, "left", "right")?;
@@ -3749,14 +5071,14 @@ fn emit_typed_sort_by(
             "right_key.clone()".to_string()
         };
         let cmp_expr = format!(
-            "{{\n    let left_key = &left_ref.0;\n    let right_key = &right_ref.0;\n    let left = {left_expr};\n    let right = {right_expr};\n{inline_prelude}    {inline_expr}\n}}",
+            "{{\n    let left = {left_expr};\n    let right = {right_expr};\n{inline_prelude}    {inline_expr}\n}}",
             left_expr = left_expr,
             right_expr = right_expr,
             inline_prelude = indent(&inline_prelude, 4),
             inline_expr = inline_expr
         );
         let rev_expr = format!(
-            "{{\n    let left_key = &right_ref.0;\n    let right_key = &left_ref.0;\n    let left = {left_expr};\n    let right = {right_expr};\n{inline_prelude}    {inline_expr}\n}}",
+            "{{\n    let left = {left_expr};\n    let right = {right_expr};\n{inline_prelude}    {inline_expr}\n}}",
             left_expr = left_expr,
             right_expr = right_expr,
             inline_prelude = indent(&inline_prelude, 4),
@@ -3779,29 +5101,132 @@ fn emit_typed_sort_by(
             _ => return None,
         }
     } else if key_kind == TypedKind::Float {
-        "left_ref.0.partial_cmp(&right_ref.0).unwrap_or(std::cmp::Ordering::Equal)".to_string()
+        "left_key.partial_cmp(&right_key).unwrap_or(std::cmp::Ordering::Equal)".to_string()
     } else {
-        "left_ref.0.cmp(&right_ref.0)".to_string()
+        "left_key.cmp(&right_key)".to_string()
     };
-    let code = format!(
-        "{{\n{coll_bind}        let mut {keyed_var}: Vec<({key_ty}, {value_ty})> = Vec::with_capacity({coll_ref}.len());\n        for {value_var} in {coll_ref}.iter() {{\n            let {value_var} = {value_var}.clone();\n{inline_prelude}            let {key_var} = {inline_expr};\n            {keyed_var}.push(({key_var}, {value_var}));\n        }}\n        {keyed_var}.sort_by(|left_ref, right_ref| {{\n            {cmp_block}\n        }});\n        let mut {out_var}: Vec<{value_ty}> = Vec::with_capacity({keyed_var}.len());\n        for (_, value) in {keyed_var}.into_iter() {{\n            {out_var}.push(value);\n        }}\n        {out_var}\n    }}",
-        coll_bind = coll_bind,
-        coll_ref = coll_ref,
-        keyed_var = keyed_var,
-        key_ty = key_ty,
-        value_ty = value_ty,
+    let value_ref = "value_ref";
+    let value_expr = if typed_kind_is_copy(&elem_kind) {
+        format!("*{}", value_ref)
+    } else {
+        format!("{}.clone()", value_ref)
+    };
+    let key_inline_block = format!(
+        "{{\n            let {value_var} = {value_expr};\n{inline_prelude}            {inline_expr}\n        }}",
         value_var = value_var,
+        value_expr = value_expr,
         inline_prelude = indent(&key_inline_prelude, 12),
-        inline_expr = key_inline_expr,
-        key_var = key_var,
-        cmp_block = cmp_block,
-        out_var = out_var
+        inline_expr = key_inline_expr
+    );
+    let use_cached_key =
+        args.len() == 2 && key_kind != TypedKind::Float && !is_trivial_sort_key(&args[0]);
+    let sort_body = if use_cached_key {
+        format!(
+            "        {out_var}.sort_by_cached_key(|{value_ref}| {key_block});\n",
+            out_var = out_var,
+            value_ref = value_ref,
+            key_block = key_inline_block
+        )
+    } else if args.len() == 2 {
+        let left_key = format!(
+            "{{\n            let {value_var} = {left_expr};\n{inline_prelude}            {inline_expr}\n        }}",
+            value_var = value_var,
+            left_expr = if typed_kind_is_copy(&elem_kind) {
+                "(*left_ref)".to_string()
+            } else {
+                "left_ref.clone()".to_string()
+            },
+            inline_prelude = indent(&key_inline_prelude, 12),
+            inline_expr = key_inline_expr
+        );
+        let right_key = format!(
+            "{{\n            let {value_var} = {right_expr};\n{inline_prelude}            {inline_expr}\n        }}",
+            value_var = value_var,
+            right_expr = if typed_kind_is_copy(&elem_kind) {
+                "(*right_ref)".to_string()
+            } else {
+                "right_ref.clone()".to_string()
+            },
+            inline_prelude = indent(&key_inline_prelude, 12),
+            inline_expr = key_inline_expr
+        );
+        format!(
+            "        {out_var}.sort_by(|left_ref, right_ref| {{\n            let left_key = {left_key};\n            let right_key = {right_key};\n            {cmp_block}\n        }});\n",
+            out_var = out_var,
+            left_key = left_key,
+            right_key = right_key,
+            cmp_block = cmp_block
+        )
+    } else {
+        let left_key = format!(
+            "{{\n            let {value_var} = {left_expr};\n{inline_prelude}            {inline_expr}\n        }}",
+            value_var = value_var,
+            left_expr = if typed_kind_is_copy(&elem_kind) {
+                "(*left_ref)".to_string()
+            } else {
+                "left_ref.clone()".to_string()
+            },
+            inline_prelude = indent(&key_inline_prelude, 12),
+            inline_expr = key_inline_expr
+        );
+        let right_key = format!(
+            "{{\n            let {value_var} = {right_expr};\n{inline_prelude}            {inline_expr}\n        }}",
+            value_var = value_var,
+            right_expr = if typed_kind_is_copy(&elem_kind) {
+                "(*right_ref)".to_string()
+            } else {
+                "right_ref.clone()".to_string()
+            },
+            inline_prelude = indent(&key_inline_prelude, 12),
+            inline_expr = key_inline_expr
+        );
+        format!(
+            "        {out_var}.sort_by(|left_ref, right_ref| {{\n            let left_key = {left_key};\n            let right_key = {right_key};\n            {cmp_block}\n        }});\n",
+            out_var = out_var,
+            left_key = left_key,
+            right_key = right_key,
+            cmp_block = cmp_block
+        )
+    };
+    let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
+    let code = format!(
+        "{{\n        let mut {out_var}: Vec<{out_elem_ty}> = {out_init};\n{sort_body}        {out_var}\n    }}",
+        out_var = out_var,
+        out_elem_ty = out_elem_ty,
+        out_init = out_init,
+        sort_body = sort_body
     );
     Some(TypedExpr {
         code,
         kind: TypedKind::Vec(Box::new(elem_kind)),
         is_symbol: false,
+        can_move: true,
     })
+}
+
+fn is_trivial_sort_key(func: &AstExpr) -> bool {
+    match func {
+        AstExpr::Symbol(sym) => {
+            let canonical = aliases::resolve_alias(sym);
+            matches!(canonical, "identity" | "inc" | "dec")
+        }
+        AstExpr::Fn { params, body, .. } => {
+            if params.len() != 1 || params[0].rest || body.len() != 1 {
+                return false;
+            }
+            let param = &params[0].name;
+            is_trivial_sort_key_expr(&body[0], param)
+        }
+        _ => false,
+    }
+}
+
+fn is_trivial_sort_key_expr(expr: &AstExpr, param: &str) -> bool {
+    match expr {
+        AstExpr::Symbol(sym) => sym == param,
+        AstExpr::Literal(Literal::Int(_) | Literal::Float(_)) => true,
+        _ => false,
+    }
 }
 
 fn emit_typed_split(
@@ -3856,12 +5281,12 @@ fn emit_typed_split(
             limit_code = limit_code
         ));
     }
-    out.push_str(&format!(
-        "        let mut {out_var}: Vec<String> = Vec::new();\n",
-        out_var = out_var
-    ));
     match &args[1] {
         AstExpr::Literal(Literal::Regex(pattern)) => {
+            out.push_str(&format!(
+                "        let mut {out_var}: Vec<String> = Vec::new();\n",
+                out_var = out_var
+            ));
             let sep_var = ctx.temp("re");
             let regex_expr = emit_static_regex_expr(ctx, pattern, "split expects regex");
             out.push_str(&format!(
@@ -3887,26 +5312,43 @@ fn emit_typed_split(
             }
         }
         _ => {
-            let sep = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
-            if sep.kind != TypedKind::Str {
-                return None;
-            }
-            let sep_var = ctx.temp("sep");
             let sep_ref = ctx.temp("sep_ref");
-            if sep.is_symbol {
-                out.push_str(&format!(
-                    "        let {sep_ref} = {sep}.as_str();\n",
-                    sep_ref = sep_ref,
-                    sep = sep.code
-                ));
-            } else {
-                out.push_str(&format!(
-                    "        let {sep_var} = {sep};\n        let {sep_ref} = {sep_var}.as_str();\n",
-                    sep_var = sep_var,
-                    sep_ref = sep_ref,
-                    sep = sep.code
-                ));
+            match &args[1] {
+                AstExpr::Literal(Literal::Str(value)) => {
+                    out.push_str(&format!(
+                        "        let {sep_ref} = {sep_lit};\n",
+                        sep_ref = sep_ref,
+                        sep_lit = emit_string_literal(value)
+                    ));
+                }
+                _ => {
+                    let sep = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
+                    if sep.kind != TypedKind::Str {
+                        return None;
+                    }
+                    let sep_var = ctx.temp("sep");
+                    if sep.is_symbol {
+                        out.push_str(&format!(
+                            "        let {sep_ref} = {sep}.as_str();\n",
+                            sep_ref = sep_ref,
+                            sep = sep.code
+                        ));
+                    } else {
+                        out.push_str(&format!(
+                            "        let {sep_var} = {sep};\n        let {sep_ref} = {sep_var}.as_str();\n",
+                            sep_var = sep_var,
+                            sep_ref = sep_ref,
+                            sep = sep.code
+                        ));
+                    }
+                }
             }
+            out.push_str(&format!(
+                "        let mut {out_var}: Vec<String> = if {sep_ref}.is_empty() {{\n            Vec::with_capacity({text_ref}.len())\n        }} else {{\n            Vec::with_capacity({text_ref}.len() / std::cmp::max({sep_ref}.len(), 1) + 1)\n        }};\n",
+                out_var = out_var,
+                sep_ref = sep_ref,
+                text_ref = text_ref
+            ));
             out.push_str(&format!(
                 "        if {sep_ref}.is_empty() {{\n            for ch in {text_ref}.chars() {{\n                {out_var}.push(ch.to_string());\n            }}\n        }} else {{\n",
                 sep_ref = sep_ref,
@@ -3937,6 +5379,7 @@ fn emit_typed_split(
         code: out,
         kind: TypedKind::Vec(Box::new(TypedKind::Str)),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4032,6 +5475,7 @@ fn emit_typed_re_find(
             ))))),
         ))),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4127,6 +5571,7 @@ fn emit_typed_re_matches(
             ))))),
         ))),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4222,6 +5667,7 @@ fn emit_typed_re_seq(
             ))))),
         ))),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4327,6 +5773,7 @@ fn emit_typed_replace(
                     code,
                     kind: TypedKind::Vec(Box::new(out_elem_kind)),
                     is_symbol: false,
+                    can_move: true,
                 });
             }
             TypedKind::Map(key_kind, value_kind_coll) => {
@@ -4406,6 +5853,7 @@ fn emit_typed_replace(
                     code,
                     kind: out_kind,
                     is_symbol: false,
+                    can_move: true,
                 });
             }
             _ => return None,
@@ -4517,6 +5965,7 @@ fn emit_typed_replace(
         code: out,
         kind: TypedKind::Str,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4537,7 +5986,15 @@ fn emit_typed_join(
     if *elem_kind != TypedKind::Str {
         return None;
     }
-    let sep_expr = if args.len() == 2 {
+    let sep_literal = if args.len() == 2 {
+        match &args[1] {
+            AstExpr::Literal(Literal::Str(value)) => Some(value.clone()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let sep_expr = if args.len() == 2 && sep_literal.is_none() {
         let sep = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
         if sep.kind != TypedKind::Str {
             return None;
@@ -4564,7 +6021,13 @@ fn emit_typed_join(
     };
     let sep_var = ctx.temp("sep");
     let sep_ref = ctx.temp("sep_ref");
-    let sep_bind = if let Some(sep) = sep_expr {
+    let sep_bind = if let Some(value) = sep_literal {
+        format!(
+            "        let {sep_ref} = {sep_lit};\n",
+            sep_ref = sep_ref,
+            sep_lit = emit_string_literal(&value)
+        )
+    } else if let Some(sep) = sep_expr {
         if sep.is_symbol {
             format!(
                 "        let {sep_ref} = {sep}.as_str();\n",
@@ -4582,17 +6045,24 @@ fn emit_typed_join(
     } else {
         format!("        let {sep_ref} = \"\";\n", sep_ref = sep_ref)
     };
+    let len_var = ctx.temp("len");
+    let first_var = ctx.temp("first");
+    let out_var = ctx.temp("out");
     let code = format!(
-        "{{\n{coll_bind}{sep_bind}        {coll_ref}.join({sep_ref})\n    }}",
+        "{{\n{coll_bind}{sep_bind}        let mut {len_var}: usize = 0;\n        let mut {first_var} = true;\n        for part in {coll_ref}.iter() {{\n            if !{first_var} {{\n                {len_var} += {sep_ref}.len();\n            }}\n            {first_var} = false;\n            {len_var} += part.len();\n        }}\n        let mut {out_var} = String::with_capacity({len_var});\n        let mut {first_var} = true;\n        for part in {coll_ref}.iter() {{\n            if !{first_var} {{\n                {out_var}.push_str({sep_ref});\n            }}\n            {first_var} = false;\n            {out_var}.push_str(part);\n        }}\n        {out_var}\n    }}",
         coll_bind = coll_bind,
         sep_bind = sep_bind,
         coll_ref = coll_ref,
-        sep_ref = sep_ref
+        sep_ref = sep_ref,
+        len_var = len_var,
+        first_var = first_var,
+        out_var = out_var
     );
     Some(TypedExpr {
         code,
         kind: TypedKind::Str,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4643,6 +6113,7 @@ fn emit_typed_count(
         code,
         kind: TypedKind::Int,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -4728,6 +6199,7 @@ fn emit_typed_get(
                 code: expr,
                 kind: result_kind,
                 is_symbol: false,
+                can_move: true,
             })
         }
         TypedKind::Map(key_kind, value_kind) => {
@@ -4782,6 +6254,7 @@ fn emit_typed_get(
                 code: expr,
                 kind: result_kind,
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -4848,6 +6321,7 @@ fn emit_typed_assoc(
                 code: out,
                 kind: TypedKind::Map(key_kind, value_kind),
                 is_symbol: false,
+                can_move: true,
             })
         }
         TypedKind::Vec(elem_kind) => {
@@ -4911,6 +6385,7 @@ fn emit_typed_assoc(
                 code: out,
                 kind: TypedKind::Vec(Box::new(elem_kind)),
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -5055,6 +6530,7 @@ fn emit_typed_get_in(
         code,
         kind: result_kind,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -5106,6 +6582,7 @@ fn emit_typed_every(
         code,
         kind: TypedKind::Bool,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -5157,6 +6634,7 @@ fn emit_typed_not_every(
         code,
         kind: TypedKind::Bool,
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -5231,6 +6709,7 @@ fn emit_typed_contains(
                 code,
                 kind: TypedKind::Bool,
                 is_symbol: false,
+                can_move: true,
             })
         }
         TypedKind::Map(key_kind, _) => {
@@ -5264,6 +6743,7 @@ fn emit_typed_contains(
                 code,
                 kind: TypedKind::Bool,
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -5319,18 +6799,29 @@ fn emit_typed_nth(
             } else {
                 "panic!(\"nth index out of range\")".to_string()
             };
+            let value_expr = if typed_kind_is_copy(&elem_kind) {
+                format!("{coll_ref}[{idx_var}]", coll_ref = coll_ref, idx_var = idx_var)
+            } else {
+                format!(
+                    "{coll_ref}[{idx_var}].clone()",
+                    coll_ref = coll_ref,
+                    idx_var = idx_var
+                )
+            };
             let code = format!(
-                "{{\n{coll_bind}        let {idx_var} = {idx};\n        if {idx_var} < 0 {{ panic!(\"nth expects non-negative Int index\"); }}\n        let {idx_var} = {idx_var} as usize;\n        if {idx_var} < {coll_ref}.len() {{ {coll_ref}[{idx_var}].clone() }} else {{ {default_code} }}\n    }}",
+                "{{\n{coll_bind}        let {idx_var} = {idx};\n        if {idx_var} < 0 {{ panic!(\"nth expects non-negative Int index\"); }}\n        let {idx_var} = {idx_var} as usize;\n        if {idx_var} < {coll_ref}.len() {{ {value_expr} }} else {{ {default_code} }}\n    }}",
                 coll_bind = coll_bind,
                 idx_var = idx_var,
                 idx = idx.code,
                 coll_ref = coll_ref,
+                value_expr = value_expr,
                 default_code = default_code
             );
             Some(TypedExpr {
                 code,
                 kind: *elem_kind,
                 is_symbol: false,
+                can_move: true,
             })
         }
         TypedKind::Str => {
@@ -5374,6 +6865,7 @@ fn emit_typed_nth(
                 code,
                 kind: TypedKind::Str,
                 is_symbol: false,
+                can_move: true,
             })
         }
         _ => None,
@@ -5460,6 +6952,7 @@ fn emit_typed_assoc_in(
         code: out,
         kind: path.maps[0].clone(),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -5582,6 +7075,7 @@ fn emit_typed_update_in(
         code: out,
         kind: path.maps[0].clone(),
         is_symbol: false,
+        can_move: true,
     })
 }
 
@@ -6112,6 +7606,7 @@ fn count_symbol_uses_in_expr(expr: &AstExpr, target: &str, shadowed: bool) -> us
         AstExpr::SetVar { value, .. } => count_symbol_uses_in_expr(value, target, shadowed),
     }
 }
+
 
 fn emit_native_call(
     codegen: &mut CodegenContext,
@@ -7247,7 +8742,7 @@ fn emit_quote_expr(expr: &Expr) -> Result<String, String> {
                 let val = emit_quote_expr(val_expr)?;
                 out.push_str("    let key_value = ");
                 out.push_str(&key);
-                out.push_str("?;\n    let key = clove2_core::eval::value_to_key(&key_value)?;\n    let value = ");
+                out.push_str("?;\n    let key = clove_build_core::eval::value_to_key(&key_value)?;\n    let value = ");
                 out.push_str(&val);
                 out.push_str("?;\n    map.insert(key, value);\n");
             }

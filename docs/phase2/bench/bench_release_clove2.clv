@@ -24,11 +24,15 @@
       (range reps-mid))))
 
 ;; remove / drop-while / keep / keep-indexed
-(def rm: [Int] (remove odd? (range reps-mid)))
-(def dw: [Int] (drop-while (fn [x: Int] (< x 10)) rm))
-(def kp: [Int] (keep (fn [x: Int] (when (even? x) x)) dw))
-(def kpi: [Int] (keep-indexed (fn [i: Int x: Int] (when (even? i) x)) kp))
-(def sum-keep: Int (reduce + 0 kpi))
+(def sum-keep: Int
+  (reduce
+    +
+    0
+    (keep-indexed
+      (fn [i: Int x: Int] (when (even? i) x))
+      (keep
+        (fn [x: Int] (when (even? x) x))
+        (drop-while (fn [x: Int] (< x 10)) (remove odd? (range reps-mid)))))))
 
 ;; sort / sort-by / some
 (def small: [Int] (range 20000))

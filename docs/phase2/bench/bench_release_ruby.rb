@@ -9,9 +9,18 @@ sum_filter = (0...reps_fast).select { |i| i.even? }.inject(0, :+)
 # hash-map / conj / nth / rest / interleave / count / empty?
 sum_collections = 0
 reps_mid.times do |x|
-  n0 = x
-  c = 2
-  sum_collections += c + n0
+  m = { a: x, b: x }
+  v = [x, x]
+  n0 = v[0]
+  r = v[1..]
+  i = []
+  len = [v.length, r.length].min
+  (0...len).each do |idx|
+    i << v[idx]
+    i << r[idx]
+  end
+  c = i.length
+  sum_collections += m.empty? ? 0 : c + n0
 end
 
 # remove / drop-while / keep / keep-indexed

@@ -2,9 +2,9 @@
 
 Japanese version: [build.ja.md](build.ja.md)
 
-- Updated: 2025-12-21
+- Updated: 2026-03-02
 
-`clove build` generates a **Rust project** from a Clove file.
+`clove build` compiles a Clove source file with the current C backend and emits a native binary.
 
 ## 1. Usage
 
@@ -12,39 +12,40 @@ Japanese version: [build.ja.md](build.ja.md)
 clove build path/to/app.clv
 ```
 
-In the generated directory (e.g., `build/`), run:
+Default output:
 
-```bash
-cargo build --release
+```text
+target/clove/bin/<file-stem>
 ```
 
-This produces an executable.
+## 2. Build options
 
-## 2. `--opt=typed`
+```bash
+clove build path/to/app.clv --out ./bin/app
+clove build path/to/app.clv --emit-c
+```
 
-`--opt=typed` enables “more static code generation” based on typed IR.
+- `--out PATH`
+  - Output binary path.
+- `--emit-c`
+  - Still builds the binary, but prints the generated C file path (`<out>.c`) instead of the binary path.
+- `-o`, `--output`
+  - Alias of `--out`.
 
-- Currently experimental; you may see compatibility warnings from `hm`.
+## 3. Unsupported legacy options
 
-## 3. Static link / embedding
+The following legacy options are no longer available in `clove build`:
 
-- `--static` builds a statically linked binary (Linux musl).
-- `--embed-ruby` / `--embed-python` embed the foreign engine.
+- `--opt`
+- `--static`
+- `--embed-ruby`
+- `--embed-python`
+- `--strict-types`
+- `--emit-typed-ir`
+- `--allow-native-plugins`
+- `--plugin-dir`
 
-> Constraints:
-> - `--embed-*` currently requires `--static`.
-> - Scripts with foreign blocks will error on a non-embed static build.
-
-## 4. Native plugins
-
-Generated binaries accept `--allow-native-plugins` / `--plugin-dir`.
-Default is trusted dirs only; package plugins require lock sha256 match.
-(Operational policy matters: e.g., lock to bundled plugins only.)
-
-## 5. Common pitfalls
-
-- `--main` changes whether `-main` is called
-- foreign blocks require embed or proper engine setup
+Use `clove` runtime options for script execution, and `clove --help` / `clove build --help` for current CLI behavior.
 
 ---
 <!-- NAV:START -->

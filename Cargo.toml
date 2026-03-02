@@ -9,9 +9,10 @@ members = [
   "crates/clove-plugin-api",
   "crates/clove-plugin-sdk",
   "crates/clove-plugin-sdk-macros",
-  "crates/clove2-core",
-  "crates/clove2-lang",
-  "crates/clove2-lsp",
+  "crates/clove-build-core",
+  "crates/clove-build-front",
+  "crates/clove-build-backend-c",
+  "crates/clove-build-runtime-c",
 ]
 
 default-members = [

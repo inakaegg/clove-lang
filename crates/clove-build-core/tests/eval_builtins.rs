@@ -1,5 +1,5 @@
-use clove2_core::eval::run_str;
-use clove2_core::value::Value;
+use clove_build_core::eval::run_str;
+use clove_build_core::value::Value;
 
 #[test]
 fn comp_uses_comp_call() {

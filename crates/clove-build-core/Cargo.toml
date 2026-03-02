@@ -1,5 +1,5 @@
 [package]
-name = "clove2-core"
+name = "clove-build-core"
 version = "0.1.0"
 edition = "2021"
 description = "Phase2 core library for Clove"
