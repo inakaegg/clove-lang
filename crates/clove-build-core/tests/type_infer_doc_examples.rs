@@ -84,11 +84,12 @@ fn clove2_doc_examples_typecheck() {
             let diags = check_program(&ast, NativeLevel::Warn);
             if diags.iter().any(|d| d.level == DiagnosticLevel::Error) {
                 failures.push(format!(
-                    "{} example #{} type error\n  code: {}\n  expect: {}",
+                    "{} example #{} type error\n  code: {}\n  expect: {}\n  diagnostics: {:?}",
                     entry.name,
                     idx + 1,
                     expr_src,
-                    parts.expected_src
+                    parts.expected_src,
+                    diags
                 ));
             }
         }

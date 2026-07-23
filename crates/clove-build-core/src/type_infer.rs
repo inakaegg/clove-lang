@@ -7590,8 +7590,44 @@ fn infer_replace_call(
     if args.len() == 2 {
         let smap_ty = infer_expr(&args[0], env, diags, level);
         let coll_ty = infer_expr(&args[1], env, diags, level);
+        let Some(smap_ty) = unwrap_optional_map_like(&smap_ty, level, diags, "replace") else {
+            diags.push(error_diag(format!("replace expects map, got {}", smap_ty)));
+            return Type::Any;
+        };
         let (_map_key, map_val) = match smap_ty {
             Type::Map(key, val) => (*key, *val),
+            Type::Shape(shape) => (
+                Type::Keyword,
+                shape
+                    .fields
+                    .values()
+                    .cloned()
+                    .reduce(merge_types)
+                    .unwrap_or(Type::Any),
+            ),
+            Type::Object(fields) => (
+                Type::Str,
+                fields
+                    .values()
+                    .cloned()
+                    .reduce(merge_types)
+                    .unwrap_or(Type::Any),
+            ),
+            Type::Named(name) => {
+                let Some(fields) = env.get_type(&name) else {
+                    diags.push(error_diag(format!("unknown type: {}", name)));
+                    return Type::Any;
+                };
+                (
+                    Type::Str,
+                    fields
+                        .values()
+                        .cloned()
+                        .reduce(merge_types)
+                        .unwrap_or(Type::Any),
+                )
+            }
+            Type::Any | Type::Dyn | Type::DynOf(_) => (Type::Any, Type::Any),
             other => {
                 diags.push(error_diag(format!("replace expects map, got {}", other)));
                 return Type::Any;
@@ -7602,10 +7638,47 @@ fn infer_replace_call(
                 let merged = merge_types(*elem, map_val);
                 Type::Vec(Box::new(merged))
             }
+            Type::Tuple(items) => {
+                let elem = Type::union(items);
+                Type::Vec(Box::new(merge_types(elem, map_val)))
+            }
             Type::Map(key, val) => {
                 let merged_key = merge_types(*key, map_val);
                 Type::Map(Box::new(merged_key), val)
             }
+            Type::Shape(shape) => {
+                let value = shape
+                    .fields
+                    .values()
+                    .cloned()
+                    .reduce(merge_types)
+                    .unwrap_or(Type::Any);
+                Type::Map(
+                    Box::new(merge_types(Type::Keyword, map_val)),
+                    Box::new(value),
+                )
+            }
+            Type::Object(fields) => {
+                let value = fields
+                    .values()
+                    .cloned()
+                    .reduce(merge_types)
+                    .unwrap_or(Type::Any);
+                Type::Map(Box::new(merge_types(Type::Str, map_val)), Box::new(value))
+            }
+            Type::Named(name) => {
+                let Some(fields) = env.get_type(&name) else {
+                    diags.push(error_diag(format!("unknown type: {}", name)));
+                    return Type::Any;
+                };
+                let value = fields
+                    .values()
+                    .cloned()
+                    .reduce(merge_types)
+                    .unwrap_or(Type::Any);
+                Type::Map(Box::new(merge_types(Type::Str, map_val)), Box::new(value))
+            }
+            Type::Any | Type::Dyn | Type::DynOf(_) => Type::Any,
             other => {
                 diags.push(error_diag(format!(
                     "replace expects collection, got {}",
