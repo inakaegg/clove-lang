@@ -4445,11 +4445,11 @@ mod tests {
     }
 
     #[test]
-    fn parses_dollar_brace_as_rb_block() {
+    fn parses_dollar_brace_without_explicit_tag() {
         let form = parse_one("${1 + 2 * 3}");
         match &form.kind {
             FormKind::ForeignRaw { tag, code } => {
-                assert_eq!(tag.as_deref(), Some("rb"));
+                assert!(tag.is_none());
                 assert_eq!(code.trim(), "1 + 2 * 3");
             }
             other => panic!("expected ForeignRaw, got {:?}", other),
@@ -4457,11 +4457,11 @@ mod tests {
     }
 
     #[test]
-    fn parses_dollar_brace_with_suffix() {
+    fn parses_dollar_brace_with_suffix_without_explicit_tag() {
         let form = parse_one("${foo}.bar");
         match &form.kind {
             FormKind::ForeignRaw { tag, code } => {
-                assert_eq!(tag.as_deref(), Some("rb"));
+                assert!(tag.is_none());
                 assert_eq!(code, "(foo).bar");
             }
             other => panic!("expected ForeignRaw, got {:?}", other),

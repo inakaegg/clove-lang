@@ -4101,8 +4101,13 @@ mod tests {
     #[test]
     fn load_file_splits_data_section() {
         let mut ctx = runtime_ctx();
-        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
-        let file = repo_root.join("examples").join("__data01.clv");
+        let temp = TempDir::new("clove-load-file-data");
+        let file = temp.path().join("data.clv");
+        fs::write(
+            &file,
+            "(def data __DATA__)\ndata\n__DATA__\n{\"a\":1,\"b\":2}\n(unknown-symbol)\n",
+        )
+        .expect("write data section fixture");
         let path_text = escape_string_literal(&file.to_string_lossy());
         let expr = format!("(load-file \"{}\")", path_text);
         let value = ctx.eval_source(&expr).expect("load-file should succeed");
