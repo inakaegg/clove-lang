@@ -1,4 +1,19 @@
-use clove_core::eval_source;
+use std::thread;
+
+use clove_core::ast::Value;
+use clove_core::error::CloveError;
+use clove_core::eval_source as eval_source_raw;
+use clove_core::options::EvalOptions;
+
+fn eval_source(src: &str, options: Option<EvalOptions>) -> Result<Value, CloveError> {
+    let src = src.to_string();
+    thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || eval_source_raw(&src, options))
+        .expect("failed to spawn test thread with larger stack")
+        .join()
+        .expect("test thread panicked")
+}
 
 #[test]
 fn each_binding_returns_receiver() {

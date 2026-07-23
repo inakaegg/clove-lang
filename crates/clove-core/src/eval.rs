@@ -1149,6 +1149,50 @@ impl Evaluator {
                     Ok(None)
                 }
             }
+            name @ ("remove" | "keep" | "not-every?" | "take-while" | "drop-while"
+            | "split-with") => {
+                let target = format!("core::{name}");
+                if let Some(value) =
+                    self.eval_collection_binding_sugar(rest, env.clone(), form_span, &target, name)?
+                {
+                    Ok(Some(value))
+                } else {
+                    Ok(None)
+                }
+            }
+            name @ ("some" | "every?" | "not-any?" | "partition-by" | "group-by" | "run!") => {
+                let target = format!("std::{name}");
+                if let Some(value) =
+                    self.eval_collection_binding_sugar(rest, env.clone(), form_span, &target, name)?
+                {
+                    Ok(Some(value))
+                } else {
+                    Ok(None)
+                }
+            }
+            "sort-by" => {
+                if matches!(
+                    rest.first().map(|form| &form.kind),
+                    Some(FormKind::Vector(_))
+                ) && rest.len() != 2
+                {
+                    return Err(span_runtime_error(
+                        form_span,
+                        "sort-by binding sugar does not accept a comparator",
+                    ));
+                }
+                if let Some(value) = self.eval_collection_binding_sugar(
+                    rest,
+                    env.clone(),
+                    form_span,
+                    "std::sort-by",
+                    "sort-by",
+                )? {
+                    Ok(Some(value))
+                } else {
+                    Ok(None)
+                }
+            }
             "->" => Ok(Some(self.eval_thread_first(rest, env, form_span)?)),
             "->>" => Ok(Some(self.eval_thread_last(rest, env, form_span)?)),
             "as->" => Ok(Some(self.eval_as_thread(rest, env, form_span)?)),
@@ -5460,6 +5504,64 @@ impl Evaluator {
         let call_form = Form::new(
             FormKind::List(vec![
                 Form::new(FormKind::Symbol("core::filter".into()), form_span),
+                fn_form,
+                coll_form,
+            ]),
+            form_span,
+        );
+        Ok(Some(self.eval(&call_form, env)?))
+    }
+
+    fn eval_collection_binding_sugar(
+        &self,
+        args: &[Form],
+        env: EnvRef,
+        form_span: Span,
+        target_sym: &str,
+        display_name: &str,
+    ) -> Result<Option<Value>, CloveError> {
+        let Some(binding_form) = args.first() else {
+            return Ok(None);
+        };
+        if !matches!(binding_form.kind, FormKind::Vector(_)) {
+            return Ok(None);
+        }
+        if args.len() < 2 {
+            return Err(span_runtime_error(
+                form_span,
+                format!("{display_name} expects binding and body"),
+            ));
+        }
+        let (pattern, coll_form) = self.parse_binding_pair(binding_form)?;
+        let fn_body_span = binding_form.span;
+        let it_name = format!(
+            "__it{}",
+            PLACEHOLDER_ALLOC_COUNTER.fetch_add(1, Ordering::SeqCst)
+        );
+        let it_symbol = Form::new(FormKind::Symbol(it_name), fn_body_span);
+        let bindings_vec = Form::new(
+            FormKind::Vector(vec![pattern, it_symbol.clone()]),
+            fn_body_span,
+        );
+        let mut let_items = Vec::with_capacity(args.len() + 2);
+        let_items.push(Form::new(FormKind::Symbol("let".into()), fn_body_span));
+        let_items.push(bindings_vec);
+        for body in &args[1..] {
+            let_items.push(body.clone());
+        }
+        let let_form = Form::new(FormKind::List(let_items), fn_body_span);
+        let fn_params = Form::new(FormKind::Vector(vec![it_symbol]), fn_body_span);
+        let fn_form = Form::new(
+            FormKind::List(vec![
+                Form::new(FormKind::Symbol("fn".into()), fn_body_span),
+                fn_params,
+                let_form,
+            ]),
+            fn_body_span,
+        );
+        let call_form = Form::new(
+            FormKind::List(vec![
+                Form::new(FormKind::Symbol(target_sym.into()), form_span),
                 fn_form,
                 coll_form,
             ]),

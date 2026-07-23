@@ -233,8 +233,10 @@ impl Compiler {
                 self.lower_plain_list(span, items)
             }
             "when-let" | "if-let" | "if-some" | "doseq" | "each" | "dotimes" | "with-open"
-            | "map" | "filter" | "pmap" | "pfilter" | "dag::pmap" | "dag::pfilter"
-            | "std::pmap" | "std::pfilter" => self.lower_binding_form(span, items),
+            | "map" | "filter" | "remove" | "keep" | "some" | "every?" | "not-any?"
+            | "not-every?" | "take-while" | "drop-while" | "split-with" | "partition-by"
+            | "group-by" | "run!" | "sort-by" | "pmap" | "pfilter" | "dag::pmap"
+            | "dag::pfilter" | "std::pmap" | "std::pfilter" => self.lower_binding_form(span, items),
             "break" => Ok(Form::new(FormKind::List(items), span)),
             _ => Ok(Form::new(FormKind::List(items), span)),
         }
@@ -665,6 +667,19 @@ fn is_special_form(name: &str) -> bool {
             | "dotimes"
             | "map"
             | "filter"
+            | "remove"
+            | "keep"
+            | "some"
+            | "every?"
+            | "not-any?"
+            | "not-every?"
+            | "take-while"
+            | "drop-while"
+            | "split-with"
+            | "partition-by"
+            | "group-by"
+            | "run!"
+            | "sort-by"
             | "pmap"
             | "pfilter"
             | "dag::pmap"

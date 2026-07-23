@@ -861,7 +861,7 @@ impl Compiler {
                         &items[1..],
                         span,
                         tail,
-                        "core::some",
+                        "std::some",
                         "some expects binding and body",
                         false,
                     )? {
@@ -873,7 +873,7 @@ impl Compiler {
                         &items[1..],
                         span,
                         tail,
-                        "core::every?",
+                        "std::every?",
                         "every? expects binding and predicate body",
                         false,
                     )? {
@@ -885,7 +885,7 @@ impl Compiler {
                         &items[1..],
                         span,
                         tail,
-                        "core::not-any?",
+                        "std::not-any?",
                         "not-any? expects binding and predicate body",
                         false,
                     )? {
@@ -945,7 +945,7 @@ impl Compiler {
                         &items[1..],
                         span,
                         tail,
-                        "core::partition-by",
+                        "std::partition-by",
                         "partition-by expects binding and body",
                         false,
                     )? {
@@ -957,7 +957,7 @@ impl Compiler {
                         &items[1..],
                         span,
                         tail,
-                        "core::group-by",
+                        "std::group-by",
                         "group-by expects binding and body",
                         false,
                     )? {
@@ -969,7 +969,7 @@ impl Compiler {
                         &items[1..],
                         span,
                         tail,
-                        "core::run!",
+                        "std::run!",
                         "run! expects binding and body",
                         false,
                     )? {
@@ -982,7 +982,7 @@ impl Compiler {
                             &items[1..],
                             span,
                             tail,
-                            "core::sort-by",
+                            "std::sort-by",
                             "sort-by expects binding and body",
                             false,
                         )?
