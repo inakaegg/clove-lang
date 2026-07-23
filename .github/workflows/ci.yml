@@ -40,6 +40,8 @@ jobs:
         run: cargo build --locked --workspace
       - name: Test workspace
         run: cargo test --locked --workspace
+        env:
+          RUST_MIN_STACK: 16777216
 
   clippy:
     name: Clippy (advisory while existing warnings are cleared)
