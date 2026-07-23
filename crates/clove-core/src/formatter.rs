@@ -6611,7 +6611,8 @@ mod tests {
 
     #[test]
     fn keeps_defn_empty_params_inline() {
-        let src = "(defn initialClodius [] {:variables initialGameVariables :objects [initialVicViper]})";
+        let src =
+            "(defn initialClodius [] {:variables initialGameVariables :objects [initialVicViper]})";
         let expected =
             "(defn initialClodius []\n  {:variables initialGameVariables :objects [initialVicViper]})\n";
         assert_eq!(fmt(src), expected);

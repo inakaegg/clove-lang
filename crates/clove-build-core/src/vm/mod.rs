@@ -564,7 +564,11 @@ impl VmIter {
     }
 
     fn reduce_int_fast(&self, init: Option<i64>) -> Result<Option<i64>, Clove2Error> {
-        if self.ops.iter().any(|op| matches!(op, IterOp::Keep(_) | IterOp::KeepIndexed(_))) {
+        if self
+            .ops
+            .iter()
+            .any(|op| matches!(op, IterOp::Keep(_) | IterOp::KeepIndexed(_)))
+        {
             return Ok(None);
         }
         #[derive(Copy, Clone)]
@@ -581,7 +585,10 @@ impl VmIter {
         enum FastKind {
             None,
             Map(IntMap),
-            Filter { filter: IntFilter, invert: bool },
+            Filter {
+                filter: IntFilter,
+                invert: bool,
+            },
             MapFilter {
                 map: IntMap,
                 filter: IntFilter,
@@ -638,7 +645,10 @@ impl VmIter {
                     Some(filter) => filter,
                     None => return Ok(None),
                 };
-                FastKind::Filter { filter, invert: true }
+                FastKind::Filter {
+                    filter,
+                    invert: true,
+                }
             }
             [IterOp::Map(map_func), IterOp::Filter(filter_func)] => {
                 let map = match map_kind(map_func) {
@@ -664,7 +674,11 @@ impl VmIter {
                     Some(filter) => filter,
                     None => return Ok(None),
                 };
-                FastKind::MapFilter { map, filter, invert: true }
+                FastKind::MapFilter {
+                    map,
+                    filter,
+                    invert: true,
+                }
             }
             [IterOp::Filter(filter_func), IterOp::Map(map_func)] => {
                 let filter = match filter_kind(filter_func) {
@@ -675,7 +689,11 @@ impl VmIter {
                     Some(map) => map,
                     None => return Ok(None),
                 };
-                FastKind::FilterMap { filter, invert: false, map }
+                FastKind::FilterMap {
+                    filter,
+                    invert: false,
+                    map,
+                }
             }
             [IterOp::FilterNot(filter_func), IterOp::Map(map_func)] => {
                 let filter = match filter_kind(filter_func) {
@@ -686,7 +704,11 @@ impl VmIter {
                     Some(map) => map,
                     None => return Ok(None),
                 };
-                FastKind::FilterMap { filter, invert: true, map }
+                FastKind::FilterMap {
+                    filter,
+                    invert: true,
+                    map,
+                }
             }
             _ => return Ok(None),
         };
@@ -2073,17 +2095,13 @@ fn run_code_fast(
             Instruction::PushStr(value) => {
                 frame.stack.push(VmValue::Value(Value::Str(value.clone())))
             }
-            Instruction::PushKeyword(value) => {
-                frame.stack
-                    .push(VmValue::Value(Value::Keyword(value.clone())))
-            }
-            Instruction::PushFloat(value) => {
-                frame.stack.push(VmValue::Value(Value::Float(*value)))
-            }
-            Instruction::PushRegex(value) => {
-                frame.stack
-                    .push(VmValue::Value(Value::Regex(value.clone())))
-            }
+            Instruction::PushKeyword(value) => frame
+                .stack
+                .push(VmValue::Value(Value::Keyword(value.clone()))),
+            Instruction::PushFloat(value) => frame.stack.push(VmValue::Value(Value::Float(*value))),
+            Instruction::PushRegex(value) => frame
+                .stack
+                .push(VmValue::Value(Value::Regex(value.clone()))),
             Instruction::PushNil => frame.stack.push(VmValue::Value(Value::Nil)),
             Instruction::PushFunction(id) => {
                 frame.stack.push(VmValue::Value(Value::NativeFunction(*id)))
@@ -2632,33 +2650,31 @@ fn run_code_fast(
                     frame.stack.push(value_to_vmvalue(value));
                 }
             }
-            Instruction::Call(argc) => {
-                match *argc {
-                    1 => {
-                        let arg = pop_vm_value(&mut frame.stack)?;
-                        let callee = pop_vm_value(&mut frame.stack)?;
-                        let value = call_value_vm_arity1(state, callee, arg)?;
-                        frame.stack.push(value);
-                    }
-                    2 => {
-                        let arg2 = pop_vm_value(&mut frame.stack)?;
-                        let arg1 = pop_vm_value(&mut frame.stack)?;
-                        let callee = pop_vm_value(&mut frame.stack)?;
-                        let value = call_value_vm_arity2(state, callee, arg1, arg2)?;
-                        frame.stack.push(value);
-                    }
-                    _ => {
-                        let mut args = Vec::with_capacity(*argc);
-                        for _ in 0..*argc {
-                            args.push(pop_vm_value(&mut frame.stack)?);
-                        }
-                        args.reverse();
-                        let callee = pop_vm_value(&mut frame.stack)?;
-                        let value = call_value_vm(state, callee, args)?;
-                        frame.stack.push(value);
-                    }
+            Instruction::Call(argc) => match *argc {
+                1 => {
+                    let arg = pop_vm_value(&mut frame.stack)?;
+                    let callee = pop_vm_value(&mut frame.stack)?;
+                    let value = call_value_vm_arity1(state, callee, arg)?;
+                    frame.stack.push(value);
                 }
-            }
+                2 => {
+                    let arg2 = pop_vm_value(&mut frame.stack)?;
+                    let arg1 = pop_vm_value(&mut frame.stack)?;
+                    let callee = pop_vm_value(&mut frame.stack)?;
+                    let value = call_value_vm_arity2(state, callee, arg1, arg2)?;
+                    frame.stack.push(value);
+                }
+                _ => {
+                    let mut args = Vec::with_capacity(*argc);
+                    for _ in 0..*argc {
+                        args.push(pop_vm_value(&mut frame.stack)?);
+                    }
+                    args.reverse();
+                    let callee = pop_vm_value(&mut frame.stack)?;
+                    let value = call_value_vm(state, callee, args)?;
+                    frame.stack.push(value);
+                }
+            },
         }
         ip += 1;
     }
@@ -2682,17 +2698,13 @@ fn run_code_profiled(
             Instruction::PushStr(value) => {
                 frame.stack.push(VmValue::Value(Value::Str(value.clone())))
             }
-            Instruction::PushKeyword(value) => {
-                frame.stack
-                    .push(VmValue::Value(Value::Keyword(value.clone())))
-            }
-            Instruction::PushFloat(value) => {
-                frame.stack.push(VmValue::Value(Value::Float(*value)))
-            }
-            Instruction::PushRegex(value) => {
-                frame.stack
-                    .push(VmValue::Value(Value::Regex(value.clone())))
-            }
+            Instruction::PushKeyword(value) => frame
+                .stack
+                .push(VmValue::Value(Value::Keyword(value.clone()))),
+            Instruction::PushFloat(value) => frame.stack.push(VmValue::Value(Value::Float(*value))),
+            Instruction::PushRegex(value) => frame
+                .stack
+                .push(VmValue::Value(Value::Regex(value.clone()))),
             Instruction::PushNil => frame.stack.push(VmValue::Value(Value::Nil)),
             Instruction::PushFunction(id) => {
                 frame.stack.push(VmValue::Value(Value::NativeFunction(*id)))
@@ -3251,33 +3263,31 @@ fn run_code_profiled(
                     frame.stack.push(value_to_vmvalue(value));
                 }
             }
-            Instruction::Call(argc) => {
-                match *argc {
-                    1 => {
-                        let arg = pop_vm_value(&mut frame.stack)?;
-                        let callee = pop_vm_value(&mut frame.stack)?;
-                        let value = call_value_vm_arity1(state, callee, arg)?;
-                        frame.stack.push(value);
-                    }
-                    2 => {
-                        let arg2 = pop_vm_value(&mut frame.stack)?;
-                        let arg1 = pop_vm_value(&mut frame.stack)?;
-                        let callee = pop_vm_value(&mut frame.stack)?;
-                        let value = call_value_vm_arity2(state, callee, arg1, arg2)?;
-                        frame.stack.push(value);
-                    }
-                    _ => {
-                        let mut args = Vec::with_capacity(*argc);
-                        for _ in 0..*argc {
-                            args.push(pop_vm_value(&mut frame.stack)?);
-                        }
-                        args.reverse();
-                        let callee = pop_vm_value(&mut frame.stack)?;
-                        let value = call_value_vm(state, callee, args)?;
-                        frame.stack.push(value);
-                    }
+            Instruction::Call(argc) => match *argc {
+                1 => {
+                    let arg = pop_vm_value(&mut frame.stack)?;
+                    let callee = pop_vm_value(&mut frame.stack)?;
+                    let value = call_value_vm_arity1(state, callee, arg)?;
+                    frame.stack.push(value);
                 }
-            }
+                2 => {
+                    let arg2 = pop_vm_value(&mut frame.stack)?;
+                    let arg1 = pop_vm_value(&mut frame.stack)?;
+                    let callee = pop_vm_value(&mut frame.stack)?;
+                    let value = call_value_vm_arity2(state, callee, arg1, arg2)?;
+                    frame.stack.push(value);
+                }
+                _ => {
+                    let mut args = Vec::with_capacity(*argc);
+                    for _ in 0..*argc {
+                        args.push(pop_vm_value(&mut frame.stack)?);
+                    }
+                    args.reverse();
+                    let callee = pop_vm_value(&mut frame.stack)?;
+                    let value = call_value_vm(state, callee, args)?;
+                    frame.stack.push(value);
+                }
+            },
         }
         let elapsed = start.elapsed().as_nanos();
         profiler::record_op_label(label, elapsed);
@@ -3634,7 +3644,6 @@ fn call_builtin_1(state: &mut VmState, name: &str, arg: Value) -> Result<Value, 
     }
 }
 
-
 fn call_builtin_1_vm(
     state: &mut VmState,
     name: &str,
@@ -3644,17 +3653,13 @@ fn call_builtin_1_vm(
         "inc" => match arg {
             VmValue::Int(value) => Ok(VmValue::Int(value + 1)),
             VmValue::Value(Value::Int(value)) => Ok(VmValue::Int(value + 1)),
-            VmValue::Value(Value::Float(value)) => {
-                Ok(VmValue::Value(Value::Float(value + 1.0)))
-            }
+            VmValue::Value(Value::Float(value)) => Ok(VmValue::Value(Value::Float(value + 1.0))),
             _ => Err(Clove2Error::new("vm: inc expects number")),
         },
         "dec" => match arg {
             VmValue::Int(value) => Ok(VmValue::Int(value - 1)),
             VmValue::Value(Value::Int(value)) => Ok(VmValue::Int(value - 1)),
-            VmValue::Value(Value::Float(value)) => {
-                Ok(VmValue::Value(Value::Float(value - 1.0)))
-            }
+            VmValue::Value(Value::Float(value)) => Ok(VmValue::Value(Value::Float(value - 1.0))),
             _ => Err(Clove2Error::new("vm: dec expects number")),
         },
         "identity" => Ok(arg.clone()),
@@ -3763,7 +3768,6 @@ fn call_builtin_2(
         _ => call_builtin(state, name, vec![arg1, arg2]),
     }
 }
-
 
 fn call_builtin_2_vm(
     _state: &mut VmState,

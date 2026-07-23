@@ -8570,8 +8570,8 @@ fn resolve_regex_value(value: &Value) -> Result<Regex, Clove2Error> {
             if let Some(regex) = cache.borrow().get(pattern) {
                 return Ok(regex.clone());
             }
-            let regex =
-                Regex::new(pattern).map_err(|err| Clove2Error::new(format!("invalid regex: {}", err)))?;
+            let regex = Regex::new(pattern)
+                .map_err(|err| Clove2Error::new(format!("invalid regex: {}", err)))?;
             cache.borrow_mut().insert(pattern.clone(), regex.clone());
             Ok(regex)
         }),

@@ -704,9 +704,13 @@ fn emit_typed_program(items: &[TopLevel]) -> Option<String> {
                         if let AstExpr::Symbol(sym) = callee.as_ref() {
                             let canonical = aliases::resolve_alias(sym);
                             if canonical == "range" {
-                                if let Some(spec) =
-                                    range_spec_from_args(&mut ctx, &env, &fns, &HashMap::new(), args)
-                                {
+                                if let Some(spec) = range_spec_from_args(
+                                    &mut ctx,
+                                    &env,
+                                    &fns,
+                                    &HashMap::new(),
+                                    args,
+                                ) {
                                     ctx.range_defs.insert(name.clone(), spec);
                                     continue;
                                 }
@@ -2481,7 +2485,11 @@ fn emit_typed_pipeline(
     let has_index = ops
         .iter()
         .any(|op| matches!(op, PipelineOp::KeepIndexed(_)));
-    let idx_var = if has_index { Some(ctx.temp("idx")) } else { None };
+    let idx_var = if has_index {
+        Some(ctx.temp("idx"))
+    } else {
+        None
+    };
     let mut drop_flags: Vec<String> = Vec::new();
     let value_var = ctx.temp("value");
     let value_ref = ctx.temp("value_ref");
@@ -2499,17 +2507,35 @@ fn emit_typed_pipeline(
     for op in ops {
         match op {
             PipelineOp::Map(func) => {
-                let inline =
-                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let inline = emit_typed_unary_inline(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &current_kind,
+                    &current_var,
+                )?;
                 let next_var = ctx.temp("map_val");
                 step_body.push_str(&indent(&inline.prelude, 12));
-                step_body.push_str(&format!("            let {next_var} = {expr};\n", next_var = next_var, expr = inline.expr));
+                step_body.push_str(&format!(
+                    "            let {next_var} = {expr};\n",
+                    next_var = next_var,
+                    expr = inline.expr
+                ));
                 current_var = next_var;
                 current_kind = inline.kind;
             }
             PipelineOp::Filter(func) => {
-                let inline =
-                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let inline = emit_typed_unary_inline(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &current_kind,
+                    &current_var,
+                )?;
                 if inline.kind != TypedKind::Bool {
                     return None;
                 }
@@ -2521,8 +2547,15 @@ fn emit_typed_pipeline(
                 ));
             }
             PipelineOp::Remove(func) => {
-                let inline =
-                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let inline = emit_typed_unary_inline(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &current_kind,
+                    &current_var,
+                )?;
                 if inline.kind != TypedKind::Bool {
                     return None;
                 }
@@ -2534,8 +2567,15 @@ fn emit_typed_pipeline(
                 ));
             }
             PipelineOp::DropWhile(func) => {
-                let inline =
-                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let inline = emit_typed_unary_inline(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &current_kind,
+                    &current_var,
+                )?;
                 if inline.kind != TypedKind::Bool {
                     return None;
                 }
@@ -2550,15 +2590,26 @@ fn emit_typed_pipeline(
                 ));
             }
             PipelineOp::Keep(func) => {
-                let inline =
-                    emit_typed_unary_inline(ctx, env, fns, locals, func, &current_kind, &current_var)?;
+                let inline = emit_typed_unary_inline(
+                    ctx,
+                    env,
+                    fns,
+                    locals,
+                    func,
+                    &current_kind,
+                    &current_var,
+                )?;
                 let TypedKind::Optional(inner_kind) = inline.kind else {
                     return None;
                 };
                 let opt_var = ctx.temp("opt");
                 let next_var = ctx.temp("keep_val");
                 step_body.push_str(&indent(&inline.prelude, 12));
-                step_body.push_str(&format!("            let {opt_var} = {expr};\n", opt_var = opt_var, expr = inline.expr));
+                step_body.push_str(&format!(
+                    "            let {opt_var} = {expr};\n",
+                    opt_var = opt_var,
+                    expr = inline.expr
+                ));
                 step_body.push_str(&format!(
                     "            let {next_var} = match {opt_var} {{\n                Some(value) => value,\n                None => {{\n{idx_inc}                    continue;\n                }}\n            }};\n",
                     next_var = next_var,
@@ -2587,7 +2638,11 @@ fn emit_typed_pipeline(
                 let opt_var = ctx.temp("opt");
                 let next_var = ctx.temp("keep_idx_val");
                 step_body.push_str(&indent(&inline.prelude, 12));
-                step_body.push_str(&format!("            let {opt_var} = {expr};\n", opt_var = opt_var, expr = inline.expr));
+                step_body.push_str(&format!(
+                    "            let {opt_var} = {expr};\n",
+                    opt_var = opt_var,
+                    expr = inline.expr
+                ));
                 step_body.push_str(&format!(
                     "            let {next_var} = match {opt_var} {{\n                Some(value) => value,\n                None => {{\n{idx_inc}                    continue;\n                }}\n            }};\n",
                     next_var = next_var,
@@ -2600,7 +2655,11 @@ fn emit_typed_pipeline(
         }
     }
     let out_elem_ty = typed_kind_to_rust(&current_kind)?;
-    let push_line = format!("            {out_var}.push({value});\n", out_var = out_var, value = current_var);
+    let push_line = format!(
+        "            {out_var}.push({value});\n",
+        out_var = out_var,
+        value = current_var
+    );
     let index_init = if let Some(idx_var) = &idx_var {
         format!("        let mut {idx_var}: i64 = 0;\n", idx_var = idx_var)
     } else {
@@ -2614,10 +2673,19 @@ fn emit_typed_pipeline(
             .map(|flag| format!("        let mut {flag} = true;\n", flag = flag))
             .collect::<String>()
     };
-    let loop_body = format!("{steps}{push}{idx_inc}", steps = step_body, push = push_line, idx_inc = idx_inc);
+    let loop_body = format!(
+        "{steps}{push}{idx_inc}",
+        steps = step_body,
+        push = push_line,
+        idx_inc = idx_inc
+    );
     let code = if let Some(spec) = range_spec {
         let (vars, prelude) = emit_range_prelude(ctx, &spec);
-        let idx_init = format!("{index_init}{drop_init}", index_init = index_init, drop_init = drop_init);
+        let idx_init = format!(
+            "{index_init}{drop_init}",
+            index_init = index_init,
+            drop_init = drop_init
+        );
         let loop_body = format!(
             "        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_var});\n{idx_init}        if {step_var} > 0 {{\n            let mut {value_var} = {start_var};\n            while {value_var} < {end_var} {{\n{loop_body}                {value_var} += {step_var};\n            }}\n        }} else {{\n            let mut {value_var} = {start_var};\n            while {value_var} > {end_var} {{\n{loop_body}                {value_var} += {step_var};\n            }}\n        }}\n        {out_var}\n",
             out_var = out_var,
@@ -2630,7 +2698,11 @@ fn emit_typed_pipeline(
             end_var = vars.end_var,
             loop_body = loop_body
         );
-        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
+        format!(
+            "{{\n{prelude}{loop_body}    }}",
+            prelude = prelude,
+            loop_body = loop_body
+        )
     } else {
         let coll = coll?;
         let can_move_coll = !coll.is_symbol || coll.can_move;
@@ -2664,7 +2736,11 @@ fn emit_typed_pipeline(
         } else {
             format!("{}.clone()", value_ref)
         };
-        let idx_init = format!("{index_init}{drop_init}", index_init = index_init, drop_init = drop_init);
+        let idx_init = format!(
+            "{index_init}{drop_init}",
+            index_init = index_init,
+            drop_init = drop_init
+        );
         let loop_body = if can_move_coll {
             format!(
                 "        for {value_var} in {coll_var}.into_iter() {{\n{loop_body}        }}\n",
@@ -2765,7 +2841,11 @@ fn emit_typed_map(
             inline_prelude = indent(&inline.prelude, 16),
             inline_expr = inline.expr
         );
-        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
+        format!(
+            "{{\n{prelude}{loop_body}    }}",
+            prelude = prelude,
+            loop_body = loop_body
+        )
     } else {
         let coll = coll?;
         let can_move_coll = !coll.is_symbol || coll.can_move;
@@ -2847,9 +2927,14 @@ fn emit_typed_filter(
     if args.len() != 2 {
         return None;
     }
-    if let Some(pipeline) =
-        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::Filter(&args[0]), &args[1])
-    {
+    if let Some(pipeline) = emit_typed_pipeline(
+        ctx,
+        env,
+        fns,
+        locals,
+        PipelineOp::Filter(&args[0]),
+        &args[1],
+    ) {
         return Some(pipeline);
     }
     let range_spec = range_spec_from_ast(ctx, env, fns, locals, &args[1]);
@@ -2886,7 +2971,11 @@ fn emit_typed_filter(
             inline_prelude = indent(&inline.prelude, 16),
             inline_expr = inline.expr
         );
-        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
+        format!(
+            "{{\n{prelude}{loop_body}    }}",
+            prelude = prelude,
+            loop_body = loop_body
+        )
     } else {
         let coll = coll?;
         let can_move_coll = !coll.is_symbol || coll.can_move;
@@ -3172,9 +3261,14 @@ fn emit_typed_remove(
     if args.len() != 2 {
         return None;
     }
-    if let Some(pipeline) =
-        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::Remove(&args[0]), &args[1])
-    {
+    if let Some(pipeline) = emit_typed_pipeline(
+        ctx,
+        env,
+        fns,
+        locals,
+        PipelineOp::Remove(&args[0]),
+        &args[1],
+    ) {
         return Some(pipeline);
     }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
@@ -3264,9 +3358,14 @@ fn emit_typed_drop_while(
     if args.len() != 2 {
         return None;
     }
-    if let Some(pipeline) =
-        emit_typed_pipeline(ctx, env, fns, locals, PipelineOp::DropWhile(&args[0]), &args[1])
-    {
+    if let Some(pipeline) = emit_typed_pipeline(
+        ctx,
+        env,
+        fns,
+        locals,
+        PipelineOp::DropWhile(&args[0]),
+        &args[1],
+    ) {
         return Some(pipeline);
     }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[1])?;
@@ -3617,7 +3716,11 @@ fn emit_typed_reduce(
             inline_prelude = indent(&inline.prelude, 16),
             inline_expr = inline.expr
         );
-        format!("{{\n{prelude}{loop_body}    }}", prelude = prelude, loop_body = loop_body)
+        format!(
+            "{{\n{prelude}{loop_body}    }}",
+            prelude = prelude,
+            loop_body = loop_body
+        )
     } else {
         let coll = coll?;
         let can_move_coll = !coll.is_symbol || coll.can_move;
@@ -4087,7 +4190,6 @@ fn range_spec_from_ast(
     }
 }
 
-
 struct RangeVars {
     start_var: String,
     end_var: String,
@@ -4226,7 +4328,11 @@ fn emit_typed_reduce_fused(
                 body = "{{body}}\n",
             )
         };
-        base_loop = format!("{coll_bind}{loop_body}", coll_bind = coll_bind, loop_body = loop_body);
+        base_loop = format!(
+            "{coll_bind}{loop_body}",
+            coll_bind = coll_bind,
+            loop_body = loop_body
+        );
     }
 
     let mut cur_kind = base_kind.clone();
@@ -6800,7 +6906,11 @@ fn emit_typed_nth(
                 "panic!(\"nth index out of range\")".to_string()
             };
             let value_expr = if typed_kind_is_copy(&elem_kind) {
-                format!("{coll_ref}[{idx_var}]", coll_ref = coll_ref, idx_var = idx_var)
+                format!(
+                    "{coll_ref}[{idx_var}]",
+                    coll_ref = coll_ref,
+                    idx_var = idx_var
+                )
             } else {
                 format!(
                     "{coll_ref}[{idx_var}].clone()",
@@ -7606,7 +7716,6 @@ fn count_symbol_uses_in_expr(expr: &AstExpr, target: &str, shadowed: bool) -> us
         AstExpr::SetVar { value, .. } => count_symbol_uses_in_expr(value, target, shadowed),
     }
 }
-
 
 fn emit_native_call(
     codegen: &mut CodegenContext,

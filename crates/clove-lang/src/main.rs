@@ -32,7 +32,9 @@ fn help() -> ! {
     println!("Options:");
     println!("  --repl                Start the REPL, or enter it after running a script in the same context");
     println!("  --main                Call `-main` after eval if present (for script execution)");
-    println!("  --vm                  Enable VM execution (fallback to eval for unsupported forms)");
+    println!(
+        "  --vm                  Enable VM execution (fallback to eval for unsupported forms)"
+    );
     println!("  --vm-prof             Enable lightweight VM profiling (opcode/chunk stats)");
     println!("  --no-std              Disable auto-loading std (for perf measurement)");
     println!("  -e CODE               Evaluate CODE and exit");
@@ -172,7 +174,7 @@ fn main() {
                 args.remove(0);
             }
             Some("-a") | Some("--auto-fallback") => {
-            // Disabled by default
+                // Disabled by default
                 auto_fallback = true;
                 args.remove(0);
             }

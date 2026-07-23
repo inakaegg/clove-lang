@@ -359,8 +359,6 @@ mod tests {
         .expect("write lock");
 
         let err = can_load_native_plugin(&pkg_plugin, &ctx, false).expect_err("hash mismatch");
-        assert!(err
-            .to_string()
-            .contains("sha256 recorded in the lockfile"));
+        assert!(err.to_string().contains("sha256 recorded in the lockfile"));
     }
 }
