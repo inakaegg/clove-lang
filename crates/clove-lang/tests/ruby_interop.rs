@@ -1,6 +1,5 @@
 use clove_core::{
     ast::{Key, Value},
-    error::CloveError,
     eval_source_with_engines,
     options::EvalOptions,
 };
@@ -13,7 +12,7 @@ fn eval_with_ruby(src: &str) -> Value {
 fn main() {
     ruby_interop_all();
     ruby_foreign_callable_can_be_passed_to_map();
-    tagless_foreign_requires_default_language();
+    tagless_foreign_uses_ruby_default();
 }
 
 fn ruby_interop_all() {
@@ -81,19 +80,15 @@ end}
     }
 }
 
-fn tagless_foreign_requires_default_language() {
+fn tagless_foreign_uses_ruby_default() {
     let src = "$Foo.bar";
-    let err = eval_source_with_engines(src, EvalOptions::default(), &clove_ruby::engines())
-        .expect_err("tagless foreign should error without default language");
-    match err {
-        CloveError::Other(data) => {
-            assert!(
-                data.message
-                    .contains("foreign callable requires explicit tag"),
-                "unexpected message: {}",
-                data.message
-            );
+    let value =
+        eval_source_with_engines(src, EvalOptions::default(), &clove_ruby::engines()).unwrap();
+    match value {
+        Value::ForeignCallable { tag, path, .. } => {
+            assert_eq!(tag, "rb");
+            assert_eq!(path, "Foo.bar");
         }
-        other => panic!("expected Other error, got {:?}", other),
+        other => panic!("expected Ruby foreign callable, got {:?}", other),
     }
 }
