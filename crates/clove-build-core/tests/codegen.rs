@@ -12,7 +12,7 @@ fn codegen_reduce_is_typed() {
     let out = emit_rust_program(&ast, MutMode::Mut).unwrap();
     assert!(!out.contains("Value::"));
     assert!(out.contains("acc_"));
-    assert!(out.contains("for value_"));
+    assert!(out.contains("while value_"));
 }
 
 #[test]
