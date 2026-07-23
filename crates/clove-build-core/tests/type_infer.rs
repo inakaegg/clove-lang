@@ -983,7 +983,7 @@ fn open_shape_allows_missing_key() {
 #[test]
 fn bench_phase2_infers_vec_types() {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../bench/phase2/bench.clv");
+    path.push("tests/fixtures/type_infer_phase2_bench.clv");
     let content = std::fs::read_to_string(&path).unwrap();
     let forms = read_all(&content).unwrap();
     let ast = parse_forms(&forms).unwrap();
