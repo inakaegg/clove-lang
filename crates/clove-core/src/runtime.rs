@@ -432,7 +432,8 @@ impl RuntimeCtx {
     where
         F: FnOnce(Arc<RuntimeCtx>) -> Result<R, CloveError>,
     {
-        CURRENT_RUNTIME.with(|cell| cell.borrow().clone().map(f))
+        let current = CURRENT_RUNTIME.with(|cell| cell.borrow().clone());
+        current.map(f)
     }
 
     pub fn with_current<F, R>(f: F) -> Result<R, CloveError>
