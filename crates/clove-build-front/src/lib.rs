@@ -144,6 +144,11 @@ fn lower_defn(items: &[SExpr]) -> Result<TopLevel, FrontError> {
             message: "defn missing body".to_string(),
         });
     }
+    if items.len() != body_index + 1 {
+        return Err(FrontError {
+            message: "defn currently supports a single body form".to_string(),
+        });
+    }
     let body = lower_expr(&items[body_index])?;
     Ok(TopLevel::Def {
         name,
@@ -341,6 +346,15 @@ mod tests {
         assert_eq!(param1, "acc");
         assert_eq!(param2, "k");
         assert_eq!(param3, "v");
+    }
+
+    #[test]
+    fn reject_defn_with_multiple_body_forms_instead_of_dropping_them() {
+        let err = parse_source(&src("(defn step [x] (+ x 1) (+ x 100))"))
+            .expect_err("multi-form body must not compile with changed semantics");
+        assert!(err
+            .to_string()
+            .contains("defn currently supports a single body form"));
     }
 
     #[test]

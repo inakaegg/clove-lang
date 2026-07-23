@@ -136,6 +136,13 @@ struct MapVar {
     kind: MapKind,
 }
 
+#[derive(Debug, Clone)]
+struct ResourceSnapshot {
+    vec_names: Vec<String>,
+    map_names: Vec<String>,
+    str_names: Vec<String>,
+}
+
 pub fn emit_c(program: &FrontProgram, config: &RuntimeConfig) -> Result<CArtifact, BackendError> {
     let mut compiler = Compiler {
         config,
@@ -422,8 +429,8 @@ impl<'a> Compiler<'a> {
         match v.ctype {
             CType::VecI64 => match v.repr {
                 CRepr::Var(name) => Ok(VecInput {
+                    releasable: self.is_releasable_var(&name),
                     name,
-                    releasable: !matches!(expr, Expr::Symbol(_)),
                 }),
                 CRepr::Expr(_) => Err(BackendError {
                     message: "internal error: Vec must be materialized variable".to_string(),
@@ -440,8 +447,8 @@ impl<'a> Compiler<'a> {
         match v.ctype {
             CType::VecStr => match v.repr {
                 CRepr::Var(name) => Ok(VecInput {
+                    releasable: self.is_releasable_var(&name),
                     name,
-                    releasable: !matches!(expr, Expr::Symbol(_)),
                 }),
                 CRepr::Expr(_) => Err(BackendError {
                     message: "internal error: Vec<Str> must be materialized variable".to_string(),
@@ -458,8 +465,8 @@ impl<'a> Compiler<'a> {
         match v.ctype {
             CType::MapKI64 => match v.repr {
                 CRepr::Var(name) => Ok(VecInput {
+                    releasable: self.is_releasable_var(&name),
                     name,
-                    releasable: !matches!(expr, Expr::Symbol(_)),
                 }),
                 CRepr::Expr(_) => Err(BackendError {
                     message: "internal error: Map must be materialized variable".to_string(),
@@ -469,6 +476,57 @@ impl<'a> Compiler<'a> {
                 message: "expected Map<Keyword,Int> expression".to_string(),
             }),
         }
+    }
+
+    fn is_releasable_var(&self, name: &str) -> bool {
+        !self.bindings.values().any(|binding| {
+            matches!(
+                binding,
+                Binding::Value(CValue {
+                    repr: CRepr::Var(bound),
+                    ..
+                }) if bound == name
+            )
+        })
+    }
+
+    fn resource_snapshot(&self) -> ResourceSnapshot {
+        ResourceSnapshot {
+            vec_names: self.vec_vars.iter().map(|var| var.name.clone()).collect(),
+            map_names: self.map_vars.iter().map(|var| var.name.clone()).collect(),
+            str_names: self.str_vars.clone(),
+        }
+    }
+
+    fn take_scoped_cleanup(&mut self, before: &ResourceSnapshot) -> Vec<String> {
+        let mut cleanup = Vec::new();
+        self.vec_vars.retain(|var| {
+            if before.vec_names.contains(&var.name) {
+                true
+            } else {
+                cleanup.push(match var.kind {
+                    VecKind::I64 => format!("clv_vec_free(&{});", var.name),
+                    VecKind::VecI64 => format!("clv_vec_vec_i64_free(&{});", var.name),
+                    VecKind::Str => format!("clv_vec_str_free(&{});", var.name),
+                });
+                false
+            }
+        });
+        self.map_vars.retain(|var| {
+            if before.map_names.contains(&var.name) {
+                true
+            } else {
+                cleanup.push(match var.kind {
+                    MapKind::KI64 => format!("clv_map_ki64_free(&{});", var.name),
+                    MapKind::I64VecI64 => {
+                        format!("clv_map_i64_vec_i64_free(&{});", var.name)
+                    }
+                });
+                false
+            }
+        });
+        self.str_vars.retain(|name| before.str_names.contains(name));
+        cleanup
     }
 
     fn track_vec_var(&mut self, name: String, kind: VecKind) {
@@ -797,8 +855,11 @@ impl<'a> Compiler<'a> {
                         repr: CRepr::Expr("true".to_string()),
                     });
                 }
-                let mut parts = Vec::with_capacity(args.len());
+                let result = self.next_tmp("and");
+                self.lines.push(format!("bool {} = true;", result));
                 for arg in args {
+                    let resources = self.resource_snapshot();
+                    let body_start = self.lines.len();
                     let v = self.compile_expr(arg)?;
                     if !matches!(v.ctype, CType::Bool) {
                         return Err(BackendError {
@@ -808,11 +869,19 @@ impl<'a> Compiler<'a> {
                     let e = match v.repr {
                         CRepr::Expr(e) | CRepr::Var(e) => e,
                     };
-                    parts.push(format!("({})", e));
+                    let body = self.lines.split_off(body_start);
+                    let cleanup = self.take_scoped_cleanup(&resources);
+                    self.lines.push(format!("if ({}) {{", result));
+                    self.lines
+                        .extend(body.into_iter().map(|line| format!("  {}", line)));
+                    self.lines.push(format!("  {} = ({});", result, e));
+                    self.lines
+                        .extend(cleanup.into_iter().map(|line| format!("  {}", line)));
+                    self.lines.push("}".to_string());
                 }
                 Ok(CValue {
                     ctype: CType::Bool,
-                    repr: CRepr::Expr(format!("({})", parts.join(" && "))),
+                    repr: CRepr::Var(result),
                 })
             }
             "or" => {
@@ -822,8 +891,11 @@ impl<'a> Compiler<'a> {
                         repr: CRepr::Expr("false".to_string()),
                     });
                 }
-                let mut parts = Vec::with_capacity(args.len());
+                let result = self.next_tmp("or");
+                self.lines.push(format!("bool {} = false;", result));
                 for arg in args {
+                    let resources = self.resource_snapshot();
+                    let body_start = self.lines.len();
                     let v = self.compile_expr(arg)?;
                     if !matches!(v.ctype, CType::Bool) {
                         return Err(BackendError {
@@ -833,11 +905,19 @@ impl<'a> Compiler<'a> {
                     let e = match v.repr {
                         CRepr::Expr(e) | CRepr::Var(e) => e,
                     };
-                    parts.push(format!("({})", e));
+                    let body = self.lines.split_off(body_start);
+                    let cleanup = self.take_scoped_cleanup(&resources);
+                    self.lines.push(format!("if (!{}) {{", result));
+                    self.lines
+                        .extend(body.into_iter().map(|line| format!("  {}", line)));
+                    self.lines.push(format!("  {} = ({});", result, e));
+                    self.lines
+                        .extend(cleanup.into_iter().map(|line| format!("  {}", line)));
+                    self.lines.push("}".to_string());
                 }
                 Ok(CValue {
                     ctype: CType::Bool,
-                    repr: CRepr::Expr(format!("({})", parts.join(" || "))),
+                    repr: CRepr::Var(result),
                 })
             }
             "identity" => {
@@ -1165,23 +1245,11 @@ impl<'a> Compiler<'a> {
                 })
             }
             "rand" => {
-                if args.len() > 1 {
-                    return Err(BackendError {
-                        message: "rand expects 0 or 1 args".to_string(),
-                    });
-                }
-                if args.is_empty() {
-                    Ok(CValue {
-                        ctype: CType::I64,
-                        repr: CRepr::Expr("clv_rand_int_i64(9223372036854775807LL)".to_string()),
-                    })
-                } else {
-                    let n = self.as_i64_expr(&args[0])?;
-                    Ok(CValue {
-                        ctype: CType::I64,
-                        repr: CRepr::Expr(format!("clv_rand_int_i64({})", n)),
-                    })
-                }
+                Err(BackendError {
+                    message:
+                        "rand is not supported in the phase2 C subset because Float is unsupported; use rand-int"
+                            .to_string(),
+                })
             }
             "compare" | "compare-desc" => {
                 if args.len() != 2 {
@@ -2236,7 +2304,7 @@ impl<'a> Compiler<'a> {
                             if has_default { "true" } else { "false" },
                             default_value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         Ok(CValue {
@@ -2266,7 +2334,7 @@ impl<'a> Compiler<'a> {
                             if has_default { "true" } else { "false" },
                             default_value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         Ok(CValue {
@@ -2310,7 +2378,7 @@ impl<'a> Compiler<'a> {
                             if has_default { "true" } else { "false" },
                             default_value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         Ok(CValue {
@@ -2341,7 +2409,7 @@ impl<'a> Compiler<'a> {
                             if has_default { "true" } else { "false" },
                             default_value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         Ok(CValue {
@@ -2386,7 +2454,7 @@ impl<'a> Compiler<'a> {
                             "clv_vec_i64 {} = clv_assoc_i64(&{}, {}LL, {});",
                             out_var, name, idx, new_var
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         self.track_vec_var(out_var.clone(), VecKind::I64);
@@ -2423,7 +2491,7 @@ impl<'a> Compiler<'a> {
                             escape_c_string(&key),
                             new_var
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         self.track_map_var(out_var.clone(), MapKind::KI64);
@@ -2469,7 +2537,7 @@ impl<'a> Compiler<'a> {
                             "clv_vec_i64 {} = clv_assoc_i64(&{}, {}, {});",
                             out_var, name, idx, new_var
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         self.track_vec_var(out_var.clone(), VecKind::I64);
@@ -2501,7 +2569,7 @@ impl<'a> Compiler<'a> {
                             "clv_map_ki64 {} = clv_map_assoc_ki64(&{}, {}, {});",
                             out_var, name, key, new_var
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         self.track_map_var(out_var.clone(), MapKind::KI64);
@@ -2536,7 +2604,7 @@ impl<'a> Compiler<'a> {
                             "clv_vec_i64 {} = clv_assoc_i64(&{}, {}, {});",
                             var, name, idx, value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         self.track_vec_var(var.clone(), VecKind::I64);
@@ -2558,7 +2626,7 @@ impl<'a> Compiler<'a> {
                             "clv_map_ki64 {} = clv_map_assoc_ki64(&{}, {}, {});",
                             var, name, key, value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         self.track_map_var(var.clone(), MapKind::KI64);
@@ -2594,7 +2662,7 @@ impl<'a> Compiler<'a> {
                             "clv_vec_i64 {} = clv_assoc_i64(&{}, {}LL, {});",
                             var, name, idx, value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         self.track_vec_var(var.clone(), VecKind::I64);
@@ -2620,7 +2688,7 @@ impl<'a> Compiler<'a> {
                             escape_c_string(&key),
                             value
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         self.track_map_var(var.clone(), MapKind::KI64);
@@ -2783,13 +2851,13 @@ impl<'a> Compiler<'a> {
                         message: "time expects 1 arg in phase2 C subset".to_string(),
                     });
                 }
-                let result = self.as_i64_expr(&args[0])?;
                 let start = self.next_tmp("time_start");
                 let elapsed = self.next_tmp("time_elapsed");
                 let result_var = self.next_tmp("time_result");
                 let map = self.next_tmp("time_map");
                 self.lines
                     .push(format!("int64_t {} = clv_now_ns();", start));
+                let result = self.as_i64_expr(&args[0])?;
                 self.lines
                     .push(format!("int64_t {} = {};", result_var, result));
                 self.lines
@@ -2820,7 +2888,6 @@ impl<'a> Compiler<'a> {
                     });
                 }
                 let runs = self.as_i64_expr(&args[0])?;
-                let expr = self.as_i64_expr(&args[1])?;
                 let runs_var = self.next_tmp("bench_runs");
                 let start = self.next_tmp("bench_start");
                 let elapsed = self.next_tmp("bench_elapsed");
@@ -2834,10 +2901,21 @@ impl<'a> Compiler<'a> {
                 self.lines
                     .push(format!("int64_t {} = clv_now_ns();", start));
                 self.lines.push(format!("int64_t {} = 0LL;", result_var));
+                let resources = self.resource_snapshot();
+                let body_start = self.lines.len();
+                let expr = self.as_i64_expr(&args[1])?;
+                let body = self.lines.split_off(body_start);
+                let cleanup = self.take_scoped_cleanup(&resources);
                 self.lines.push(format!(
-                    "for (int64_t {} = 0LL; {} < {}; ++{}) {} = {};",
-                    i, i, runs_var, i, result_var, expr
+                    "for (int64_t {} = 0LL; {} < {}; ++{}) {{",
+                    i, i, runs_var, i
                 ));
+                self.lines
+                    .extend(body.into_iter().map(|line| format!("  {}", line)));
+                self.lines.push(format!("  {} = {};", result_var, expr));
+                self.lines
+                    .extend(cleanup.into_iter().map(|line| format!("  {}", line)));
+                self.lines.push("}".to_string());
                 self.lines
                     .push(format!("int64_t {} = clv_now_ns() - {};", elapsed, start));
                 self.lines
@@ -3668,7 +3746,7 @@ impl<'a> Compiler<'a> {
                             "clv_map_ki64 {} = clv_frequencies_i64(&{});",
                             out, name
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                     }
@@ -3677,7 +3755,7 @@ impl<'a> Compiler<'a> {
                             "clv_map_ki64 {} = clv_frequencies_str(&{});",
                             out, name
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                     }
@@ -4565,7 +4643,7 @@ impl<'a> Compiler<'a> {
                 let var = self.next_tmp("count");
                 self.lines
                     .push(format!("int64_t {} = ((int64_t)({}.len));", var, src_name));
-                if !matches!(args[0], Expr::Symbol(_)) {
+                if self.is_releasable_var(&src_name) {
                     match src_ctype {
                         CType::MapKI64 | CType::MapI64VecI64 => self.release_map_var(&src_name),
                         _ => self.release_vec_var(&src_name),
@@ -4599,7 +4677,7 @@ impl<'a> Compiler<'a> {
                             "bool {} = ({} >= 0LL) && (((size_t)({})) < {}.len);",
                             var, idx_var, idx_var, name
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         Ok(CValue {
@@ -4620,7 +4698,7 @@ impl<'a> Compiler<'a> {
                             "bool {} = clv_map_ki64_contains(&{}, {});",
                             var, name, key
                         ));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         Ok(CValue {
@@ -4651,7 +4729,7 @@ impl<'a> Compiler<'a> {
                         let var = self.next_tmp("empty_q");
                         self.lines
                             .push(format!("bool {} = ({}.len == 0);", var, name));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_vec_var(&name);
                         }
                         Ok(CValue {
@@ -4669,7 +4747,7 @@ impl<'a> Compiler<'a> {
                         let var = self.next_tmp("empty_q");
                         self.lines
                             .push(format!("bool {} = ({}.len == 0);", var, name));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         Ok(CValue {
@@ -4687,7 +4765,7 @@ impl<'a> Compiler<'a> {
                         let var = self.next_tmp("empty_q");
                         self.lines
                             .push(format!("bool {} = ({}.len == 0);", var, name));
-                        if !matches!(&args[0], Expr::Symbol(_)) {
+                        if self.is_releasable_var(&name) {
                             self.release_map_var(&name);
                         }
                         Ok(CValue {
@@ -5675,9 +5753,11 @@ fn extract_symbol_vector(expr: &Expr) -> Result<Vec<String>, BackendError> {
 fn sanitize(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() || ch == '_' {
+        if ch.is_ascii_alphanumeric() {
             out.push(ch);
         } else {
+            out.push('_');
+            out.push_str(&format!("{:x}", ch as u32));
             out.push('_');
         }
     }
@@ -5716,42 +5796,67 @@ typedef struct {
   size_t cap;
 } clv_vec_vec_i64;
 
-typedef struct {
+typedef struct clv_arena_chunk {
   char* data;
   size_t len;
   size_t cap;
+  struct clv_arena_chunk* next;
+} clv_arena_chunk;
+
+typedef struct {
+  clv_arena_chunk* head;
+  clv_arena_chunk* tail;
 } clv_arena;
 
-static clv_arena CLV_STR_ARENA = {NULL, 0, 0};
+static clv_arena CLV_STR_ARENA = {NULL, NULL};
 
 static void* clv_arena_alloc(size_t n) {
   if (n == 0) {
     n = 1;
   }
-  if (CLV_STR_ARENA.cap - CLV_STR_ARENA.len < n) {
-    size_t need = CLV_STR_ARENA.len + n;
-    size_t cap = CLV_STR_ARENA.cap == 0 ? 4096 : CLV_STR_ARENA.cap;
-    while (cap < need) {
+  clv_arena_chunk* chunk = CLV_STR_ARENA.tail;
+  if (!chunk || chunk->cap - chunk->len < n) {
+    size_t cap = 4096;
+    while (cap < n) {
       cap *= 2;
     }
-    char* next = (char*)realloc(CLV_STR_ARENA.data, cap);
+    clv_arena_chunk* next = (clv_arena_chunk*)malloc(sizeof(clv_arena_chunk));
     if (!next) {
       fprintf(stderr, "phase2 C: arena alloc failed\n");
       abort();
     }
-    CLV_STR_ARENA.data = next;
-    CLV_STR_ARENA.cap = cap;
+    next->data = (char*)malloc(cap);
+    if (!next->data) {
+      free(next);
+      fprintf(stderr, "phase2 C: arena alloc failed\n");
+      abort();
+    }
+    next->len = 0;
+    next->cap = cap;
+    next->next = NULL;
+    if (CLV_STR_ARENA.tail) {
+      CLV_STR_ARENA.tail->next = next;
+    } else {
+      CLV_STR_ARENA.head = next;
+    }
+    CLV_STR_ARENA.tail = next;
+    chunk = next;
   }
-  void* ptr = CLV_STR_ARENA.data + CLV_STR_ARENA.len;
-  CLV_STR_ARENA.len += n;
+  void* ptr = chunk->data + chunk->len;
+  chunk->len += n;
   return ptr;
 }
 
 static void clv_arena_dispose(void) {
-  free(CLV_STR_ARENA.data);
-  CLV_STR_ARENA.data = NULL;
-  CLV_STR_ARENA.len = 0;
-  CLV_STR_ARENA.cap = 0;
+  clv_arena_chunk* chunk = CLV_STR_ARENA.head;
+  while (chunk) {
+    clv_arena_chunk* next = chunk->next;
+    free(chunk->data);
+    free(chunk);
+    chunk = next;
+  }
+  CLV_STR_ARENA.head = NULL;
+  CLV_STR_ARENA.tail = NULL;
 }
 
 static char* clv_str_clone_n(const char* s, size_t n) {
@@ -7994,8 +8099,262 @@ static int64_t clv_last_index_of_str(const char* s, const char* needle) {
 mod tests {
     use clove_build_front::{Expr, FrontProgram, TopLevel};
     use clove_build_runtime_c::RuntimeConfig;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use crate::emit_c;
+
+    static TEST_ID: AtomicUsize = AtomicUsize::new(0);
+
+    fn compile_and_run(program: &FrontProgram) -> String {
+        let artifact = emit_c(program, &RuntimeConfig::default()).expect("emit should succeed");
+        let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "clove-build-backend-c-{}-{}",
+            std::process::id(),
+            id
+        ));
+        fs::create_dir_all(&root).expect("create temp directory");
+        let source: PathBuf = root.join("test.c");
+        let binary = root.join("test-bin");
+        fs::write(&source, artifact.source).expect("write generated C");
+        let compile = Command::new("cc")
+            .args(["-O1"])
+            .arg(&source)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .expect("run C compiler");
+        assert!(
+            compile.status.success(),
+            "C compilation failed: {}",
+            String::from_utf8_lossy(&compile.stderr)
+        );
+        let output = Command::new(&binary)
+            .output()
+            .expect("run generated binary");
+        assert!(
+            output.status.success(),
+            "generated binary failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        fs::remove_dir_all(&root).expect("remove temp directory");
+        String::from_utf8(output.stdout).expect("generated output must be UTF-8")
+    }
+
+    #[test]
+    fn generated_strings_remain_valid_after_arena_growth() {
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Def {
+                    name: "before".to_string(),
+                    value: Expr::Str("sentinel".to_string()),
+                },
+                TopLevel::Def {
+                    name: "large".to_string(),
+                    value: Expr::Str("x".repeat(5000)),
+                },
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Symbol("before".to_string())],
+                }),
+            ],
+        };
+        assert_eq!(compile_and_run(&program), "sentinel\n");
+    }
+
+    #[test]
+    fn identity_does_not_transfer_collection_ownership() {
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Def {
+                    name: "xs".to_string(),
+                    value: Expr::Vector(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]),
+                },
+                TopLevel::Def {
+                    name: "ys".to_string(),
+                    value: Expr::Call {
+                        callee: "map".to_string(),
+                        args: vec![
+                            Expr::Symbol("inc".to_string()),
+                            Expr::Call {
+                                callee: "identity".to_string(),
+                                args: vec![Expr::Symbol("xs".to_string())],
+                            },
+                        ],
+                    },
+                },
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Call {
+                        callee: "count".to_string(),
+                        args: vec![Expr::Symbol("xs".to_string())],
+                    }],
+                }),
+            ],
+        };
+        assert_eq!(compile_and_run(&program), "3\n");
+    }
+
+    #[test]
+    fn and_or_preserve_short_circuit_side_effects() {
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Call {
+                        callee: "and".to_string(),
+                        args: vec![
+                            Expr::Bool(false),
+                            Expr::Call {
+                                callee: "println".to_string(),
+                                args: vec![Expr::Bool(true)],
+                            },
+                        ],
+                    }],
+                }),
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Call {
+                        callee: "and".to_string(),
+                        args: vec![
+                            Expr::Bool(true),
+                            Expr::Call {
+                                callee: "=".to_string(),
+                                args: vec![
+                                    Expr::Call {
+                                        callee: "upper-case".to_string(),
+                                        args: vec![Expr::Str("a".to_string())],
+                                    },
+                                    Expr::Str("A".to_string()),
+                                ],
+                            },
+                        ],
+                    }],
+                }),
+            ],
+        };
+        assert_eq!(compile_and_run(&program), "false\ntrue\n");
+    }
+
+    #[test]
+    fn time_and_bench_keep_measured_work_inside_the_timed_region() {
+        let measured = Expr::Call {
+            callee: "reduce".to_string(),
+            args: vec![
+                Expr::Symbol("+".to_string()),
+                Expr::Int(0),
+                Expr::Call {
+                    callee: "range".to_string(),
+                    args: vec![Expr::Int(0), Expr::Int(100)],
+                },
+            ],
+        };
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Def {
+                    name: "timed".to_string(),
+                    value: Expr::Call {
+                        callee: "time".to_string(),
+                        args: vec![measured.clone()],
+                    },
+                },
+                TopLevel::Def {
+                    name: "benched".to_string(),
+                    value: Expr::Call {
+                        callee: "bench".to_string(),
+                        args: vec![Expr::Int(2), measured],
+                    },
+                },
+            ],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        let main = c
+            .source
+            .split("int main(void) {")
+            .nth(1)
+            .expect("main body");
+        let time_start = main.find("time_start").expect("time start");
+        let timed_range = main.find("clv_range_i64").expect("timed range");
+        assert!(time_start < timed_range);
+        let loop_start = main.find("for (int64_t bench_i").expect("bench loop");
+        let benched_range = main.rfind("clv_range_i64").expect("benched range");
+        assert!(loop_start < benched_range);
+    }
+
+    #[test]
+    fn rand_is_rejected_until_float_semantics_are_supported() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "rand".to_string(),
+                args: vec![Expr::Int(1)],
+            })],
+        };
+        let err = emit_c(&program, &RuntimeConfig::default())
+            .expect_err("integer rand lowering silently changes Float semantics");
+        assert!(err
+            .to_string()
+            .contains("rand is not supported in the phase2 C subset"));
+    }
+
+    #[test]
+    fn bench_cleans_temporary_resources_inside_the_loop() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::Call {
+                    callee: "get".to_string(),
+                    args: vec![
+                        Expr::Call {
+                            callee: "bench".to_string(),
+                            args: vec![
+                                Expr::Int(2),
+                                Expr::Call {
+                                    callee: "index-of".to_string(),
+                                    args: vec![
+                                        Expr::Call {
+                                            callee: "upper-case".to_string(),
+                                            args: vec![Expr::Str("a".to_string())],
+                                        },
+                                        Expr::Str("A".to_string()),
+                                    ],
+                                },
+                            ],
+                        },
+                        Expr::Keyword("result".to_string()),
+                    ],
+                }],
+            })],
+        };
+        assert_eq!(compile_and_run(&program), "0\n");
+    }
+
+    #[test]
+    fn distinct_clove_names_do_not_collide_as_c_identifiers() {
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Def {
+                    name: "foo-bar".to_string(),
+                    value: Expr::Int(1),
+                },
+                TopLevel::Def {
+                    name: "foo_bar".to_string(),
+                    value: Expr::Int(2),
+                },
+                TopLevel::Def {
+                    name: "foo_2d_bar".to_string(),
+                    value: Expr::Int(3),
+                },
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Symbol("foo-bar".to_string())],
+                }),
+            ],
+        };
+        assert_eq!(compile_and_run(&program), "1\n");
+    }
 
     #[test]
     fn emit_reduce_pipeline_c() {
