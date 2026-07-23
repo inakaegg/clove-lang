@@ -1,0 +1,545 @@
+; Phase2 clove2 syntax + type inference coverage
+; 目的: LSP inlay hint / type_infer の確認用
+
+(use mode :native)
+(use native :strict)
+
+; literals / symbols / keywords
+(def nilv nil)
+(def boolv true)
+(def intv 1)
+(def floatv 1.25)
+(def strv "hello")
+(def regexv /ab+c/)
+(def kw :kw)
+(def sym 'sym)
+(def quoted-list '(+ 1 2))
+(def quoted-vec '[1 2 3])
+(def quoted-map '{:a 1 :b 2});
+
+; collections
+(def vec-int: [Int] [1 2 3])
+(def vec-str: [Str] ["a" "b"])
+(def vec-int2: Vec<Int> [1 2 3])
+(def set-int: [Int] #{1 2 3})
+(def tuple-pair: [Int Str] [1 "a"])
+(def obj1 {:a 1 :b 2})
+(def map1 {"a" 1 "b" 2})
+(def map2: Map<Str, Int> {"a" 1 "b" 2})
+(def map-typed: {Str Int} {"a" 1})
+(def shape-typed: {:a Int :b Str} {:a 1 :b "x"})
+(def shape-open: {:a Int ..} {:a 1 :b "x"})
+
+; control forms
+(def ifv (if true 1 2))
+(def letv (let [a: Int 1 b: Int 2] (+ a b)))
+(def dov (do (println "x") 1))
+(def andv (and true false))
+(def orv (or nil "x"))
+(def orv2: Nil|Str (or nil "x"))
+(def optv: Str? (or nil "x"))
+(def opt-num (or nil 1))
+(def expr-ann (+ 1 2): Int)
+(def notv (not false))
+(def whenv (when true (+ 1 2)))
+(def whenv2 (when false (+ 1 2)))
+(if-not false 1 2) ; => 1
+(when-not false (+ 1 2)) ; => 3
+(if-let [x optv] (count x) 0) ; => 1
+(when-let [x optv] (count x)) ; => 1
+(if-some [x nil] x 0) ; => 0
+(if-some [x false] x :none) ; => false
+(cond false 1 true 2) ; => 2
+(cond false 1 :else 3) ; => 3
+(condp = 1 1 :one 2 :two :else :other) ; => :one
+(condp = 1 1 :>> (fn [v: Bool] (if v :hit :miss)) :else :none) ; => :hit
+(-> 1 inc (* 2)) ; => 4
+(->> [1 2 3] (map inc) (filter even?) (reduce + 0)) ; => 6
+(as-> 1 it (+ it 2) (* it 3)) ; => 9
+(doto 1 (inc) (dec)) ; => 1
+(loop [i: Int 0 acc: Int 0] (if (< i 3) (recur (+ i 1) (+ acc i)) acc)) ; => 3
+(def w: Int 0)
+(do (while (< w 3) (set! w (inc w))) w) ; => 3
+(try (throw :fail) (catch RuntimeError e :fail)) ; => :fail
+(try (throw 1) (fn [e: Int] 42)) ; => 42
+(try [i: Int 0] (throw 7) (fn [e: Int] (+ i e)) (fn [] i)) ; => 7
+(try (runtime-error "boom") (catch RuntimeError e "boom")) ; => "boom"
+(try (throw :fail) (err e :err)) ; => :err
+(try (throw :fail) (err e :err) (fin :cleanup)) ; => :err
+(try (throw :fail) (err e :err) (finally :cleanup)) ; => :err
+(for [x [1 2 3]] (* x x)) ; => [1 4 9]
+(vec (for [x [1 2] y [:a :b]] [x y])) ; => [[1 :a] [1 :b] [2 :a] [2 :b]]
+(for [x [1 2 3] :when (odd? x)] x) ; => [1 3]
+(for [x [1 2 3] :let [y (+ x 1)] :when (odd? y)] y) ; => [3]
+(for [x [1 2 3] :while (< x 3)] x) ; => [1 2]
+(doseq [x [1 2 3]] x) ; => nil
+(dotimes [i 3] i) ; => nil
+(each [x [1 2 3]] x) ; => [1 2 3]
+(each inc [1 2 3]) ; => [1 2 3]
+(cond-> 1 true inc false (* 2)) ; => 2
+(cond->> [1 2 3] true (map inc) false (filter even?) true (reduce + 0)) ; => 9
+(some-> opt-num inc (* 2)) ; => 4
+(some->> [1 2 3] (map inc) (first)) ; => 2
+
+; flow typing / narrowing
+(def opt-x (or nil "a"))
+(def opt-len (if (nil? opt-x) 0 (count opt-x)))
+(def opt-len2 (if (some? opt-x) (count opt-x) 0))
+(def union-x (or 1 "a"))
+(def union-y (if (int? union-x) (+ union-x 1) 0))
+
+; mut / imut blocks
+(def mutv (mut (inc 1) (+ 1 2)))
+(def imutv (imut (str "a" 1) "b"))
+(def setv 1)
+(set! setv 2) ; => 2
+(redef setv 3) ; => 3
+
+; functions
+(defn step [x: Int] (* x 2))
+(defn dec1 [x: Int] (- x 1))
+(defn pred [x: Int] (< 10 x))
+(defn sum [a: Int & rest: [Int]] -> Int (reduce + a rest))
+(def add1 (fn [x: Int] -> Int (+ x 1)))
+(def comp1 (comp str inc))
+(def comp2 (comp add1 inc))
+(def pipe1 (pipe inc str))
+(def juxt1 (juxt inc dec str))
+(def partial1 (partial + 1))
+(def comp-left (. inc str))
+(def comp-right (str inc .))
+(comment (__comp-call [str inc] [1])) ; => "2"
+(comment (__juxt-call [inc dec] [1])) ; => [2 0]
+(-def alias-def 1)
+(defn- alias-fn [x: Int] -> Int (+ x 1))
+
+; reader sugar
+#_ (def ignored (+ 1 2))
+(def call-sugar str("a" "b"))
+(def call-sugar-comma str("a", "b"))
+(def compose-head (. inc dec abs))
+(def compose-tail (inc dec abs .))
+(puts "alias-puts")
+
+; sequence operations
+(def xs: [Int] (range 0 5))
+(def ys: [Int] (map step xs))
+(def zs: [Int] (map dec1 ys))
+(def ws: [Int] (filter pred zs))
+(def remv: [Int] (remove even? [1 2 3 4]))
+(def dropw: [Int] (drop-while #(< % 3) [0 1 2 3 0]))
+(def total: Int (reduce + 0 ws))
+(def idxs: [Int] (map-indexed (fn [i x] (+ i x)) xs))
+(def takew: [Int] (take-while #(< % 3) [0 1 2 3 0]))
+(def keepv: [Number] (keep #(when (even? %) (/ % 2)) [1 2 3 4]))
+(def keepi (keep-indexed (fn [i x] (when (even? i) x)) [:a :b :c]))
+(def somev (some (fn [x] (when (even? x) (* x 10))) [1 3 4 5]))
+(def sortby (sort-by first #(> %1 %2) [[1 :a] [3 :b] [2 :c]]))
+(def first-x (first xs))
+(def rest-x (rest xs))
+(def last-x (last xs))
+(def count-x (count xs))
+(def tuple-src [1 "a"])
+(def tuple-idx (if true 0 1))
+(def tuple-val (nth tuple-src tuple-idx))
+
+; map operations
+(def cfg {"port" 80 "tls" 1})
+(def cfg2   (imut (assoc cfg "port" 443)))
+(def cfg3   (imut (update cfg2 "tls" inc)))
+(def port (get cfg3 "port"))
+(def keys1 (keys cfg3))
+(def vals1 (vals cfg3))
+(def sel (select-keys cfg3 ["port"]))
+(def reduced (reduce-kv (fn [acc k v] (+ acc v)) 0 {:a 1 :b 2}))
+(def merged (merge-with + {:a 1 :b 2} {:a 3 :c 4}))
+(def empty-map (empty {:a 1}))
+(def freqs (frequencies [1 1 2 3 3 3]))
+(def grouped (group-by odd? [1 2 3 4]))
+
+; string operations
+(def s1 (str "a" 1 true))
+(def s2 (pr-str 1 "a" :kw))
+(def s3 (format "{}-{}" "x" 1))
+(def s4 (join ["a" "b" "c"]))
+
+; expr inlay hint coverage (non-top-level)
+(def expr-hints
+  (do
+    (map inc [1 2 3])
+    (filter odd? [1 2 3])
+    (reduce + 0 [1 2 3])))
+
+; types / foreign
+(deftype Config {:port Int :host Str});
+(def cfg-ok: Config (expect Config {:port 80 :host "localhost"}));
+(def-foreign sha1 :file "ruby/crypto.rb" :entry "Crypto.sha1" [s: Str] -> Str);
+(def digest (when false (sha1 "abc")));
+
+; note: Phase1 の構文網羅は以下を参照
+; crates/clove-core/tests/fixtures/fmt_all_syntax.clv
+
+
+; --- clove-docs examples (auto) ---
+(comment (println "hello" 42)) ; => nil ; Print with a trailing newline
+(comment (print "hello" 42)) ; => nil ; Print without a trailing newline
+(comment (prn {:a 1 :b 2})) ; => nil ; Print with pr-str formatting and newline
+(pr-str [1 2 3]) ; => "\"[1 2 3]\"" ; Return a string
+(+ 1 2 3) ; => 6
+(+ ) ; => 0
+(- 10 3 2) ; => 5
+(- 5) ; => -5
+(* 2 3 4) ; => 24
+(* ) ; => 1
+(/ 8 2 2) ; => 2
+(/ 2) ; => 0.5
+(inc 4) ; => 5
+(inc 2.5) ; => 3.5
+(dec 5) ; => 4
+(dec 2.5) ; => 1.5
+(mod 5 3) ; => 2
+(mod -3 2) ; => 1
+(quot 10 3) ; => 3
+(quot -7 3) ; => -2
+(rem 10 3) ; => 1
+(rem -7 3) ; => -1
+(bit-and 15 7 3) ; => 3
+(bit-and) ; => -1
+(bit-or 1 2 4) ; => 7
+(bit-or) ; => 0
+(bit-xor 1 3) ; => 2
+(bit-xor 5 5 5) ; => 5
+(bit-not 0) ; => -1
+(bit-not -1) ; => 0
+(bit-shift-left 1 3) ; => 8
+(bit-shift-left -2 1) ; => -4
+(bit-shift-right 16 2) ; => 4
+(bit-shift-right -8 1) ; => -4
+(= 1 1 1) ; => true
+(= 1 2) ; => false
+(compare 1 2) ; => -1
+(compare "b" "a") ; => 1
+(!= 1 2) ; => true
+(!= 1 1) ; => false
+(not= 1 2) ; => true
+(< 1 2 3) ; => true
+(< 1 1) ; => false
+(> 3 2 1) ; => true
+(> 1 2) ; => false
+(<= 1 1 2) ; => true
+(<= 2 1) ; => false
+(>= 3 3 1) ; => true
+(>= 1 2) ; => false
+(str "a" 1) ; => "a1"
+(name :foo/bar) ; => "bar"
+(name "baz") ; => "baz"
+(namespace :foo/bar) ; => "foo"
+(namespace :bar) ; => nil
+(get {:a 1} :a) ; => 1
+(not true) ; => false
+(count [1 2 3]) ; => 3
+(empty? []) ; => true
+(odd? 3) ; => true
+(odd? 4) ; => false
+(even? 4) ; => true
+(even? 3) ; => false
+(zero? 0) ; => true
+(zero? 0.5) ; => false
+(pos? 3) ; => true
+(pos? -1) ; => false
+(neg? -1) ; => true
+(neg? 2) ; => false
+(nil? nil) ; => true
+(bool? true) ; => true
+(bool? 0) ; => false
+(boolean? true) ; => true
+(boolean? 0) ; => false
+(int? 1) ; => true
+(int? 1.0) ; => false
+(integer? 2) ; => true
+(float? 1.0) ; => true
+(float? 1) ; => false
+(number? 1.5) ; => true
+(str? "hi") ; => true
+(string? "hi") ; => true
+(keyword? :a) ; => true
+(symbol? 'a) ; => true
+(symbol? (gensym)) ; => true
+(starts-with? (str (gensym "tmp")) "tmp") ; => true
+(instance? :core::Int 1) ; => true
+(instance? "core::Str" :name) ; => false
+(vec? [1]) ; => true
+(vector? [1]) ; => true
+(map? {:a 1}) ; => true
+(fn? (fn [] nil)) ; => true
+(some? 0) ; => true
+(true? true) ; => true
+(false? false) ; => true
+(coll? [1 2 3]) ; => true
+(coll? 10) ; => false
+(sequential? [1 2]) ; => true
+(nth [10 20 30] 1) ; => 20
+(nth [0] 5 :miss) ; => :miss
+(nth [10 20 30 40] [1 3]) ; => [20 40]
+(nth [10 20 30] [0 99 2] nil) ; => [10 nil 30]
+(seq [1 2]) ; => (1 2)
+(first [1 2]) ; => 1
+(second [10 20 30]) ; => 20
+(second []) ; => nil
+(last [1 2 3]) ; => 3
+(peek [1 2 3]) ; => 3
+(peek (list 1 2 3)) ; => 1
+(rest [1 2 3]) ; => [2 3]
+(map inc [1 2 3]) ; => [2 3 4]
+(map + [1 2 3] [10 20 30]) ; => [11 22 33]
+(map #0 [[1 2] [3 4]]) ; => [1 3]
+(vec (map [x [1 2 3]] (+ x 1))) ; => [2 3 4]
+(vec (map-indexed (fn [i v] [i v]) [:a :b])) ; => [[0 :a] [1 :b]]
+(first (map-indexed (fn [i v] (+ i v)) (range 1 4))) ; => 1
+(mapcat #(vector % %) [1 2]) ; => [1 1 2 2]
+(mapcat (fn [i ch] [i ch]) [1 2] [:a :b]) ; => [1 :a 2 :b]
+(filter odd? [1 2 3 4]) ; => [1 3]
+(filter #{:a :c} [:b :a :d :c]) ; => [:a :c]
+(vec (filter [x [1 2 3 4]] (odd? x))) ; => [1 3]
+(remove odd? [1 2 3 4]) ; => [2 4]
+(vec (remove #(= :skip %) [:run :skip :go])) ; => [:run :go]
+(vec (remove [x [1 2 3 4]] (odd? x))) ; => [2 4]
+(vec (take-while #(< % 3) [0 1 2 3 0])) ; => [0 1 2]
+(take-while string? ["x" "y" 1]) ; => ["x" "y"]
+(vec (take 4 (iterate inc 0))) ; => [0 1 2 3]
+(take 3 (iterate #(+ % 2) 1)) ; => [1 3 5]
+(take-while #(< % 5) (iterate inc 0)) ; => [0 1 2 3 4]
+(vec (take-while [x [0 1 2 3 0]] (< x 3))) ; => [0 1 2]
+(vec (drop-while neg? [-2 -1 0 1])) ; => [0 1]
+(drop-while odd? [1 3 4 5]) ; => [4 5]
+(vec (drop-while [x [-2 -1 0 1]] (neg? x))) ; => [0 1]
+(reduce + [1 2 3 4]) ; => 10
+(reduce conj #{} [:x :y :x]) ; => #{:x :y}
+(dorun (map inc [1 2])) ; => nil
+(dorun 1 (map inc [1 2])) ; => nil
+(reduce-kv (fn [acc k v] (+ acc v)) 0 {:a 1 :b 2}) ; => 3
+(apply + [1 2 3 4]) ; => 10
+(apply vector 0 (list 1 2) [3 4]) ; => [0 (1 2) 3 4]
+(merge {:a 1} {:b 2}) ; => {:a 1 :b 2}
+(merge-with + {:a 1 :b 2} {:a 3 :c 4}) ; => {:a 4 :b 2 :c 4}
+(merge-with into {:tags #{:a}} {:tags #{:b :c}}) ; => {:tags #{:a :b :c}}
+(contains? {:a 1 :b 2} :a) ; => true
+(contains? [10 20] 1) ; => true
+(includes? "clove" "lo") ; => true
+(includes? [:a :b :c] :b) ; => true
+(includes? [:a :b :c] :z) ; => false
+(includes? #{:a :b} :a) ; => true
+(includes? {:a 1 :b 2} :a) ; => true
+(includes? nil :a) ; => false
+(get-in {:a {:b 2}} [:a :b]) ; => 2
+(dissoc {:a 1 :b 2} :a) ; => {:b 2}
+(assoc-in {:a {:b 1}} [:a :b] 2) ; => {:a {:b 2}}
+(update-in {:stats {:views 1}} [:stats :views] + 4) ; => {:stats {:views 5}}
+(update-in {:user {:tags []}} [:user :tags] conj :admin) ; => {:user {:tags [:admin]}}
+(take 2 [1 2 3]) ; => [1 2]
+(take 3 (repeatedly (fn [] :tick))) ; => [:tick :tick :tick]
+(vec (drop 2 [1 2 3 4])) ; => [3 4]
+(take-last 2 [1 2 3 4]) ; => [3 4]
+(take-last 3 (range 5)) ; => [2 3 4]
+(drop-last [1 2 3]) ; => [1 2]
+(drop-last 2 [1 2 3 4]) ; => [1 2]
+(reverse [1 2 3]) ; => [3 2 1]
+(reverse (list :a :b)) ; => (:b :a)
+(subvec [0 1 2 3] 1 3) ; => [1 2]
+(subvec [10 20 30] 1) ; => [20 30]
+(concat [1 2] (list 3 4)) ; => [1 2 3 4]
+(concat [:a] [:b] [:c]) ; => [:a :b :c]
+(conj [1 2] 3) ; => [1 2 3]
+(cons 0 '(1 2)) ; => (0 1 2)
+(list 1 2 3) ; => (1 2 3)
+(vector 1 2) ; => [1 2]
+(hash-map :a 1 :b 2) ; => {:a 1 :b 2}
+(vec (list 1 2 3)) ; => [1 2 3]
+(vec {:a 1}) ; => [[:a 1]]
+(into [1 2] (list 3 4)) ; => [1 2 3 4]
+(into {} [[:a 1] [:b 2]]) ; => {:a 1 :b 2}
+(assoc {:a 1} :b 2) ; => {:a 1 :b 2}
+(assoc [0 1 2] 1 99) ; => [0 99 2]
+(assoc (assoc {:a 1} :b 2) :c 3) ; => {:a 1 :b 2 :c 3}
+(let [m (assoc {:a 1} :b 2)] (assoc m :c 3)) ; => {:a 1 :b 2 :c 3}
+(let [v (conj [1] 2)] (conj v 3)) ; => [1 2 3]
+(update {:a 1} :a inc) ; => {:a 2}
+(vec (sort (keys {:a 1 :b 2}))) ; => [:a :b]
+(vec (sort (vals {:a 2 :b 1}))) ; => [1 2]
+(select-keys {:a 1 :b 2 :c 3} [:a :c]) ; => {:a 1 :c 3}
+(select-keys {:x 1} [:missing :x]) ; => {:x 1}
+(not-empty [1]) ; => [1]
+(not-empty []) ; => nil
+(take 3 (repeat :x)) ; => [:x :x :x]
+(repeat 4 7) ; => [7 7 7 7]
+(take 3 (repeatedly (fn [] :tick))) ; => [:tick :tick :tick]
+(repeatedly 3 (fn [] :x)) ; => [:x :x :x]
+(butlast [1 2 3]) ; => [1 2]
+(butlast (range 3)) ; => [0 1]
+(next [1 2 3]) ; => (2 3)
+(pop [1 2 3]) ; => [1 2]
+(empty [1 2 3]) ; => []
+(empty {:a 1}) ; => {}
+(int 1.9) ; => 1
+(int -1.2) ; => -1
+(float 2) ; => 2.0
+(bool "true") ; => true
+(bool false) ; => false
+(keyword "user") ; => :user
+(keyword "ns" "name") ; => :ns::name
+(symbol "foo") ; => foo
+(symbol :bar) ; => bar
+(range 2 8 3) ; => [2 5]
+(vec (take 4 (range))) ; => [0 1 2 3]
+(< (rand) 1.0) ; => true
+(< (rand 5.0) 5.0) ; => true
+(= 0 (rand-int 1)) ; => true
+(= "a" (rand-nth ["a" "a"])) ; => true
+(identity [1 2]) ; => [1 2]
+(map identity [nil false 3]) ; => [nil false 3]
+((constantly 42) :ignored) ; => 42
+((constantly :ok) 1 2 3) ; => :ok
+(partial + 1) ; => #<partial + args=[1] remaining=any>
+((complement even?) 3) ; => true
+((complement nil?) 0) ; => true
+(let [f (pipe inc #(* % 2))] (f 3)) ; => 8
+(let [f (pipe vector count)] (f 42)) ; => 1
+((comp inc inc) 1) ; => 3
+((comp str keyword) :ok) ; => "ok"
+((juxt inc dec str) 10) ; => [11 9 "10"]
+((juxt first count) [1 2 3]) ; => [1 3]
+(every? even? [2 4]) ; => true
+(every? [x [2 4]] (even? x)) ; => true
+(not-every? even? [2 4 5]) ; => true
+(not-every? odd? [1 3]) ; => false
+(not-every? [x [-1 0 1]] (neg? x)) ; => true
+(not-any? pos? [-1 -2]) ; => true
+(not-any? odd? [2 4 5]) ; => false
+(not-any? [x [-1 -2]] (pos? x)) ; => true
+(some #{:b} [:a :b :c]) ; => :b
+(some (fn [x] (when (even? x) (* x 10))) [1 3 4 5]) ; => 40
+(some [x [1 3 4 5]] (if (even? x) (* x 10) nil)) ; => 40
+(vec (sort (shuffle [1 2 3]))) ; => [1 2 3]
+(frequencies [:a :b :a]) ; => {:a 2 :b 1}
+(frequencies [1 1 2 3 3 3]) ; => {1 2 2 1 3 3}
+(partition 3 [1 2 3 4 5 6]) ; => [[1 2 3] [4 5 6]]
+(partition 2 1 [1 2 3 4]) ; => [[1 2] [2 3] [3 4]]
+(partition-all 3 [1 2 3 4 5]) ; => [[1 2 3] [4 5]]
+(partition-all 2 1 [:a :b :c]) ; => [[:a :b] [:b :c] [:c]]
+(partition-by odd? [1 3 2 4 5]) ; => [[1 3] [2 4] [5]]
+(partition-by identity ["a" "a" "b"]) ; => [["a" "a"] ["b"]]
+(partition-by [x ["a" "a" "b"]] x) ; => [["a" "a"] ["b"]]
+(sort [3 1 2]) ; => [1 2 3]
+(sort #(compare %2 %1) [:c :a :b]) ; => [:c :b :a]
+(sort-by count ["aa" "b" "ccc"]) ; => ["b" "aa" "ccc"]
+(sort-by first #(> %1 %2) [[1 :a] [3 :b] [2 :c]]) ; => [[3 :b] [2 :c] [1 :a]]
+(sort-by [s ["aa" "b" "ccc"]] (count s)) ; => ["b" "aa" "ccc"]
+(keep #(when (even? %) (/ % 2)) [1 2 3 4]) ; => [1 2]
+(vec (keep first [[1 2] [nil 3] [4 5]])) ; => [1 4]
+(vec (keep [x [1 2 3 4]] (if (even? x) (/ x 2) nil))) ; => [1 2]
+(keep-indexed (fn [i x] (when (even? i) x)) [:a :b :c]) ; => [:a :c]
+(vec (keep-indexed (fn [i x] (when (= i x) x)) [0 1 0 3])) ; => [0 1 3]
+(distinct [1 2 1 2]) ; => [1 2]
+(distinct [:a :a :b nil :b]) ; => [:a :b nil]
+(dedupe [1 1 2 2 1]) ; => [1 2 1]
+(dedupe [:a :a :b :b :c]) ; => [:a :b :c]
+(group-by count ["a" "bb" "c"]) ; => {1 ["a" "c"] 2 ["bb"]}
+(group-by odd? [1 2 3 4]) ; => {true [1 3] false [2 4]}
+(group-by [x [1 2 3 4]] (odd? x)) ; => {true [1 3] false [2 4]}
+(zip [1 2] [3 4 5]) ; => [[1 3] [2 4]]
+(zip-with + [1 2] [10 20 30]) ; => [11 22]
+(zipmap [:a :b] [1 2]) ; => {:a 1 :b 2}
+(zipmap [:x :y :z] (range 2)) ; => {:x 0 :y 1}
+(interpose :/ [:a :b :c]) ; => [:a :/ :b :/ :c]
+(interpose 0 [1 2]) ; => [1 0 2]
+(interleave [1 2] [:a :b]) ; => [1 :a 2 :b]
+(interleave (list "x" "y") [10 20]) ; => ["x" 10 "y" 20]
+(flatten [1 [2 [3 4]]]) ; => [1 2 3 4]
+(flatten [1 [2 [3 4]]] 1) ; => [1 2 [3 4]]
+(flatten [1 [2 [3 4]]] 2) ; => [1 2 3 4]
+(flatten [[:a] nil [:b :c]]) ; => [:a :b :c]
+(abs -3) ; => 3
+(abs -1.5) ; => 1.5
+(min 3 10 4) ; => 3
+(min -2 -7) ; => -7
+(max 3 10 4) ; => 10
+(max -2 -7) ; => -2
+(starts-with? "clove" "cl") ; => true
+(starts-with? "clove" "ve") ; => false
+(ends-with? "clove" "ve") ; => true
+(ends-with? "clove" "cl") ; => false
+(trim "  clove  ") ; => "clove"
+(trim "
+hello	") ; => "hello"
+(triml "  clove") ; => "clove"
+(triml "
+	data") ; => "data"
+(trimr "clove  ") ; => "clove"
+(trimr "data
+	") ; => "data"
+(upper-case "clove") ; => "CLOVE"
+(upper-case "MiXeD") ; => "MIXED"
+(lower-case "CLOVE") ; => "clove"
+(lower-case "MiXeD") ; => "mixed"
+(reverse-str "clove") ; => "evolc"
+(reverse-str "😀👍") ; => "👍😀"
+(split "a,b,c" /,/) ; => ["a" "b" "c"]
+(split "path" // 2) ; => ["" "path"]
+(join ["a" "b" "c"]) ; => "abc"
+(join ["a" "b"] ", ") ; => "a, b"
+(blank? "  
+	") ; => true
+(blank? "now") ; => false
+(format "Hello {}" :world) ; => "Hello :world"
+(format "{:?}" {:a 1}) ; => "{:a 1}"
+(replace {1 :one} [1 2 1]) ; => [:one 2 :one]
+(replace {:a :b} {:a 1 :c 2}) ; => {:b 1 :c 2}
+(replace-first "taco cat cat" "cat" "dog") ; => "taco dog cat"
+(replace-first "foo-123-456" /\d+/ "***") ; => "foo-***-456"
+(re-find /\d+/ "foo123bar") ; => "123"
+(re-find /(\w+)-(\d+)/ "tag-42 end") ; => ["tag-42" "tag" "42"]
+(re-matches /\d+/ "123") ; => "123"
+(re-matches /(\w+)-(\d+)/ "tag-42") ; => ["tag-42" "tag" "42"]
+(re-seq /\d+/ "v1v22") ; => ("1" "22")
+(re-seq /(\w+)-(\d+)/ "a-1 b-22") ; => (["a-1" "a" "1"] ["b-22" "b" "22"])
+(split-lines "a
+b") ; => ["a" "b"]
+(split-lines "one\r\ntwo") ; => ["one" "two"]
+(split-lines "one
+two") ; => ["one" "two"]
+(lines "a\nb\n") ; => ["a\n" "b\n"]
+(lines "a\r\nb") ; => ["a\r\n" "b"]
+(index-of "banana" "na") ; => 2
+(index-of "banana" "na" 3) ; => 4
+(last-index-of "banana" "na") ; => 4
+(last-index-of "banana" "z") ; => nil
+(capitalize "clove") ; => "Clove"
+(capitalize "ßeta") ; => "SSeta"
+(trim-newline "line
+") ; => "line"
+(trim-newline "line\r\n") ; => "line"
+(trim-newline "line
+") ; => "line"
+(subs "clove" 2) ; => "ove"
+(subs "clove" 1 4) ; => "lov"
+(comment (slurp "path/to/file.txt")) ; => nil ; Read entire file into a string
+(let [path (spit "tmp/doc-spit.txt" "hello")] (fs::delete path) path) ; => "tmp/doc-spit.txt"
+(get (time (fn [] (+ 1 2))) :result) ; => 3
+(get (time (fn [] 0)) :runs) ; => 1
+(get (bench 5 (fn [] (+ 1 2))) :runs) ; => 5
+(get (bench 10 (fn [] (reduce + (range 5)))) :result) ; => 10
+(expect Int 1) ; => 1
+(as Int 1) ; => 1
+(as Str 1) ; => nil
+(use native :allow)
+(json::read-file "data::fixtures/json/example.json") ; => {"items" [{"id" 1 "name" "alpha"} {"id" 2 "name" "beta"}]}
+(map? (json::read-file "data::fixtures/json/example.json")) ; => true
+(json::read-string "{\"a\": 1}") ; => {"a" 1}
+(json::read-string (json::write-string {"a" 1})) ; => {"a" 1}
+(json::write-file "tmp/out.json" {:ok true}) ; => "tmp/out.json"
+(json::write-file "tmp/list.json" [1 2 3]) ; => "tmp/list.json"
+(use native :strict)
+(comment (repl)) ; => nil ; Start an interactive REPL session
+(comment (repl [1 2 3])) ; => [1 2 3] ; ? / ?v / *? / *1 refer to the initial value
+(comment (debug)) ; => nil ; Enter a debug REPL session
+(comment (break)) ; => nil ; Exit from the nearest loop
