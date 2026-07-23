@@ -24,6 +24,7 @@ const SKIP_SYMBOLS: &[&str] = &[
     "async::scope-loop",
     "select",
     "select-blocking",
+    "agent-await",
     "http::request",
     "http::get",
     "http::post",
@@ -297,6 +298,14 @@ fn oop_doc_examples_skip_threading_forms() {
         let expr = format!("({} value (map inc))", form);
         assert_eq!(find_skip_symbol(&expr, OOP_SKIP_SYMBOLS), Some(*form));
     }
+}
+
+#[test]
+fn doc_examples_skip_blocking_agent_waits() {
+    assert_eq!(
+        should_skip_example("(let [a (agent 0)] (agent-await a))"),
+        Some("agent-await")
+    );
 }
 
 fn run_example(
