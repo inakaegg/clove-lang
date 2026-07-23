@@ -669,8 +669,14 @@
 (defn json-generate {:subject-pos 1} [v] (json::generate v))
 (defn json-generate-pretty {:subject-pos 1} [v] (json::generate-pretty v))
 (defn json-read-file {:subject-pos 1} [p] (json::read-file p))
-(defn json-read-file-seq {:subject-pos 1} [p] (json::read-file-seq p))
-(defn json-read-seq {:subject-pos 1} [p] (json::read-seq p))
+(defn json-read-file-seq {:subject-pos 1}
+  "Read a JSON file lazily, yielding array elements or object entries."
+  [p]
+  (json::read-file-seq p))
+(defn json-read-seq {:subject-pos 1}
+  "Read JSON lazily from a path or reader handle."
+  [p]
+  (json::read-seq p))
 (defn json-write-file {:subject-pos 1} [p v] (json::write-file p v))
 
 (defn yaml-parse {:subject-pos 1} [s] (yaml::parse s))
@@ -717,12 +723,18 @@
 
 (defn argv {:subject-pos 1} [] (cli::argv))
 (defn env {:subject-pos 1} [] (env::vars))
-(defn env-vars {:subject-pos 1} [] (env::vars))
+(defn env-vars {:subject-pos 1}
+  "Return the process environment variables as a map."
+  []
+  (env::vars))
 (defn env-get {:subject-pos 1} [k & rest]
   (if (empty? rest)
     (cli::env-get k)
     (cli::env-get k (first rest))))
-(defn env-has? {:subject-pos 1} [k] (env::has? k))
+(defn env-has? {:subject-pos 1}
+  "Return true when the process environment contains key."
+  [k]
+  (env::has? k))
 (defn parse-opts {:subject-pos 1} [argv spec] (cli::parse-opts argv spec))
 (defn parse-opts-adv {:subject-pos 1} [argv spec] (cli::parse-opts-adv argv spec))
 (defn exit {:subject-pos 1} [& rest]

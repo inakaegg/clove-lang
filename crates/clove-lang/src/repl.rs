@@ -3331,24 +3331,26 @@ mod tests {
     #[test]
     fn enum_variant_completion_after_double_colon() {
         let engines: Vec<Arc<dyn ForeignEngine>> = Vec::new();
-        let mut ctx = create_runtime(EvalOptions::default(), &engines);
-        ctx.eval_source(
-            "(ns repl::enum_completion)\n\
-             (deftype Noop {})\n\
-             (deftype Restart {:x Int})\n\
-             (defenum Action Noop Restart)",
-        )
-        .expect("enum definition");
-        let namespace_env = ctx
-            .namespace_env("repl::enum_completion")
-            .expect("namespace env");
-        let shared_env = ctx.env();
-        let helper = ReplCompleter::new(namespace_env, shared_env);
-        let replacements = helper.complete_symbol_names_for_test("Action::");
-        assert_eq!(
-            replacements,
-            vec!["Action::Noop".to_string(), "Action::Restart".to_string()]
-        );
+        let ctx = create_runtime(EvalOptions::default(), &engines);
+        ctx.with_current_ctx(|ctx| {
+            ctx.eval_source(
+                "(ns repl::enum_completion)\n\
+                 (deftype Noop {})\n\
+                 (deftype Restart {:x Int})\n\
+                 (defenum Action Noop Restart)",
+            )
+            .expect("enum definition");
+            let namespace_env = ctx
+                .namespace_env("repl::enum_completion")
+                .expect("namespace env");
+            let shared_env = ctx.env();
+            let helper = ReplCompleter::new(namespace_env, shared_env);
+            let replacements = helper.complete_symbol_names_for_test("Action::");
+            assert_eq!(
+                replacements,
+                vec!["Action::Noop".to_string(), "Action::Restart".to_string()]
+            );
+        });
     }
 
     #[test]

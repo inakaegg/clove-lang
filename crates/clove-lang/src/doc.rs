@@ -255,7 +255,11 @@ fn special_form_doc(name: &str) -> Option<DocInfo> {
 
 fn enum_variant_doc_info(name: &str, scopes: &[EnvRef]) -> Option<DocInfo> {
     let canonical = canonical_symbol_name(name);
-    let (enum_raw, variant_name) = canonical.rsplit_once("::")?;
+    let (enum_raw, variant_display) = canonical.rsplit_once("::")?;
+    let (variant_name, predicate) = match variant_display.strip_suffix('?') {
+        Some(name) => (name, true),
+        None => (variant_display, false),
+    };
     if enum_raw.is_empty() || variant_name.is_empty() || enum_raw.contains('/') {
         return None;
     }
@@ -273,19 +277,25 @@ fn enum_variant_doc_info(name: &str, scopes: &[EnvRef]) -> Option<DocInfo> {
         let ns = current_ns.as_deref().unwrap_or("user");
         format!("{ns}::{enum_raw}")
     };
-    let TypeEntry::Sum(meta) = type_registry::get_type_entry(&enum_fqn)? else {
-        return None;
-    };
-    let variant_fqn = meta
-        .members
-        .iter()
-        .find(|member| enum_member_local_name(member.as_str()) == variant_name)
-        .cloned()?;
+    let variant_fqn = match type_registry::get_type_entry(&enum_fqn) {
+        Some(TypeEntry::Sum(meta)) => meta
+            .members
+            .iter()
+            .find(|member| enum_member_local_name(member.as_str()) == variant_name)
+            .cloned(),
+        _ => None,
+    }
+    .or_else(|| resolve_namespaced_variant(enum_raw, variant_name))?;
     let TypeEntry::Product(product) = type_registry::get_type_entry(&variant_fqn)? else {
         return None;
     };
+    let role = if predicate {
+        "variant predicate"
+    } else {
+        "variant constructor"
+    };
     let doc = normalize_doc(product.doc.clone())
-        .or_else(|| Some(format!("{} variant {}", enum_raw, variant_name)));
+        .or_else(|| Some(format!("{enum_raw} {variant_name} {role}")));
     Some(DocInfo {
         name: name.to_string(),
         canonical: variant_fqn,
@@ -293,6 +303,25 @@ fn enum_variant_doc_info(name: &str, scopes: &[EnvRef]) -> Option<DocInfo> {
         doc,
         origin: Some(format!("variant of {}", enum_raw)),
     })
+}
+
+fn resolve_namespaced_variant(namespace: &str, variant_name: &str) -> Option<String> {
+    let namespace_prefix = format!("{namespace}::");
+    let mut matches = type_registry::list_all_types().into_iter().filter(|fqn| {
+        matches!(
+            type_registry::get_type_entry(fqn),
+            Some(TypeEntry::Product(meta))
+                if meta.name == variant_name
+                    && !meta.belongs_to.is_empty()
+                    && (meta.namespace == namespace
+                        || meta.namespace.starts_with(&namespace_prefix))
+        )
+    });
+    let found = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(found)
 }
 
 fn enum_member_local_name(member: &str) -> &str {
