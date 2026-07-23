@@ -7,7 +7,6 @@ use clove_core::eval::Evaluator;
 use clove_core::options::EvalOptions;
 use clove_core::repl;
 use clove_core::runtime::RuntimeCtx;
-use clove_core::settings::{FeatureToggle, RuntimeFeatureId, MAIN_PACKAGE_ID};
 
 #[derive(Debug)]
 struct DebugSnapshot {
@@ -88,12 +87,7 @@ fn debug_repl_stash_subject_is_first_arg() {
     let _handler_guard = DebugHandlerGuard::install();
 
     let ctx = RuntimeCtx::new(EvalOptions::default(), &[]);
-    ctx.settings().assign_feature_toggle(
-        FeatureToggle::Runtime(RuntimeFeatureId::ReplOnError),
-        MAIN_PACKAGE_ID,
-        true,
-    );
-    let result = ctx.eval_source("(/ 1 0)");
+    let result = ctx.eval_source("(use repl-on-error true)\n(/ 1 0)");
     assert!(result.is_err());
 
     let snapshot = take_snapshot().expect("debug repl snapshot missing");
