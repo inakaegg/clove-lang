@@ -3,7 +3,10 @@ use clove_core::options::EvalOptions;
 use clove_lang::{create_runtime, default_engines};
 use std::collections::HashMap as StdHashMap;
 
-fn eval(ctx: &mut clove_core::runtime::RuntimeCtx, src: &str) -> Value {
+fn eval(
+    ctx: &mut std::sync::Arc<clove_core::runtime::RuntimeCtx>,
+    src: &str,
+) -> Value {
     ctx.eval_source(src).expect("eval failed")
 }
 
