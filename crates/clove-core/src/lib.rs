@@ -267,6 +267,7 @@ fn apply_default_tag_form(
     default_tag: Option<&str>,
 ) -> Result<ast::Form, CloveError> {
     let span = form.span;
+    let type_hint = form.type_hint;
     let kind = match form.kind {
         ast::FormKind::ForeignRaw { tag, code } => {
             let resolved_tag = tag
@@ -351,7 +352,11 @@ fn apply_default_tag_form(
         ),
         other => other,
     };
-    Ok(ast::Form::new(kind, span))
+    Ok(ast::Form {
+        kind,
+        span,
+        type_hint,
+    })
 }
 
 pub fn detect_default_tag_from_name(name: &str) -> Option<String> {

@@ -234,7 +234,7 @@ fn normalize_list(
     match head {
         "def" | "def-" | "-def" => normalize_def(items, allow_invalid_type_hints),
         "defn" | "defn-" | "-defn" => normalize_defn(items, allow_invalid_type_hints),
-        "fn" | "fn*" => normalize_fn(items, allow_invalid_type_hints),
+        "fn" | "fn*" | "method" => normalize_fn(items, allow_invalid_type_hints),
         "let" | "let*" | "loop" | "loop*" | "binding" => {
             normalize_binding_vector_form(items, 1, allow_invalid_type_hints)
         }
@@ -521,6 +521,22 @@ fn normalize_fn(items: Vec<Form>, allow_invalid_type_hints: bool) -> Result<Vec<
     out.push(normalize_form(items[0].clone(), allow_invalid_type_hints)?);
     let mut idx = 1;
     let mut common_return = None;
+    if matches!(
+        (
+            items.get(idx).map(|form| &form.kind),
+            items.get(idx + 1).map(|form| &form.kind),
+        ),
+        (
+            Some(FormKind::Symbol(_)),
+            Some(FormKind::Vector(_) | FormKind::List(_))
+        )
+    ) {
+        out.push(normalize_form(
+            items[idx].clone(),
+            allow_invalid_type_hints,
+        )?);
+        idx += 1;
+    }
     while idx < items.len() {
         match &items[idx].kind {
             FormKind::String(_) | FormKind::Map(_) => {
@@ -807,7 +823,11 @@ fn normalize_deftype(
         if let FormKind::List(list_items) = &form.kind {
             if matches!(
                 list_items.first().map(|f| &f.kind),
-                Some(FormKind::Symbol(sym)) if sym == "def"
+                Some(FormKind::Symbol(sym))
+                    if matches!(
+                        sym.as_str(),
+                        "def" | "defn" | "defn-" | "method" | "where"
+                    )
             ) {
                 out.push(normalize_form(form.clone(), allow_invalid_type_hints)?);
                 idx += 1;
