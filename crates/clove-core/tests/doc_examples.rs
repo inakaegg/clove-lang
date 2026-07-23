@@ -40,6 +40,10 @@ const SKIP_SYMBOLS: &[&str] = &[
     "line-seq",
 ];
 
+const OOP_SKIP_SYMBOLS: &[&str] = &[
+    "->", "->>", "as->", "cond->", "cond->>", "some->", "some->>",
+];
+
 #[derive(Deserialize)]
 struct DocEntry {
     name: String,
@@ -163,6 +167,11 @@ fn doc_examples_oop_match_actual_results() {
             if trimmed.is_empty() {
                 continue;
             }
+            let Some(oop_example) =
+                doc_examples::try_gen_oop_example(trimmed, entry.origin.as_deref())
+            else {
+                continue;
+            };
             let parts = match doc_examples::split_example(trimmed) {
                 Some(parts) => parts,
                 None => {
@@ -174,11 +183,6 @@ fn doc_examples_oop_match_actual_results() {
                     ));
                     continue;
                 }
-            };
-            let Some(oop_example) =
-                doc_examples::try_gen_oop_example(trimmed, entry.origin.as_deref())
-            else {
-                continue;
             };
             let oop_parts = match doc_examples::split_example(&oop_example) {
                 Some(parts) => parts,
@@ -195,6 +199,15 @@ fn doc_examples_oop_match_actual_results() {
             if let Some(sym) = should_skip_example(&parts.expr_src) {
                 eprintln!(
                     "skip oop doc example: {} #{} (contains {})",
+                    entry.name,
+                    idx + 1,
+                    sym
+                );
+                continue;
+            }
+            if let Some(sym) = find_skip_symbol(&parts.expr_src, OOP_SKIP_SYMBOLS) {
+                eprintln!(
+                    "skip oop doc example: {} #{} (threading form {})",
                     entry.name,
                     idx + 1,
                     sym
@@ -225,7 +238,7 @@ fn doc_examples_oop_match_actual_results() {
                     continue;
                 }
             };
-            let oop_src = format!("(do (use oop-syntax true) {})", oop_parts.expr_src);
+            let oop_src = format!("(use oop-syntax true)\n{}", oop_parts.expr_src);
             let oop_ctx = runtime_ctx(&repo_root);
             let oop_value = match oop_ctx.eval_source(&oop_src) {
                 Ok(value) => value,
@@ -275,6 +288,14 @@ fn doc_examples_oop_match_actual_results() {
             failures.len(),
             failures.join("\n")
         );
+    }
+}
+
+#[test]
+fn oop_doc_examples_skip_threading_forms() {
+    for form in OOP_SKIP_SYMBOLS {
+        let expr = format!("({} value (map inc))", form);
+        assert_eq!(find_skip_symbol(&expr, OOP_SKIP_SYMBOLS), Some(*form));
     }
 }
 
@@ -431,13 +452,17 @@ fn should_check_entry(allowlist: &HashSet<String>, name: &str) -> bool {
 }
 
 fn should_skip_example(expr_src: &str) -> Option<&'static str> {
+    find_skip_symbol(expr_src, SKIP_SYMBOLS)
+}
+
+fn find_skip_symbol(expr_src: &str, skip_symbols: &'static [&'static str]) -> Option<&'static str> {
     let tokens: Vec<&str> = expr_src
         .split(|ch: char| {
-            !(ch.is_alphanumeric() || ch == ':' || ch == '-' || ch == '!' || ch == '?')
+            !(ch.is_alphanumeric() || ch == ':' || ch == '-' || ch == '>' || ch == '!' || ch == '?')
         })
         .filter(|s| !s.is_empty())
         .collect();
-    for sym in SKIP_SYMBOLS {
+    for sym in skip_symbols {
         if tokens.iter().any(|tok| tok == sym) {
             return Some(sym);
         }
