@@ -1,6 +1,4 @@
-use clove_core::ast::Value;
 use clove_core::error::CloveError;
-use clove_core::eval::call_callable;
 use clove_core::options::EvalOptions;
 use clove_core::runtime::RuntimeCtx;
 use std::path::{Path, PathBuf};
@@ -27,23 +25,8 @@ fn run_example(rel: &str) -> Result<(), CloveError> {
     opts.source_name = Some(path.to_string_lossy().into_owned());
     let ctx = RuntimeCtx::new(opts, &[]);
     ctx.eval_file(&path)?;
-    let _ = call_main(&ctx)?;
+    let _ = clove_lang::call_main(&ctx, &[])?;
     Ok(())
-}
-
-fn call_main(ctx: &RuntimeCtx) -> Result<Value, CloveError> {
-    let argv: Vec<Value> = Vec::new();
-    for ns in ctx.namespace_names() {
-        if let Some(env) = ctx.namespace_env(&ns) {
-            if let Some(callable) = env.read().unwrap().get("-main") {
-                return call_callable(callable, argv.clone());
-            }
-        }
-    }
-    if let Some(callable) = ctx.env().read().unwrap().get("-main") {
-        return call_callable(callable, argv);
-    }
-    Err(CloveError::runtime("`-main` not found in example"))
 }
 
 #[test]
