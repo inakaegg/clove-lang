@@ -1,11 +1,14 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use clove_build_core::reader::read_all;
 use clove_build_core::syntax::parse_forms;
 use clove_build_core::type_infer::{check_program, infer_program, DiagnosticLevel};
 use clove_build_core::types::Type;
 use clove_build_core::use_directive::NativeLevel;
+
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[test]
 fn def_type_mismatch_is_error() {
@@ -146,13 +149,7 @@ fn time_bench_checks() {
 
 #[test]
 fn json_infer_in_strict() {
-    let mut path = std::env::temp_dir();
-    let suffix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    path.push(format!("clove2_test_{}.json", suffix));
-    std::fs::write(&path, "{\"port\": 80}").unwrap();
+    let path = temp_json_file("{\"port\": 80}");
     let forms = read_all(&format!(
         "(def cfg (json::read-file \"{}\" :infer true))",
         path.display()
@@ -186,13 +183,7 @@ fn json_write_helpers() {
 
 #[test]
 fn json_infer_with_type_name() {
-    let mut path = std::env::temp_dir();
-    let suffix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    path.push(format!("clove2_test_{}.json", suffix));
-    std::fs::write(&path, "{\"port\": 80}").unwrap();
+    let path = temp_json_file("{\"port\": 80}");
     let forms = read_all(&format!(
         "(def cfg (json::read-file \"{}\" :infer true :type Config))\n(def cfg2: Config cfg)",
         path.display()
@@ -216,13 +207,7 @@ fn json_schema_unknown_type() {
 
 #[test]
 fn json_schema_known_type() {
-    let mut path = std::env::temp_dir();
-    let suffix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    path.push(format!("clove2_test_{}.json", suffix));
-    std::fs::write(&path, "{\"port\": 80}").unwrap();
+    let path = temp_json_file("{\"port\": 80}");
     let forms = read_all(&format!(
         "(deftype Config {{:port Int}})\n(def cfg (json::read-file \"{}\" :schema Config))",
         path.display()
@@ -236,13 +221,7 @@ fn json_schema_known_type() {
 
 #[test]
 fn json_schema_mismatch() {
-    let mut path = std::env::temp_dir();
-    let suffix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    path.push(format!("clove2_test_{}.json", suffix));
-    std::fs::write(&path, "{\"port\": \"x\"}").unwrap();
+    let path = temp_json_file("{\"port\": \"x\"}");
     let forms = read_all(&format!(
         "(deftype Config {{:port Int}})\n(def cfg (json::read-file \"{}\" :schema Config))",
         path.display()
@@ -252,6 +231,13 @@ fn json_schema_mismatch() {
     let diags = check_program(&ast, NativeLevel::Strict);
     assert!(diags.iter().any(|d| d.message.contains("schema mismatch")));
     let _ = std::fs::remove_file(path);
+}
+
+fn temp_json_file(contents: &str) -> PathBuf {
+    let id = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!("clove2_test_{}_{}.json", std::process::id(), id));
+    std::fs::write(&path, contents).unwrap();
+    path
 }
 
 #[test]
