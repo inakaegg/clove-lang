@@ -39,7 +39,10 @@ jobs:
       - name: Build workspace
         run: cargo build --locked --workspace
       - name: Test workspace
-        run: cargo test --locked --workspace
+        run: |
+          ruby_libdir="$(ruby -rrbconfig -e 'print RbConfig::CONFIG["libdir"]')"
+          export LD_LIBRARY_PATH="$ruby_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          cargo test --locked --workspace
         env:
           RUST_MIN_STACK: 16777216
 
