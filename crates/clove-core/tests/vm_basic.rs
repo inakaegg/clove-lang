@@ -1,3 +1,5 @@
+use std::thread;
+
 use clove_core::ast::Value;
 use clove_core::error::CloveError;
 use clove_core::options::EvalOptions;
@@ -16,9 +18,17 @@ fn eval_with_eval(src: &str) -> Result<Value, CloveError> {
 }
 
 fn assert_vm_matches_eval(src: &str) {
-    let eval_val = eval_with_eval(src).expect("eval");
-    let vm_val = eval_with_vm(src).expect("vm");
-    assert_eq!(eval_val.to_string(), vm_val.to_string(), "{}", src);
+    let src = src.to_string();
+    thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            let eval_val = eval_with_eval(&src).expect("eval");
+            let vm_val = eval_with_vm(&src).expect("vm");
+            assert_eq!(eval_val.to_string(), vm_val.to_string(), "{}", src);
+        })
+        .expect("failed to spawn test thread with larger stack")
+        .join()
+        .expect("test thread panicked");
 }
 
 #[test]
