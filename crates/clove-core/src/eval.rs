@@ -2515,35 +2515,36 @@ impl Evaluator {
                 ))
             }
         };
-        let (doc, meta_form, idx) = self.parse_doc_and_meta(items, 2, "def", true)?;
+        let type_marker_idx = items.iter().enumerate().skip(3).find_map(|(idx, form)| {
+            let is_marker = matches!(&form.kind, FormKind::Symbol(sym) if sym == ":")
+                || matches!(&form.kind, FormKind::Keyword(name) if name.is_empty());
+            is_marker.then_some(idx)
+        });
+        let value_forms = type_marker_idx.map(|idx| &items[..idx]).unwrap_or(items);
+        let (doc, meta_form, idx) = self.parse_doc_and_meta(value_forms, 2, "def", true)?;
         if idx >= items.len() {
             return Err(span_runtime_error(
                 form.span,
                 "deftype (def ...) expects name and value",
             ));
         }
+        if idx + 1 != value_forms.len() {
+            return Err(span_runtime_error(
+                form.span,
+                "deftype (def ...) expects a single value",
+            ));
+        }
         let value_form = items[idx].clone();
         let mut type_expr = None;
         let mut type_span = None;
-        if idx + 1 < items.len() {
-            let mut type_start = idx + 1;
-            let marker = &items[type_start];
-            let is_type_marker = matches!(
-                &marker.kind,
-                FormKind::Symbol(sym) if sym == ":"
-            ) || matches!(
-                &marker.kind,
-                FormKind::Keyword(name) if name.is_empty()
-            );
-            if is_type_marker {
-                type_start += 1;
-            }
-            if type_start >= items.len() {
-                return Err(span_runtime_error(
-                    marker.span,
-                    "deftype (def ...) expects type expression",
-                ));
-            }
+        let type_start = type_marker_idx.map(|idx| idx + 1).unwrap_or(idx + 1);
+        if type_marker_idx.is_some() && type_start >= items.len() {
+            return Err(span_runtime_error(
+                items[type_start - 1].span,
+                "deftype (def ...) expects type expression",
+            ));
+        }
+        if type_start < items.len() {
             let type_forms = &items[type_start..];
             let (kind, consumed) = parse_type_expr_from_forms(type_forms)?;
             if consumed != type_forms.len() {

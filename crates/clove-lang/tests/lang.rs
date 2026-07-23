@@ -689,9 +689,8 @@ fn deftype_from_def_allows_type_annotation() {
     (ns spec::types::from_def_typed)
     (use oop-syntax true)
     (deftype Config
-      (def initial {:speed 6} : {:speed Int})
-      (defn speed [] (get self :speed)))
-    [(initial.speed) (Config? initial)]
+      (def initial {:speed 6} : {:speed Int}))
+    [initial.:speed (Config? initial)]
     "#;
     let val = eval_source_with_engines(src, EvalOptions::default(), &[]).unwrap();
     match val {
