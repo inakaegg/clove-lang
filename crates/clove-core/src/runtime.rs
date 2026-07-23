@@ -5508,66 +5508,68 @@ mod tests {
 
     #[test]
     fn predicate_utilities_follow_examples() {
-        let mut ctx = runtime_ctx();
-        let _ = ctx
-            .eval_source("(require std :refer :all)")
-            .expect("require std");
+        run_with_large_stack(|| {
+            let mut ctx = runtime_ctx();
+            let _ = ctx
+                .eval_source("(require std :refer :all)")
+                .expect("require std");
 
-        let nil_pred = ctx.eval_source("(nil? nil)").expect("nil?");
-        assert_eq!(nil_pred, Value::Bool(true));
-        let some_pred = ctx.eval_source("(some? 0)").expect("some?");
-        assert_eq!(some_pred, Value::Bool(true));
+            let nil_pred = ctx.eval_source("(nil? nil)").expect("nil?");
+            assert_eq!(nil_pred, Value::Bool(true));
+            let some_pred = ctx.eval_source("(some? 0)").expect("some?");
+            assert_eq!(some_pred, Value::Bool(true));
 
-        let true_pred = ctx.eval_source("(true? true)").expect("true?");
-        assert_eq!(true_pred, Value::Bool(true));
-        let false_pred = ctx.eval_source("(false? false)").expect("false?");
-        assert_eq!(false_pred, Value::Bool(true));
+            let true_pred = ctx.eval_source("(true? true)").expect("true?");
+            assert_eq!(true_pred, Value::Bool(true));
+            let false_pred = ctx.eval_source("(false? false)").expect("false?");
+            assert_eq!(false_pred, Value::Bool(true));
 
-        let num_pred = ctx.eval_source("(number? 3.5)").expect("number?");
-        assert_eq!(num_pred, Value::Bool(true));
-        let int_pred = ctx.eval_source("(integer? 4.0)").expect("integer?");
-        assert_eq!(int_pred, Value::Bool(true));
+            let num_pred = ctx.eval_source("(number? 3.5)").expect("number?");
+            assert_eq!(num_pred, Value::Bool(true));
+            let int_pred = ctx.eval_source("(integer? 4.0)").expect("integer?");
+            assert_eq!(int_pred, Value::Bool(true));
 
-        let string_pred = ctx.eval_source("(string? \"s\")").expect("string?");
-        assert_eq!(string_pred, Value::Bool(true));
+            let string_pred = ctx.eval_source("(string? \"s\")").expect("string?");
+            assert_eq!(string_pred, Value::Bool(true));
 
-        let map_pred = ctx.eval_source("(map? {:a 1})").expect("map?");
-        assert_eq!(map_pred, Value::Bool(true));
-        let vector_pred = ctx.eval_source("(vector? [1 2])").expect("vector?");
-        assert_eq!(vector_pred, Value::Bool(true));
-        let list_pred = ctx.eval_source("(list? '(1 2))").expect("list?");
-        assert_eq!(list_pred, Value::Bool(true));
-        let set_pred = ctx.eval_source("(set? #{1 2})").expect("set?");
-        assert_eq!(set_pred, Value::Bool(true));
+            let map_pred = ctx.eval_source("(map? {:a 1})").expect("map?");
+            assert_eq!(map_pred, Value::Bool(true));
+            let vector_pred = ctx.eval_source("(vector? [1 2])").expect("vector?");
+            assert_eq!(vector_pred, Value::Bool(true));
+            let list_pred = ctx.eval_source("(list? '(1 2))").expect("list?");
+            assert_eq!(list_pred, Value::Bool(true));
+            let set_pred = ctx.eval_source("(set? #{1 2})").expect("set?");
+            assert_eq!(set_pred, Value::Bool(true));
 
-        let sequential_pred = ctx
-            .eval_source("(sequential? (rest [1 2 3]))")
-            .expect("sequential?");
-        assert_eq!(sequential_pred, Value::Bool(true));
+            let sequential_pred = ctx
+                .eval_source("(sequential? (rest [1 2 3]))")
+                .expect("sequential?");
+            assert_eq!(sequential_pred, Value::Bool(true));
 
-        let fn_pred = ctx.eval_source("(fn? (fn [x] (+ x 1)))").expect("fn?");
-        assert_eq!(fn_pred, Value::Bool(true));
+            let fn_pred = ctx.eval_source("(fn? (fn [x] (+ x 1)))").expect("fn?");
+            assert_eq!(fn_pred, Value::Bool(true));
 
-        let keyword_pred = ctx.eval_source("(keyword? :k)").expect("keyword?");
-        assert_eq!(keyword_pred, Value::Bool(true));
+            let keyword_pred = ctx.eval_source("(keyword? :k)").expect("keyword?");
+            assert_eq!(keyword_pred, Value::Bool(true));
 
-        let symbol_pred = ctx.eval_source("(symbol? 'foo)").expect("symbol?");
-        assert_eq!(symbol_pred, Value::Bool(true));
+            let symbol_pred = ctx.eval_source("(symbol? 'foo)").expect("symbol?");
+            assert_eq!(symbol_pred, Value::Bool(true));
 
-        let some_fn = ctx
-            .eval_source("(some odd? [2 4 5 6])")
-            .expect("some returns first truthy result");
-        assert_eq!(some_fn, Value::Bool(true));
+            let some_fn = ctx
+                .eval_source("(some odd? [2 4 5 6])")
+                .expect("some returns first truthy result");
+            assert_eq!(some_fn, Value::Bool(true));
 
-        let every_pred = ctx
-            .eval_source("(every? number? [1 2.0 3])")
-            .expect("every?");
-        assert_eq!(every_pred, Value::Bool(true));
+            let every_pred = ctx
+                .eval_source("(every? number? [1 2.0 3])")
+                .expect("every?");
+            assert_eq!(every_pred, Value::Bool(true));
 
-        let not_any_pred = ctx
-            .eval_source("(not-any? zero? [1 2 3])")
-            .expect("not-any?");
-        assert_eq!(not_any_pred, Value::Bool(true));
+            let not_any_pred = ctx
+                .eval_source("(not-any? zero? [1 2 3])")
+                .expect("not-any?");
+            assert_eq!(not_any_pred, Value::Bool(true));
+        });
     }
 }
 
