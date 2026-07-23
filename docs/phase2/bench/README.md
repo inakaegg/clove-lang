@@ -16,7 +16,7 @@ This directory keeps **the minimal public benchmark set** for the public repo.
 
 ## Records
 
-- `records/bench_release_20260127.md`
+- `records/bench_release_20260129.md`
 
 ## Example
 

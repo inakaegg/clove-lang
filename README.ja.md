@@ -4,6 +4,8 @@
 
 # Clove
 
+[![CI](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml)
+
 英語版（公式）: [README.md](README.md)
 
 Clove は **Clojure ライクな S 式**をベースにしつつ、  
@@ -168,6 +170,7 @@ config[:host] ; => "localhost"
 * まず動かす: [`docs/getting_started.md`](docs/getting_started.md)
 * ドキュメントの入口: [`docs/index.md`](docs/index.md)
 * 動くサンプル集: [`examples/`](examples/)
+* VS Code 拡張: [`packages/vscode-clove/`](packages/vscode-clove/)（ソース同梱。現時点では Marketplace 未公開）
 * 例の実行:
 
   ```bash

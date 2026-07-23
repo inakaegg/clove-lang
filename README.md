@@ -4,6 +4,8 @@
 
 # Clove
 
+[![CI](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml)
+
 Japanese version: [README.ja.md](README.ja.md)
 
 Clove is a small language inspired by **Clojure-style S-expressions**, with
@@ -170,6 +172,7 @@ More examples are in [examples/concurrency/](examples/concurrency/) and [docs/la
 - Quick start: [docs/getting_started.md](docs/getting_started.md)
 - Docs entry: [docs/index.md](docs/index.md)
 - Examples: [examples/](examples/)
+- VS Code extension: [packages/vscode-clove/](packages/vscode-clove/) (source distribution; not currently published on the Marketplace)
 - Run examples:
 
   ```bash

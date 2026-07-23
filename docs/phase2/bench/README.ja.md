@@ -17,7 +17,7 @@
 
 ## 記録
 
-- `records/bench_release_20260127.md`
+- `records/bench_release_20260129.md`
 
 ## 実行例
 

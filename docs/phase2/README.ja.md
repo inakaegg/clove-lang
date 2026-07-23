@@ -1,161 +1,95 @@
-# Phase2 作業引き継ぎ（入口）
+# Phase2 の設計と現状
 
-英語版（公式）: `README.md`  
-※ 日本語版は `README.ja.md` にまとめています。
+英語版: [README.md](README.md)
 
-このディレクトリは **Phase2 の仕様・進捗・意思決定**を一箇所に集約するための入口です。  
-ターミナルの Codex にはここだけ見せれば迷わない、という前提で整理しています。
+Phase2 は、Clove の実験的なネイティブビルド経路です。既存の実行系は REPL とスクリプト実行を引き続き担当し、`clove build` は対応済みの言語サブセットを C バックエンドへ渡します。
 
----
+## 実行経路とビルド経路
 
-## 1. Clove とは？
+| 経路 | 目的 | 主な構成要素 | 現在の入口 |
+| --- | --- | --- | --- |
+| Phase1 実行経路 | 動的機能を含む柔軟な REPL とスクリプト実行 | [`clove-core`](../../crates/clove-core/)、[`clove-lang`](../../crates/clove-lang/)、[`clove-lsp`](../../crates/clove-lsp/) | `clove --repl`、`clove file.clv` |
+| Phase2 ネイティブビルド経路 | 静的に対応できる言語サブセットの事前コンパイル | [`clove-build-front`](../../crates/clove-build-front/)、[`clove-build-backend-c`](../../crates/clove-build-backend-c/)、[`clove-build-runtime-c`](../../crates/clove-build-runtime-c/) | `clove build file.clv` |
 
-- Clojure 系の S 式言語（Lisp 方言）
-- REPL / スクリプト実行と、ネイティブビルド（高速実行）を両立したい言語
-- コンパイラ/ツール実装は Rust で、ネイティブビルド出力は C バックエンド経由で生成する
+現在のネイティブビルドは次の順で処理します。
 
----
+```text
+Clove ソース
+  -> clove-build-front
+  -> clove-build-backend-c が C ソースを生成
+  -> システムの C コンパイラ
+  -> ネイティブ実行ファイル
+```
 
-## 2. Phase1 とは？
+[`clove-build-core`](../../crates/clove-build-core/) には、再設計の過程で作られた Phase2 のパーサ、型、コード生成、VM の基盤があります。現在の C 経路はその構文モデルを再利用していますが、Phase2 のすべての設計機能が `clove build` から利用できる段階ではありません。
 
-- 既存実装の世代（現在の Clove）
-- 仕様追加を積み重ねてきた結果、パフォーマンス・メモリ利用が厳しくなっている
-- 動的機能を広く許容し、REPL とスクリプト用途に強い反面、最適化が難しい
-- 主要コード: [crates/clove-core](/crates/clove-core), [crates/clove-lang](/crates/clove-lang), [crates/clove-lsp](/crates/clove-lsp)
+## 設計方針
 
----
+- **Native-first のビルド経路:** 未対応の動的処理を暗黙にインタプリタへフォールバックせず、ネイティブコンパイル時にエラーとします。
+- **型情報を使う lowering:** build、実行時最適化、LSP 診断で同じ typed pipeline を共有することが長期方針です。現在も統合作業中です。
+- **明示的な外部言語境界:** ネイティブビルドでは、外部言語呼び出しを通常の動的値に混ぜず、境界として見える設計を目指します。
+- **動的値の限定:** `Any` を可能な限り避け、`Dyn` は明示的な境界に限定する方針です。
 
-## 3. Phase2 とは？
+### `mut` と `imut`
 
-- **再設計・再実装**の世代（Native-first を最優先）
-- 型情報を前提に C バックエンドへ lowering/codegen し、ネイティブバイナリを生成する
-- Dynamic 機能は「開発時のみ」に限定し、ビルド時は静的に解決する
-- `mut` をデフォルト（build時）。`imut` は観測不変、`mut` は in-place 必須（共有があればエラー）
-- 主要コード: [crates/clove-build-core](/crates/clove-build-core), [crates/clove-build-front](/crates/clove-build-front), [crates/clove-build-backend-c](/crates/clove-build-backend-c), [crates/clove-build-runtime-c](/crates/clove-build-runtime-c)
+Phase2 はコレクション更新を二つのモードに分けます。
 
----
+- `imut` は、元の値を観測した結果が変わらない更新です。
+- `mut` は、その場での更新を必須とし、値が共有されている場合はエラーにします。
 
-## 4. Phase1 との違い（要点）
+この区別は Phase2 コンパイラの設計であり、`clove-build-core` に実装されています。統合済みの C バックエンドはまだ `--mut`、`--mode`、`--native` を公開していないため、これらを現在の `clove build` のコマンドライン保証としては扱いません。
 
-- Native-first（C バックエンド経路）を最優先し、Dynamic は縮退
-- `Any` を極力排除し、`Dyn` は **境界に限定**して使う
-- `mut/imut` の文脈で **同一関数が最適化の可否を変える**（mut は in-place 必須）
-- Native ビルドでは **動的評価/ロードや再定義を禁止**する
-- `def-foreign` を必須化して、外部言語との境界を明示
-- strict / warn / allow によるビルドの厳格度を導入
-- LSP の診断/補完/型表示を前提に設計
+## 現在の実装状況
 
----
+- `clove build` は C バックエンドへ接続され、対応済みサブセットからネイティブ実行ファイルを生成します。
+- `--out` / `--output` で出力先を指定し、`--emit-c` で生成した C ファイルのパスを表示できます。
+- REPL と通常のスクリプト実行は、引き続き既存の実行系を使います。
+- `clove-lsp` はネイティブビルド経路とは独立してエディタ向け言語機能を提供します。
+- C バックエンドは実験段階です。インタプリタで動くすべての例をビルドできる状態ではありません。
 
-## 5. 現在の進捗（概要）
+## ビルド例
 
-- `clove` の `run`/`build`/`check` が動作（build は phase2 C backend 経路に統合済み）
-- `--native` / `--mode` / `--mut` を CLI から上書き可能
-- `time` / `bench` を eval に追加（戻り型は関数の戻り値に追随）
-- LSP: 診断 + 補完 + hover + 定義ジャンプ + シンボル一覧（トップレベル）
-
-詳細な進捗管理は内部向け資料で管理（公開版では省略）。
-
----
-
-## 6. 公開版の構成
-
-- 公開用の情報は **README のみ**に集約
-- ベンチは [docs/phase2/bench/](/docs/phase2/bench/) にまとめた 1 本のみを公開
-
----
-
-## 7. 主要コマンド
+clone 済みのリポジトリから CLI をインストールします。
 
 ```bash
-# Build/Run CLI
 cargo install --path crates/clove-lang
-
-# 実行
-clove path/to/a.clv
-
-# ビルド（ネイティブ）
-clove build path/to/a.clv --out target/clove/bin/a
-
-# 型チェック（strict/warn/allow 切替可）
-clove check path/to/a.clv --native=strict
-
-# LSP
-cargo install --path crates/clove-lsp
 ```
 
-補足:
+確認済みの例をビルドして実行します。
 
-- clove の **デフォルトは strict**（CLI/LSP ともに同じ）
-- `use native :warn` / `:allow` または `--native=warn` / `--native=allow` で緩められる
-
----
-
-## 7.1 モード整理（run / REPL / build）
-
-### コマンド別の前提（簡略運用）
-
-ここでは **通常運用での前提**を先に固定する。  
-`--mode` は各コマンドで暗黙に決まっているものとし、**指定しない**。
-
-| コマンド | mode | native | 備考 |
-| --- | --- | --- | --- |
-| build | native | strict | 既定は strict のみ |
-| run | native | strict / warn | warn は移行期の妥協用 |
-| repl | dynamic | warn / allow | strict は使わない |
-
-結論: **実運用で使うオプションは run の `--native=warn` だけで十分**（strict/ warn の切替のみ）。
-
-### 例外的に詳細指定する場合
-
-どうしても必要な場合のみ `--mode/--native/--mut` を個別指定する。  
-ただし以下の制約を守ること。
-
-- `mode=native` のとき `native=allow` は **不可**
-- `mode=dynamic` のとき `native=strict` は **不可**
-
-### `--mut`
-
-- `soft` : 共有がある場合はエラー（mut の基本）
-- `hard` : 共有があっても破壊的更新（現状は設計のみ、詳細は DECISIONS 参照）
-
-### run と REPL の違い
-
-- **run**: clove2 専用 VM で実行（typed opcode 優先 + dynamic fallback）
-  - `--mode/--native/--mut` がそのまま効く
-  - 速度重視（Ruby 以上を目標）
-- **REPL**: dynamic を優先（融通重視）
-  - typed opcode は「最適化できる部分のみ」適用
-  - 動的機能は常に許容
-
-### コマンド別の挙動例（同一コード）
-
-サンプル:
-
-```
-(def m {:a 1})
-(def n (get m :b)) ; nil が返る
-(println (inc n))
+```bash
+clove build examples/build/high_value_report.clv \
+  --out target/clove/bin/high_value_report
+./target/clove/bin/high_value_report
 ```
 
-| コマンド | 期待挙動 |
-| --- | --- |
-| build（strict） | **型エラー**（`inc` は Number のみ、`n` は Nil を含むため） |
-| run（strict） | **型エラー**（同上） |
-| run（warn） | **警告**（実行は可能だが、実行時エラーの可能性） |
-| repl（allow） | **型エラーなし**で実行、`inc nil` により **実行時エラー** |
+生成した C ファイルを確認する場合:
 
-動的機能の例:
-
-```
-(eval "(+ 1 2)")
+```bash
+clove build examples/build/high_value_report.clv \
+  --out target/clove/bin/high_value_report \
+  --emit-c
 ```
 
-- `mode=native` : **エラー**（dynamic機能禁止）
-- `mode=dynamic` : **実行可能**
+動作するシステム C コンパイラが必要です。
 
----
+## 過去のベンチ結果
 
-## 8. 作業ルール（抜粋）
+[2026-01-29 ベンチ記録](bench/records/bench_release_20260129.md) は、同じ処理について、以前の `clove2` ネイティブビルド・VM 経路と Rust、Go、Ruby、Clojure を比較したものです。
 
-- 詳細ルールはリポジトリ直下の `AGENTS.md` を参照
+| 実装 | hyperfine mean | max RSS |
+| --- | ---: | ---: |
+| `clove2` 生成実行ファイル | 0.3626 s | 5.3 MiB |
+| `clove2 run(vm)` | 1.429 s | 280.0 MiB |
+| Rust | 0.1299 s | 2.7 MiB |
+| Go | 0.2000 s | 9.3 MiB |
+| Ruby | 1.150 s | 57.4 MiB |
+| Clojure | 1.289 s | 600.5 MiB |
+
+この測定は統合済み C バックエンドより前の履歴上の基準値であり、現在の `clove build` の性能を示すものではありません。記録にはコマンド、実行回数、`hyperfine` の生出力を残しています。
+
+## 関連文書
+
+- [build コマンド](../tooling/build.ja.md)
+- [ベンチのソースと測定方法](bench/README.ja.md)
+- [リポジトリ概要](../../README.ja.md)
