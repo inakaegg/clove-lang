@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex, RwLock, Weak};
 use crate::apply_default_foreign_tags_for_source;
 use crate::ast::{
     contains_mut_collection, desugar_interpolated_regex, desugar_interpolated_string, ComposeKind,
-    FnArity, Form, FormKind, InterpolatedPart, Key, LambdaClause, LocalDefn, LocalDefnClause,
-    MapItem, NativeFn, RegexValue, Span, TransientKind, Value,
+    EnvSlot, FnArity, Form, FormKind, InterpolatedPart, Key, LambdaClause, LambdaData, LocalDefn,
+    LocalDefnClause, MapItem, MultiLambdaData, NativeFn, RegexValue, Span, TransientKind, Value,
 };
 use crate::ast::{HashMap, Vector};
 use crate::builtins::core::{meta_lookup, meta_set};
@@ -4273,17 +4273,8 @@ impl Evaluator {
                         }
                     }
                 }
-                Value::Lambda {
-                    name,
-                    inferred_type,
-                    ..
-                }
-                | Value::MultiLambda {
-                    name,
-                    inferred_type,
-                    ..
-                } => {
-                    if let Some(name) = name {
+                Value::Lambda { data, .. } => {
+                    if let Some(name) = &data.name {
                         if let Some(meta) = fn_meta::get(name) {
                             return (
                                 fn_arg_positions_from_meta_with_core_fallback(&meta, arg_len),
@@ -4291,7 +4282,20 @@ impl Evaluator {
                             );
                         }
                     }
-                    if let Some(kind) = inferred_type.as_ref() {
+                    if let Some(kind) = data.inferred_type.as_ref() {
+                        return (fn_arg_positions_from_type(kind, arg_len), true);
+                    }
+                }
+                Value::MultiLambda { data, .. } => {
+                    if let Some(name) = &data.name {
+                        if let Some(meta) = fn_meta::get(name) {
+                            return (
+                                fn_arg_positions_from_meta_with_core_fallback(&meta, arg_len),
+                                true,
+                            );
+                        }
+                    }
+                    if let Some(kind) = data.inferred_type.as_ref() {
                         return (fn_arg_positions_from_type(kind, arg_len), true);
                     }
                 }
@@ -7209,20 +7213,22 @@ impl Evaluator {
         let inferred_type = self.infer_lambda_type_kind(&clause.params_form, &parsed, &body);
         let source_meta = build_lambda_source_meta();
         Ok(Value::Lambda {
-            params: parsed.params,
-            rest: parsed.rest,
-            body,
-            local_defns,
-            env: env.clone(),
-            engines: self.engines.clone(),
-            auto_fallback: self.auto_fallback,
-            call_wrappers: self.call_wrappers(),
-            settings: self.settings.clone(),
-            meta: source_meta,
-            doc: None,
-            name: fn_name,
-            inferred_type: Some(inferred_type),
-            recur_id,
+            data: Arc::new(LambdaData {
+                params: parsed.params,
+                rest: parsed.rest,
+                body,
+                local_defns,
+                engines: self.engines.clone(),
+                auto_fallback: self.auto_fallback,
+                call_wrappers: self.call_wrappers(),
+                settings: self.settings.clone(),
+                meta: source_meta,
+                doc: None,
+                name: fn_name,
+                inferred_type: Some(inferred_type),
+                recur_id,
+            }),
+            env: EnvSlot::strong(env.clone()),
         })
     }
 
@@ -7249,16 +7255,18 @@ impl Evaluator {
         }
         let source_meta = build_lambda_source_meta();
         Ok(Value::MultiLambda {
-            clauses: parsed_clauses,
-            env: env.clone(),
-            engines: self.engines.clone(),
-            auto_fallback: self.auto_fallback,
-            call_wrappers: self.call_wrappers(),
-            settings: self.settings.clone(),
-            meta: source_meta,
-            doc: None,
-            name: fn_name,
-            inferred_type: None,
+            data: Arc::new(MultiLambdaData {
+                clauses: parsed_clauses,
+                engines: self.engines.clone(),
+                auto_fallback: self.auto_fallback,
+                call_wrappers: self.call_wrappers(),
+                settings: self.settings.clone(),
+                meta: source_meta,
+                doc: None,
+                name: fn_name,
+                inferred_type: None,
+            }),
+            env: EnvSlot::strong(env.clone()),
         })
     }
 
@@ -8591,12 +8599,14 @@ impl Evaluator {
             Value::Func(func) => func
                 .debug_name()
                 .and_then(|name| self.fn_meta_from_name(&name)),
-            Value::Lambda {
-                name: Some(name), ..
-            }
-            | Value::MultiLambda {
-                name: Some(name), ..
-            } => self.fn_meta_from_name(name),
+            Value::Lambda { data, .. } => data
+                .name
+                .as_deref()
+                .and_then(|name| self.fn_meta_from_name(name)),
+            Value::MultiLambda { data, .. } => data
+                .name
+                .as_deref()
+                .and_then(|name| self.fn_meta_from_name(name)),
             _ => None,
         }
     }
@@ -8716,20 +8726,22 @@ impl Evaluator {
         let recur_id = LOOP_COUNTER.fetch_add(1, Ordering::SeqCst);
         let source_meta = build_lambda_source_meta();
         Ok(Value::Lambda {
-            params: mapping.args,
-            rest: mapping.rest,
-            body: body_forms,
-            local_defns,
-            env: env.clone(),
-            engines: self.engines.clone(),
-            auto_fallback: self.auto_fallback,
-            call_wrappers: self.call_wrappers(),
-            settings: self.settings.clone(),
-            meta: source_meta,
-            doc: None,
-            name: None,
-            inferred_type: Some(inferred_type),
-            recur_id,
+            data: Arc::new(LambdaData {
+                params: mapping.args,
+                rest: mapping.rest,
+                body: body_forms,
+                local_defns,
+                engines: self.engines.clone(),
+                auto_fallback: self.auto_fallback,
+                call_wrappers: self.call_wrappers(),
+                settings: self.settings.clone(),
+                meta: source_meta,
+                doc: None,
+                name: None,
+                inferred_type: Some(inferred_type),
+                recur_id,
+            }),
+            env: EnvSlot::strong(env.clone()),
         })
     }
 
@@ -9375,297 +9387,77 @@ fn merge_meta_maps(
 }
 
 fn lambda_source_file(value: &Value) -> Option<String> {
-    match value {
-        Value::Lambda {
-            meta: Some(meta), ..
-        }
-        | Value::MultiLambda {
-            meta: Some(meta), ..
-        } => meta
-            .get(&Key::Keyword("source-file".to_string()))
-            .and_then(|val| match val {
-                Value::String(s) => Some(s.clone()),
-                _ => None,
-            }),
+    let meta = match value {
+        Value::Lambda { data, .. } => data.meta.as_ref(),
+        Value::MultiLambda { data, .. } => data.meta.as_ref(),
         _ => None,
-    }
+    }?;
+    meta.get(&Key::Keyword("source-file".to_string()))
+        .and_then(|val| match val {
+            Value::String(s) => Some(s.clone()),
+            _ => None,
+        })
 }
 
-fn attach_lambda_meta(value: Value, meta: Option<HashMap<Key, Value>>) -> Value {
-    match value {
-        Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta: existing,
-            doc,
-            name,
-            inferred_type,
-            recur_id,
-        } => Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta: merge_meta_maps(existing, meta),
-            doc,
-            name,
-            inferred_type,
-            recur_id,
-        },
-        Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta: existing,
-            doc,
-            name,
-            inferred_type,
-        } => Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta: merge_meta_maps(existing, meta),
-            doc,
-            name,
-            inferred_type,
-        },
-        other => other,
+fn attach_lambda_meta(mut value: Value, meta: Option<HashMap<Key, Value>>) -> Value {
+    match &mut value {
+        Value::Lambda { data, .. } => {
+            let data = Arc::make_mut(data);
+            data.meta = merge_meta_maps(data.meta.take(), meta);
+        }
+        Value::MultiLambda { data, .. } => {
+            let data = Arc::make_mut(data);
+            data.meta = merge_meta_maps(data.meta.take(), meta);
+        }
+        _ => {}
     }
+    value
 }
 
-fn attach_lambda_doc(value: Value, doc: Option<String>) -> Value {
-    match value {
-        Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc: existing,
-            name,
-            inferred_type,
-            recur_id,
-        } => Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc: doc.or(existing),
-            name,
-            inferred_type,
-            recur_id,
-        },
-        Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc: existing,
-            name,
-            inferred_type,
-        } => Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc: doc.or(existing),
-            name,
-            inferred_type,
-        },
-        other => other,
+fn attach_lambda_doc(mut value: Value, doc: Option<String>) -> Value {
+    match &mut value {
+        Value::Lambda { data, .. } => {
+            let data = Arc::make_mut(data);
+            data.doc = doc.or_else(|| data.doc.take());
+        }
+        Value::MultiLambda { data, .. } => {
+            let data = Arc::make_mut(data);
+            data.doc = doc.or_else(|| data.doc.take());
+        }
+        _ => {}
     }
+    value
 }
 
-fn attach_lambda_body(value: Value, new_body: Vec<Form>) -> Value {
-    match value {
-        Value::Lambda {
-            params,
-            rest,
-            body: _,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name,
-            inferred_type,
-            recur_id,
-        } => Value::Lambda {
-            params,
-            rest,
-            body: new_body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name,
-            inferred_type,
-            recur_id,
-        },
-        other => other,
+fn attach_lambda_body(mut value: Value, new_body: Vec<Form>) -> Value {
+    if let Value::Lambda { data, .. } = &mut value {
+        Arc::make_mut(data).body = new_body;
     }
+    value
 }
 
-fn attach_lambda_name(value: Value, name: Option<String>) -> Value {
-    match value {
-        Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name: existing,
-            inferred_type,
-            recur_id,
-        } => Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name: name.or(existing),
-            inferred_type,
-            recur_id,
-        },
-        Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name: existing,
-            inferred_type,
-        } => Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name: name.or(existing),
-            inferred_type,
-        },
-        other => other,
+fn attach_lambda_name(mut value: Value, name: Option<String>) -> Value {
+    match &mut value {
+        Value::Lambda { data, .. } => {
+            let data = Arc::make_mut(data);
+            data.name = name.or_else(|| data.name.take());
+        }
+        Value::MultiLambda { data, .. } => {
+            let data = Arc::make_mut(data);
+            data.name = name.or_else(|| data.name.take());
+        }
+        _ => {}
     }
+    value
 }
 
-fn attach_lambda_inferred_type(value: Value, ty: Option<MetaTypeKind>) -> Value {
-    match value {
-        Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name,
-            recur_id,
-            ..
-        } => Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name,
-            inferred_type: ty,
-            recur_id,
-        },
-        Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name,
-            ..
-        } => Value::MultiLambda {
-            clauses,
-            env,
-            engines,
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta,
-            doc,
-            name,
-            inferred_type: ty,
-        },
-        other => other,
+fn attach_lambda_inferred_type(mut value: Value, ty: Option<MetaTypeKind>) -> Value {
+    match &mut value {
+        Value::Lambda { data, .. } => Arc::make_mut(data).inferred_type = ty,
+        Value::MultiLambda { data, .. } => Arc::make_mut(data).inferred_type = ty,
+        _ => {}
     }
+    value
 }
 
 fn is_some_value(v: &Value) -> bool {
@@ -12131,22 +11923,22 @@ fn build_list_source(head: &str, args: &[Form], span: Span) -> String {
 
 fn doc_from_value(value: &Value) -> Option<String> {
     match value {
-        Value::Lambda { doc, .. } | Value::MultiLambda { doc, .. } => normalize_doc(doc.clone()),
+        Value::Lambda { data, .. } => normalize_doc(data.doc.clone()),
+        Value::MultiLambda { data, .. } => normalize_doc(data.doc.clone()),
         _ => None,
     }
 }
 
 fn source_from_value(value: &Value) -> Option<String> {
     match value {
-        Value::Lambda {
-            params, rest, body, ..
-        } => Some(format!(
+        Value::Lambda { data, .. } => Some(format!(
             "(fn {} {})",
-            format_arglist(params, rest.as_ref()),
-            format_body_source(body)
+            format_arglist(&data.params, data.rest.as_ref()),
+            format_body_source(&data.body)
         )),
-        Value::MultiLambda { clauses, .. } => {
-            let parts: Vec<String> = clauses
+        Value::MultiLambda { data, .. } => {
+            let parts: Vec<String> = data
+                .clauses
                 .iter()
                 .map(|clause| {
                     format!(
@@ -12389,10 +12181,16 @@ fn callable_stack_label(callable: &Value) -> Option<String> {
 
 fn callable_frame_meta(callable: &Value) -> Option<(Option<String>, Option<Span>)> {
     match callable {
-        Value::Lambda { name, .. } | Value::MultiLambda { name, .. } => {
-            let name = name.as_ref()?;
-            fn_meta::get(name).map(|meta| (meta.source_file, meta.source_span))
-        }
+        Value::Lambda { data, .. } => data
+            .name
+            .as_ref()
+            .and_then(|name| fn_meta::get(name))
+            .map(|meta| (meta.source_file, meta.source_span)),
+        Value::MultiLambda { data, .. } => data
+            .name
+            .as_ref()
+            .and_then(|name| fn_meta::get(name))
+            .map(|meta| (meta.source_file, meta.source_span)),
         Value::Partial { callable, .. } => callable_frame_meta(callable),
         _ => None,
     }
@@ -12476,12 +12274,15 @@ fn value_accepts_n(value: &Value, n: usize) -> bool {
             Some(clauses) => vm_multi_accepts(&clauses, n),
             None => matches!(check_arity(func.arity(), n), ArityCheck::Call),
         },
-        Value::Lambda { params, rest, .. } => {
-            let arity = lambda_arity(params.len(), rest.is_some());
+        Value::Lambda { data, .. } => {
+            let arity = lambda_arity(data.params.len(), data.rest.is_some());
             matches!(check_arity(arity, n), ArityCheck::Call)
         }
-        Value::MultiLambda { clauses, .. } => {
-            matches!(multi_arity_check(clauses, n), MultiArityCheck::Call(_))
+        Value::MultiLambda { data, .. } => {
+            matches!(
+                multi_arity_check(&data.clauses, n),
+                MultiArityCheck::Call(_)
+            )
         }
         Value::Partial { remaining, .. } => matches!(check_arity(*remaining, n), ArityCheck::Call),
         Value::Compose { funcs, kind } => {
@@ -12512,12 +12313,8 @@ fn value_accepts_n(value: &Value, n: usize) -> bool {
 fn profile_label_for_callable(callable: &Value) -> Option<String> {
     match callable {
         Value::Func(func) => func.debug_name().map(|name| name.to_string()),
-        Value::Lambda {
-            name: Some(name), ..
-        } => Some(name.clone()),
-        Value::MultiLambda {
-            name: Some(name), ..
-        } => Some(name.clone()),
+        Value::Lambda { data, .. } => data.name.clone(),
+        Value::MultiLambda { data, .. } => data.name.clone(),
         _ => None,
     }
 }
@@ -12620,108 +12417,69 @@ pub fn call_callable(callable: Value, args: Vec<Value>) -> Result<Value, CloveEr
                 ArityCheck::TooMany => Err(arity_error(arity, args.len())),
             }
         }
-        Value::Lambda {
-            ref params,
-            ref rest,
-            ref body,
-            ref local_defns,
-            ref env,
-            ref engines,
-            auto_fallback,
-            ref call_wrappers,
-            ref doc,
-            ref name,
-            ref inferred_type,
-            ref settings,
-            ref meta,
-            recur_id,
-        } => {
+        Value::Lambda { ref data, ref env } => {
+            let strong_env = env.upgrade().ok_or_else(|| {
+                CloveError::runtime("internal error: closure environment is no longer available")
+            })?;
             let callable_value = Value::Lambda {
-                params: params.clone(),
-                rest: rest.clone(),
-                body: body.clone(),
-                local_defns: local_defns.clone(),
-                env: env.clone(),
-                engines: engines.clone(),
-                auto_fallback,
-                call_wrappers: call_wrappers.clone(),
-                doc: doc.clone(),
-                name: name.clone(),
-                inferred_type: inferred_type.clone(),
-                settings: settings.clone(),
-                meta: meta.clone(),
-                recur_id,
+                data: data.clone(),
+                env: EnvSlot::strong(strong_env.clone()),
             };
-            let arity = lambda_arity(params.len(), rest.is_some());
+            let arity = lambda_arity(data.params.len(), data.rest.is_some());
             match check_arity(arity, args.len()) {
                 ArityCheck::Call => invoke_lambda(
                     callable_value.clone(),
-                    params.clone(),
-                    rest.clone(),
-                    body.clone(),
-                    local_defns.clone(),
-                    env.clone(),
-                    engines.clone(),
-                    auto_fallback,
-                    call_wrappers.clone(),
-                    name.clone(),
-                    settings.clone(),
-                    recur_id,
+                    &data.params,
+                    data.rest.as_ref(),
+                    &data.body,
+                    &data.local_defns,
+                    strong_env,
+                    &data.engines,
+                    data.auto_fallback,
+                    &data.call_wrappers,
+                    data.name.as_ref(),
+                    &data.settings,
+                    data.recur_id,
                     args,
                 ),
                 ArityCheck::NeedMore(_remaining) => Err(arity_error(arity, args.len())),
                 ArityCheck::TooMany => Err(arity_error(arity, args.len())),
             }
         }
-        Value::MultiLambda {
-            ref clauses,
-            ref env,
-            ref engines,
-            auto_fallback,
-            ref call_wrappers,
-            ref doc,
-            ref name,
-            ref inferred_type,
-            ref settings,
-            ref meta,
-        } => {
+        Value::MultiLambda { ref data, ref env } => {
+            let strong_env = env.upgrade().ok_or_else(|| {
+                CloveError::runtime("internal error: closure environment is no longer available")
+            })?;
             let callable_value = Value::MultiLambda {
-                clauses: clauses.clone(),
-                env: env.clone(),
-                engines: engines.clone(),
-                auto_fallback,
-                call_wrappers: call_wrappers.clone(),
-                doc: doc.clone(),
-                name: name.clone(),
-                inferred_type: inferred_type.clone(),
-                settings: settings.clone(),
-                meta: meta.clone(),
+                data: data.clone(),
+                env: EnvSlot::strong(strong_env.clone()),
             };
-            match multi_arity_check(clauses, args.len()) {
+            match multi_arity_check(&data.clauses, args.len()) {
                 MultiArityCheck::Call(idx) => {
-                    let clause = clauses
+                    let clause = data
+                        .clauses
                         .get(idx)
                         .ok_or_else(|| CloveError::runtime("invalid arity index"))?;
                     invoke_lambda(
                         callable_value.clone(),
-                        clause.params.clone(),
-                        clause.rest.clone(),
-                        clause.body.clone(),
-                        clause.local_defns.clone(),
-                        env.clone(),
-                        engines.clone(),
-                        auto_fallback,
-                        call_wrappers.clone(),
-                        name.clone(),
-                        settings.clone(),
+                        &clause.params,
+                        clause.rest.as_ref(),
+                        &clause.body,
+                        &clause.local_defns,
+                        strong_env,
+                        &data.engines,
+                        data.auto_fallback,
+                        &data.call_wrappers,
+                        data.name.as_ref(),
+                        &data.settings,
                         clause.recur_id,
                         args,
                     )
                 }
                 MultiArityCheck::NeedMore(_remaining) => {
-                    Err(multi_arity_error(clauses, args.len()))
+                    Err(multi_arity_error(&data.clauses, args.len()))
                 }
-                MultiArityCheck::TooMany => Err(multi_arity_error(clauses, args.len())),
+                MultiArityCheck::TooMany => Err(multi_arity_error(&data.clauses, args.len())),
             }
         }
         Value::ForeignCallable {
@@ -12935,16 +12693,16 @@ fn pack_lambda_args(mut args: Vec<Value>, positional_len: usize, has_rest: bool)
 #[allow(clippy::too_many_arguments)]
 fn invoke_lambda(
     lambda_value: Value,
-    params: Vec<String>,
-    rest: Option<String>,
-    body: Vec<Form>,
-    local_defns: Vec<LocalDefn>,
+    params: &[String],
+    rest: Option<&String>,
+    body: &[Form],
+    local_defns: &[LocalDefn],
     env: EnvRef,
-    engines: Vec<Arc<dyn ForeignEngine>>,
+    engines: &[Arc<dyn ForeignEngine>],
     auto_fallback: bool,
-    call_wrappers: Arc<StdHashSet<String>>,
-    name: Option<String>,
-    settings: RuntimeSettings,
+    call_wrappers: &Arc<StdHashSet<String>>,
+    name: Option<&String>,
+    settings: &RuntimeSettings,
     recur_id: usize,
     args: Vec<Value>,
 ) -> Result<Value, CloveError> {
@@ -12972,7 +12730,7 @@ fn invoke_lambda(
         let prev = current_file_name();
         set_current_file(Some(source_file));
         Some(FileGuard { prev })
-    } else if let Some(fn_name) = &name {
+    } else if let Some(fn_name) = name {
         if let Some(meta) = fn_meta::get(fn_name) {
             if meta.source_file.is_some() {
                 let prev = current_file_name();
@@ -13010,26 +12768,26 @@ fn invoke_lambda(
         }
         install_local_defns(
             child.clone(),
-            &local_defns,
-            &engines,
+            local_defns,
+            engines,
             auto_fallback,
-            &call_wrappers,
-            &settings,
+            call_wrappers,
+            settings,
         );
         let guard = push_recur_context(RecurContext {
             id: recur_id,
             positional_count: positional_len,
             has_rest,
             kind: RecurKind::Function,
-            name: name.clone(),
+            name: name.cloned(),
         });
-        let mut evaluator = Evaluator::new_with_env_ref(env.clone(), &engines, auto_fallback);
+        let mut evaluator = Evaluator::new_with_env_ref(env.clone(), engines, auto_fallback);
         evaluator.set_settings(settings.clone());
         evaluator.set_call_wrappers_arc(call_wrappers.clone());
         if let Some(Ok(store)) = RuntimeCtx::try_with_current(|ctx| Ok(ctx.namespace_store())) {
             evaluator.set_namespace_store(store);
         }
-        let result = evaluator.eval_do(&body, child.clone());
+        let result = evaluator.eval_do(body, child.clone());
         drop(guard);
         match result {
             Ok(value) => return Ok(value),
@@ -13087,20 +12845,22 @@ fn build_local_defn_value(
     if defn.clauses.len() == 1 {
         let clause = &defn.clauses[0];
         Value::Lambda {
-            params: clause.params.clone(),
-            rest: clause.rest.clone(),
-            body: clause.body.clone(),
-            local_defns: clause.local_defns.clone(),
-            env,
-            engines: engines.to_vec(),
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta: defn.meta.clone(),
-            doc: defn.doc.clone(),
-            name: Some(defn.name.clone()),
-            inferred_type: clause.inferred_type.clone(),
-            recur_id: clause.recur_id,
+            data: Arc::new(LambdaData {
+                params: clause.params.clone(),
+                rest: clause.rest.clone(),
+                body: clause.body.clone(),
+                local_defns: clause.local_defns.clone(),
+                engines: engines.to_vec(),
+                auto_fallback,
+                call_wrappers,
+                settings,
+                meta: defn.meta.clone(),
+                doc: defn.doc.clone(),
+                name: Some(defn.name.clone()),
+                inferred_type: clause.inferred_type.clone(),
+                recur_id: clause.recur_id,
+            }),
+            env: EnvSlot::strong(env),
         }
     } else {
         let mut clauses = Vec::with_capacity(defn.clauses.len());
@@ -13114,16 +12874,18 @@ fn build_local_defn_value(
             });
         }
         Value::MultiLambda {
-            clauses,
-            env,
-            engines: engines.to_vec(),
-            auto_fallback,
-            call_wrappers,
-            settings,
-            meta: defn.meta.clone(),
-            doc: defn.doc.clone(),
-            name: Some(defn.name.clone()),
-            inferred_type: None,
+            data: Arc::new(MultiLambdaData {
+                clauses,
+                engines: engines.to_vec(),
+                auto_fallback,
+                call_wrappers,
+                settings,
+                meta: defn.meta.clone(),
+                doc: defn.doc.clone(),
+                name: Some(defn.name.clone()),
+                inferred_type: None,
+            }),
+            env: EnvSlot::strong(env),
         }
     }
 }

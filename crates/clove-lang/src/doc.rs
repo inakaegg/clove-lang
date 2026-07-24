@@ -89,11 +89,9 @@ pub fn describe_symbol(name: &str, scopes: &[EnvRef]) -> Option<DocInfo> {
             let val_opt = env.read().ok().and_then(|g| g.get(key));
             if let Some(val) = val_opt {
                 match val {
-                    Value::Lambda {
-                        params, rest, doc, ..
-                    } => {
-                        let doc_text = normalize_doc(doc.clone());
-                        let sig = lambda_signature(name, &params, rest.as_ref());
+                    Value::Lambda { data, .. } => {
+                        let doc_text = normalize_doc(data.doc.clone());
+                        let sig = lambda_signature(name, &data.params, data.rest.as_ref());
                         return Some(DocInfo {
                             name: name.to_string(),
                             canonical: canonical_symbol_name(name).into_owned(),
@@ -102,9 +100,9 @@ pub fn describe_symbol(name: &str, scopes: &[EnvRef]) -> Option<DocInfo> {
                             origin: Some("lambda".into()),
                         });
                     }
-                    Value::MultiLambda { clauses, doc, .. } => {
-                        let doc_text = normalize_doc(doc.clone());
-                        if let Some(first) = clauses.first() {
+                    Value::MultiLambda { data, .. } => {
+                        let doc_text = normalize_doc(data.doc.clone());
+                        if let Some(first) = data.clauses.first() {
                             let sig = lambda_signature(name, &first.params, first.rest.as_ref());
                             return Some(DocInfo {
                                 name: name.to_string(),

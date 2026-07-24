@@ -1696,13 +1696,11 @@ fn is_concat_fn(value: &Value) -> bool {
             func.debug_name(),
             Some("concat") | Some("std::concat") | Some("core::concat")
         ),
-        Value::Lambda {
-            name: Some(name), ..
+        Value::Lambda { data, .. } => {
+            matches!(data.name.as_deref(), Some("concat") | Some("std::concat"))
         }
-        | Value::MultiLambda {
-            name: Some(name), ..
-        } => {
-            matches!(name.as_str(), "concat" | "std::concat")
+        Value::MultiLambda { data, .. } => {
+            matches!(data.name.as_deref(), Some("concat") | Some("std::concat"))
         }
         _ => false,
     }

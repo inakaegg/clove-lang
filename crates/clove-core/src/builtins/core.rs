@@ -1319,12 +1319,12 @@ pub(crate) fn meta_lookup(value: &Value) -> Value {
     if let Some(stored) = META_STORE.lock().unwrap().get(value).cloned() {
         return stored;
     }
-    match value {
-        Value::Lambda { meta: Some(m), .. } | Value::MultiLambda { meta: Some(m), .. } => {
-            Value::Map(m.clone())
-        }
-        _ => Value::Nil,
-    }
+    let meta = match value {
+        Value::Lambda { data, .. } => data.meta.as_ref(),
+        Value::MultiLambda { data, .. } => data.meta.as_ref(),
+        _ => None,
+    };
+    meta.cloned().map(Value::Map).unwrap_or(Value::Nil)
 }
 
 pub(crate) fn meta_set(value: Value, meta: Value) {
@@ -1346,7 +1346,8 @@ fn doc_from_value(value: &Value) -> Option<String> {
         return normalize_doc(Some(doc));
     }
     match value {
-        Value::Lambda { doc, .. } | Value::MultiLambda { doc, .. } => normalize_doc(doc.clone()),
+        Value::Lambda { data, .. } => normalize_doc(data.doc.clone()),
+        Value::MultiLambda { data, .. } => normalize_doc(data.doc.clone()),
         _ => None,
     }
 }
@@ -1382,15 +1383,14 @@ fn source_from_name(name: &str) -> Option<String> {
 
 fn source_from_value(value: &Value) -> Option<String> {
     match value {
-        Value::Lambda {
-            params, rest, body, ..
-        } => Some(format!(
+        Value::Lambda { data, .. } => Some(format!(
             "(fn {} {})",
-            format_arglist(params, rest.as_ref()),
-            format_body_source(body)
+            format_arglist(&data.params, data.rest.as_ref()),
+            format_body_source(&data.body)
         )),
-        Value::MultiLambda { clauses, .. } => {
-            let parts: Vec<String> = clauses
+        Value::MultiLambda { data, .. } => {
+            let parts: Vec<String> = data
+                .clauses
                 .iter()
                 .map(|clause| {
                     format!(
