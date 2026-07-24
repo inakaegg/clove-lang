@@ -14,22 +14,18 @@ static FN_TYPE_CACHE: Lazy<RwLock<HashMap<usize, String>>> =
 
 pub fn fn_type_string(value: &Value) -> Option<String> {
     match value {
-        Value::Lambda {
-            params,
-            rest,
-            body,
-            recur_id,
-            inferred_type,
-            ..
-        } => inferred_signature(inferred_type.as_ref())
-            .or_else(|| fn_type_for_lambda(params, rest.as_ref(), body, Some(*recur_id))),
-        Value::MultiLambda {
-            clauses,
-            inferred_type,
-            ..
-        } => {
-            inferred_signature(inferred_type.as_ref()).or_else(|| fn_type_for_multi_lambda(clauses))
+        Value::Lambda { data, .. } => {
+            inferred_signature(data.inferred_type.as_ref()).or_else(|| {
+                fn_type_for_lambda(
+                    &data.params,
+                    data.rest.as_ref(),
+                    &data.body,
+                    Some(data.recur_id),
+                )
+            })
         }
+        Value::MultiLambda { data, .. } => inferred_signature(data.inferred_type.as_ref())
+            .or_else(|| fn_type_for_multi_lambda(&data.clauses)),
         Value::Func(func) => fn_type_for_native(func),
         Value::Partial { .. } | Value::Compose { .. } | Value::ForeignCallable { .. } => None,
         _ => None,

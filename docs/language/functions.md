@@ -2,7 +2,7 @@
 
 Japanese version: [functions.ja.md](functions.ja.md)
 
-- Updated: 2026-01-14
+- Updated: 2026-07-24
 
 ## 1. `defn` / `fn`
 
@@ -65,6 +65,13 @@ the body is implicitly wrapped in `try`.
 - Order is fixed as **err -> fin**.
 - `err` / `fin` can appear only at the end.
 
+### 1.4 Closure lifetime limitation
+
+Clove releases call environments retained by closures that are bound directly with `let`,
+`-defn`, or `where`. A closure stored indirectly inside a collection in the same scope can still
+form a retaining cycle. Avoid self-referential structures such as an environment binding whose
+vector or map contains a closure that captures that same environment.
+
 ## 2. Variadic args
 
 ```clojure
@@ -116,4 +123,3 @@ See: [dot-chain](dot_chain.md)
 **Previous:** [Collections (list/vector/map/set)](collections.md)
 **Next:** [Destructuring](destructuring.md)
 <!-- NAV:END -->
-

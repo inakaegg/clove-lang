@@ -4,7 +4,7 @@ use std::collections::HashMap as StdHashMap;
 use std::collections::HashSet as StdHashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::thread::ThreadId;
 
@@ -729,6 +729,75 @@ impl TransientHandle {
 }
 
 #[derive(Clone)]
+pub enum EnvSlot {
+    Strong(crate::env::EnvRef),
+    Weak(std::sync::Weak<RwLock<crate::env::Env>>),
+}
+
+impl EnvSlot {
+    pub fn strong(env: crate::env::EnvRef) -> Self {
+        Self::Strong(env)
+    }
+
+    pub fn downgrade_if_same(&mut self, owner: &std::sync::Weak<RwLock<crate::env::Env>>) {
+        let Self::Strong(env) = self else {
+            return;
+        };
+        if std::sync::Weak::ptr_eq(&Arc::downgrade(env), owner) {
+            *self = Self::Weak(Arc::downgrade(env));
+        }
+    }
+
+    pub fn upgrade(&self) -> Option<crate::env::EnvRef> {
+        match self {
+            Self::Strong(env) => Some(env.clone()),
+            Self::Weak(env) => env.upgrade(),
+        }
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        self.as_ptr() == other.as_ptr()
+    }
+
+    fn as_ptr(&self) -> *const RwLock<crate::env::Env> {
+        match self {
+            Self::Strong(env) => Arc::as_ptr(env),
+            Self::Weak(env) => env.as_ptr(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct LambdaData {
+    pub params: Vec<String>,
+    pub rest: Option<String>,
+    pub body: Vec<Form>,
+    pub local_defns: Vec<LocalDefn>,
+    pub engines: Vec<Arc<dyn ForeignEngine>>,
+    pub auto_fallback: bool,
+    pub call_wrappers: Arc<StdHashSet<String>>,
+    pub settings: RuntimeSettings,
+    pub meta: Option<HashMap<Key, Value>>,
+    pub doc: Option<String>,
+    pub name: Option<String>,
+    pub inferred_type: Option<crate::types::TypeKind>,
+    pub recur_id: usize,
+}
+
+#[derive(Clone)]
+pub struct MultiLambdaData {
+    pub clauses: Vec<LambdaClause>,
+    pub engines: Vec<Arc<dyn ForeignEngine>>,
+    pub auto_fallback: bool,
+    pub call_wrappers: Arc<StdHashSet<String>>,
+    pub settings: RuntimeSettings,
+    pub meta: Option<HashMap<Key, Value>>,
+    pub doc: Option<String>,
+    pub name: Option<String>,
+    pub inferred_type: Option<crate::types::TypeKind>,
+}
+
+#[derive(Clone)]
 pub enum Value {
     Int(i64),
     Float(f64),
@@ -773,32 +842,12 @@ pub enum Value {
     },
     Seq(SeqHandle),
     Lambda {
-        params: Vec<String>,
-        rest: Option<String>,
-        body: Vec<Form>,
-        local_defns: Vec<LocalDefn>,
-        env: crate::env::EnvRef,
-        engines: Vec<Arc<dyn ForeignEngine>>,
-        auto_fallback: bool,
-        call_wrappers: Arc<StdHashSet<String>>,
-        settings: RuntimeSettings,
-        meta: Option<HashMap<Key, Value>>,
-        doc: Option<String>,
-        name: Option<String>,
-        inferred_type: Option<crate::types::TypeKind>,
-        recur_id: usize,
+        data: Arc<LambdaData>,
+        env: EnvSlot,
     },
     MultiLambda {
-        clauses: Vec<LambdaClause>,
-        env: crate::env::EnvRef,
-        engines: Vec<Arc<dyn ForeignEngine>>,
-        auto_fallback: bool,
-        call_wrappers: Arc<StdHashSet<String>>,
-        settings: RuntimeSettings,
-        meta: Option<HashMap<Key, Value>>,
-        doc: Option<String>,
-        name: Option<String>,
-        inferred_type: Option<crate::types::TypeKind>,
+        data: Arc<MultiLambdaData>,
+        env: EnvSlot,
     },
     Symbol(String),
     Foreign(crate::foreign::ForeignValue),
@@ -859,6 +908,31 @@ pub struct SortedSet {
 }
 
 impl Value {
+    pub(crate) fn downgrade_env_if_same(
+        &mut self,
+        owner: &std::sync::Weak<RwLock<crate::env::Env>>,
+    ) {
+        match self {
+            Value::Lambda { env, .. } | Value::MultiLambda { env, .. } => {
+                env.downgrade_if_same(owner);
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn clone_with_strong_env(&self) -> Self {
+        let mut value = self.clone();
+        match &mut value {
+            Value::Lambda { env, .. } | Value::MultiLambda { env, .. } => {
+                if let Some(strong) = env.upgrade() {
+                    *env = EnvSlot::Strong(strong);
+                }
+            }
+            _ => {}
+        }
+        value
+    }
+
     pub fn type_name(&self) -> &'static str {
         match self {
             Value::Int(_) | Value::Float(_) => "number",
@@ -1037,93 +1111,46 @@ impl PartialEq for Value {
                 },
             ) => aid == bid && aty == bty,
             (Value::Seq(a), Value::Seq(b)) => a.ptr_eq(b),
-            (
-                Value::Lambda {
-                    params: ap,
-                    rest: ar,
-                    body: ab,
-                    local_defns: alocal_defns,
-                    env: ae,
-                    engines: aeng,
-                    auto_fallback: af,
-                    call_wrappers: ac,
-                    settings: aset,
-                    meta: ameta,
-                    doc: adoc,
-                    name: aname,
-                    inferred_type: ainferred,
-                    recur_id: arid,
-                },
-                Value::Lambda {
-                    params: bp,
-                    rest: br,
-                    body: bb,
-                    local_defns: blocal_defns,
-                    env: be,
-                    engines: beng,
-                    auto_fallback: bf,
-                    call_wrappers: bc,
-                    settings: bset,
-                    meta: bmeta,
-                    doc: bdoc,
-                    name: bname,
-                    inferred_type: binferred,
-                    recur_id: brid,
-                },
-            ) => {
-                ap == bp
-                    && ar == br
-                    && ab == bb
-                    && alocal_defns == blocal_defns
-                    && af == bf
-                    && ameta == bmeta
-                    && adoc == bdoc
-                    && aname == bname
-                    && Arc::ptr_eq(ae, be)
-                    && aeng.len() == beng.len()
-                    && aeng.iter().zip(beng.iter()).all(|(a, b)| Arc::ptr_eq(a, b))
-                    && Arc::ptr_eq(ac, bc)
-                    && aset == bset
-                    && ainferred == binferred
-                    && arid == brid
+            (Value::Lambda { data: ad, env: ae }, Value::Lambda { data: bd, env: be }) => {
+                ad.params == bd.params
+                    && ad.rest == bd.rest
+                    && ad.body == bd.body
+                    && ad.local_defns == bd.local_defns
+                    && ad.auto_fallback == bd.auto_fallback
+                    && ad.meta == bd.meta
+                    && ad.doc == bd.doc
+                    && ad.name == bd.name
+                    && ae.ptr_eq(be)
+                    && ad.engines.len() == bd.engines.len()
+                    && ad
+                        .engines
+                        .iter()
+                        .zip(bd.engines.iter())
+                        .all(|(a, b)| Arc::ptr_eq(a, b))
+                    && Arc::ptr_eq(&ad.call_wrappers, &bd.call_wrappers)
+                    && ad.settings == bd.settings
+                    && ad.inferred_type == bd.inferred_type
+                    && ad.recur_id == bd.recur_id
             }
             (
-                Value::MultiLambda {
-                    clauses: ac,
-                    env: ae,
-                    engines: aeng,
-                    auto_fallback: af,
-                    call_wrappers: acw,
-                    settings: aset,
-                    meta: ameta,
-                    doc: adoc,
-                    name: aname,
-                    inferred_type: ainferred,
-                },
-                Value::MultiLambda {
-                    clauses: bc,
-                    env: be,
-                    engines: beng,
-                    auto_fallback: bf,
-                    call_wrappers: bcw,
-                    settings: bset,
-                    meta: bmeta,
-                    doc: bdoc,
-                    name: bname,
-                    inferred_type: binferred,
-                },
+                Value::MultiLambda { data: ad, env: ae },
+                Value::MultiLambda { data: bd, env: be },
             ) => {
-                ac == bc
-                    && af == bf
-                    && ameta == bmeta
-                    && adoc == bdoc
-                    && aname == bname
-                    && Arc::ptr_eq(ae, be)
-                    && aeng.len() == beng.len()
-                    && aeng.iter().zip(beng.iter()).all(|(a, b)| Arc::ptr_eq(a, b))
-                    && Arc::ptr_eq(acw, bcw)
-                    && aset == bset
-                    && ainferred == binferred
+                ad.clauses == bd.clauses
+                    && ad.auto_fallback == bd.auto_fallback
+                    && ad.meta == bd.meta
+                    && ad.doc == bd.doc
+                    && ad.name == bd.name
+                    && ae.ptr_eq(be)
+                    && ad.engines.len() == bd.engines.len()
+                    && ad
+                        .engines
+                        .iter()
+                        .zip(bd.engines.iter())
+                        .all(|(a, b)| Arc::ptr_eq(a, b))
+                    && Arc::ptr_eq(&ad.call_wrappers, &bd.call_wrappers)
+                    && ad.settings == bd.settings
+                    && ad.inferred_type == bd.inferred_type
             }
             (Value::Foreign(a), Value::Foreign(b)) => {
                 a.tag == b.tag && Arc::ptr_eq(&a.data, &b.data)
@@ -1262,59 +1289,33 @@ impl Hash for Value {
                         handle.ptr().hash(state);
                         handle.epoch.hash(state);
                     }
-                    Value::Lambda {
-                        params,
-                        rest,
-                        body,
-                        local_defns,
-                        env,
-                        engines,
-                        auto_fallback,
-                        call_wrappers,
-                        settings,
-                        meta,
-                        doc,
-                        name,
-                        inferred_type,
-                        recur_id,
-                    } => {
-                        params.hash(state);
-                        rest.hash(state);
-                        body.hash(state);
-                        local_defns.hash(state);
-                        Arc::as_ptr(env).hash(state);
-                        engines.iter().for_each(|e| Arc::as_ptr(e).hash(state));
-                        auto_fallback.hash(state);
-                        Arc::as_ptr(call_wrappers).hash(state);
-                        settings.hash(state);
-                        meta.hash(state);
-                        doc.hash(state);
-                        name.hash(state);
-                        inferred_type.hash(state);
-                        recur_id.hash(state);
+                    Value::Lambda { data, env } => {
+                        data.params.hash(state);
+                        data.rest.hash(state);
+                        data.body.hash(state);
+                        data.local_defns.hash(state);
+                        env.as_ptr().hash(state);
+                        data.engines.iter().for_each(|e| Arc::as_ptr(e).hash(state));
+                        data.auto_fallback.hash(state);
+                        Arc::as_ptr(&data.call_wrappers).hash(state);
+                        data.settings.hash(state);
+                        data.meta.hash(state);
+                        data.doc.hash(state);
+                        data.name.hash(state);
+                        data.inferred_type.hash(state);
+                        data.recur_id.hash(state);
                     }
-                    Value::MultiLambda {
-                        clauses,
-                        env,
-                        engines,
-                        auto_fallback,
-                        call_wrappers,
-                        settings,
-                        meta,
-                        doc,
-                        name,
-                        inferred_type,
-                    } => {
-                        clauses.hash(state);
-                        Arc::as_ptr(env).hash(state);
-                        engines.iter().for_each(|e| Arc::as_ptr(e).hash(state));
-                        auto_fallback.hash(state);
-                        Arc::as_ptr(call_wrappers).hash(state);
-                        settings.hash(state);
-                        meta.hash(state);
-                        doc.hash(state);
-                        name.hash(state);
-                        inferred_type.hash(state);
+                    Value::MultiLambda { data, env } => {
+                        data.clauses.hash(state);
+                        env.as_ptr().hash(state);
+                        data.engines.iter().for_each(|e| Arc::as_ptr(e).hash(state));
+                        data.auto_fallback.hash(state);
+                        Arc::as_ptr(&data.call_wrappers).hash(state);
+                        data.settings.hash(state);
+                        data.meta.hash(state);
+                        data.doc.hash(state);
+                        data.name.hash(state);
+                        data.inferred_type.hash(state);
                     }
                     Value::Symbol(s) => s.hash(state),
                     Value::Foreign(fv) => {
@@ -1394,8 +1395,15 @@ fn pretty_symbol(name: &str) -> String {
 
 pub fn callable_label(callable: &Value) -> Option<String> {
     match callable {
-        Value::Lambda { name, .. } | Value::MultiLambda { name, .. } => Some(
-            name.clone()
+        Value::Lambda { data, .. } => Some(
+            data.name
+                .clone()
+                .map(|n| pretty_symbol(&n))
+                .unwrap_or_else(|| "<lambda>".into()),
+        ),
+        Value::MultiLambda { data, .. } => Some(
+            data.name
+                .clone()
                 .map(|n| pretty_symbol(&n))
                 .unwrap_or_else(|| "<lambda>".into()),
         ),
@@ -1431,7 +1439,11 @@ fn format_fn_arity(arity: FnArity) -> String {
 
 fn format_callable_value(callable: &Value) -> String {
     match callable {
-        Value::Lambda { name, .. } | Value::MultiLambda { name, .. } => match name {
+        Value::Lambda { data, .. } => match &data.name {
+            Some(n) => format!("#<fn {}>", pretty_symbol(n)),
+            None => "#<lambda>".into(),
+        },
+        Value::MultiLambda { data, .. } => match &data.name {
             Some(n) => format!("#<fn {}>", pretty_symbol(n)),
             None => "#<lambda>".into(),
         },

@@ -986,14 +986,10 @@ fn is_method_value(value: &Value) -> bool {
 
 fn signature_from_value(value: &Value) -> Option<FnSigSpec> {
     match value {
-        Value::Lambda {
-            inferred_type: Some(kind),
-            ..
+        Value::Lambda { data, .. } => data.inferred_type.as_ref().and_then(signature_from_kind),
+        Value::MultiLambda { data, .. } => {
+            data.inferred_type.as_ref().and_then(signature_from_kind)
         }
-        | Value::MultiLambda {
-            inferred_type: Some(kind),
-            ..
-        } => signature_from_kind(kind),
         _ => None,
     }
 }

@@ -288,13 +288,13 @@ impl<'a> Vm<'a> {
                     if let Value::Map(meta_map) = meta_lookup(&eval_value) {
                         meta_set(value.clone(), Value::Map(meta_map));
                     }
-                    match &eval_value {
-                        Value::Lambda { doc, .. } | Value::MultiLambda { doc, .. } => {
-                            if let Some(doc) = doc.clone() {
-                                doc_set(value.clone(), doc);
-                            }
-                        }
-                        _ => {}
+                    let doc = match &eval_value {
+                        Value::Lambda { data, .. } => data.doc.clone(),
+                        Value::MultiLambda { data, .. } => data.doc.clone(),
+                        _ => None,
+                    };
+                    if let Some(doc) = doc {
+                        doc_set(value.clone(), doc);
                     }
                     {
                         let mut writer = self.env.write().unwrap();

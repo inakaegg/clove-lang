@@ -602,24 +602,18 @@ fn home_dir() -> Option<PathBuf> {
 
 pub(crate) fn derive_lambda_store_name(value: &Value) -> Option<String> {
     match value {
-        Value::Lambda {
-            params,
-            rest,
-            body,
-            local_defns,
-            ..
-        } => {
+        Value::Lambda { data, .. } => {
             let mut hasher = Sha256::new();
-            hash_clause(&mut hasher, params, rest, body);
-            hash_local_defns(&mut hasher, local_defns);
+            hash_clause(&mut hasher, &data.params, &data.rest, &data.body);
+            hash_local_defns(&mut hasher, &data.local_defns);
             Some(format!("{:x}", hasher.finalize()))
         }
-        Value::MultiLambda { clauses, .. } => {
-            if clauses.is_empty() {
+        Value::MultiLambda { data, .. } => {
+            if data.clauses.is_empty() {
                 return None;
             }
             let mut hasher = Sha256::new();
-            for clause in clauses {
+            for clause in &data.clauses {
                 hash_clause(&mut hasher, &clause.params, &clause.rest, &clause.body);
                 hash_local_defns(&mut hasher, &clause.local_defns);
             }
