@@ -8,21 +8,20 @@
 
 英語版（公式）: [README.md](README.md)
 
-Clove は **Clojure ライクな S 式**をベースにしつつ、  
-**軽量な型（deftype / defenum）**と **パターンマッチ**、さらに **Ruby / Python の埋め込み**までをひとつにまとめた、小さな言語です。
+Clove は Clojure に着想を得た小さな Lisp です。**S 式**をベースに、
+**軽量な型（`deftype` / `defenum`）とパターンマッチ**、**Ruby / Python のインライン埋め込み**を
+1 つの言語にまとめ、スクリプトのネイティブバイナリ化にも対応しています。
 
-Clojure のような書き味を保ちながら、必要な場面では「外の世界（Ruby/Python）」も気軽に混ぜられる——  
-そんな “風味（flavor）” を狙って作っています。
-
-> **ステータス: experimental / WIP** — 構文・API・CLI は今後も変わる可能性があります。  
-> 詳しい仕様は [`docs/`](docs/)、動くコードは [`examples/`](examples/) に集約しています。  
-> README は「雰囲気がつかめる程度」にとどめます。
+> **ステータス: experimental / WIP** — 構文・API・CLI は今後も変わる可能性があります。
+> 詳しい仕様は [`docs/`](docs/)、動くコードは [`examples/`](examples/) に集約しています。
+> この README は意図的に短く、例を中心に構成しています。
 
 ---
 
-## まずは雰囲気がわかる短い例
+## 短い例で見る Clove
 
 ### Hello
+
 ```clojure
 (ns examples::hello)
 
@@ -35,51 +34,51 @@ clove examples/hello.clv
 
 ---
 
-### ドットチェーン（`.(...)`）と穴あき `?`
+### ドットチェーン（`.(...)`）とプレースホルダ `?`
 
-`as->` の「値を流し込む」書き方を、`expr.( ... )` で短く書けます。
+`as->` のように値を流し込む処理を、`expr.( ... )` で短く書けます。
 `?` が「直前の値が入る場所」です。
 
 ```clojure
 (inc 123).(+ 1 ?).(repeat 3 ?).(map inc ?)
-; => (126 126 126)
+; => [126 126 126]
 ```
 
-`*?` は「直前の値を引数として展開」します（内部的には `apply`）。
+`*?` は直前の値を引数列として展開します（内部的には `apply`）。
 
 ```clojure
 [inc (range 10)].(map *?)
-; => (1 2 3 4 5 6 7 8 9 10)
+; => [1 2 3 4 5 6 7 8 9 10]
 ```
 
 ---
 
-### `?` のプレースホルダ（その場関数）
+### `?` プレースホルダ（インライン関数）
 
-`?` を含む式は「その場で小さな関数」に変換されます。
+`?` を含む式は、その場で小さな無名関数になります。
 
 ```clojure
 (map (+ ? 10) (range 5))
-; => (10 11 12 13 14)
+; => [10 11 12 13 14]
 
 (filter (not= :skip ?) [:ok :skip :ok])
-; => (:ok :ok)
+; => [:ok :ok]
 ```
 
-> `?` の詳細は [`docs/language/reader_syntax.md`](docs/language/reader_syntax.md) を参照してください。
+> 詳細: [`docs/language/reader_syntax.md`](docs/language/reader_syntax.md)
 
 ---
 
 ### map 省略記法 + indexer（`[]`）
 
-Clojure 風 `{:x 1}` に加えて、JSON っぽい `{name: "Taro"}` も使えます。
+Clojure 風の `{:x 1}` に加えて、JSON 風の `{name: "Taro"}` も書けます。
 
 ```clojure
 (def user {name: "Taro" age: 30})
 user[:name] ; => "Taro"
 ```
 
-indexer は “取り出し” だけじゃなく、少し柔軟に使えます。
+indexer は単純な要素取得にとどまらず、柔軟に使えます。
 
 ```clojure
 (def xs [10 11 12 13 14 15])
@@ -89,21 +88,20 @@ xs[-1]       ; => 15
 xs[99 || :ng]; => :ng   ; 見つからなければ既定値
 
 xs[[0 2 4]]  ; => [10 12 14]  ; gather（複数 index）
-xs[1,5,7]    ; => [11 15 17]  ; カンマ区切りの複数 index
+xs[1,3,5]    ; => [11 13 15]  ; カンマ区切りの複数 index
 xs[..3]      ; => [10 11 12 13] ; open range
 xs[2..]      ; => [12 13 14 15]
 xs[1...3]    ; => [11 12]       ; 末尾 exclusive
-
-xs[(+ 1 2)]  ; => 13  ; indexer 内は式も書ける
+xs[(+ 1 2)]  ; => 13  ; indexer 内には式も書ける
 ```
 
-> indexer の詳細（range、`-foo` ルール、map/set/get-in など）は [`docs/language/indexer.md`](docs/language/indexer.md) にまとめています。
+> range、`-foo` ルール、map/set/get-in などの詳細: [`docs/language/indexer.md`](docs/language/indexer.md)
 
 ---
 
 ### `deftype` / `defenum` / `match`（軽量な型と分岐）
 
-`protocol` や `multimethod` の代わりに、データ＋パターンマッチで書くスタイルを重視しています。
+`protocol` や `multimethod` の代わりに、データ + パターンマッチで書くスタイルを重視しています。
 
 ```clojure
 (deftype Dog  {:name :string :age :int})
@@ -121,10 +119,10 @@ xs[(+ 1 2)]  ; => 13  ; indexer 内は式も書ける
 
 ---
 
-### Ruby / Python をその場で混ぜる
+### Ruby / Python のインライン埋め込み
 
-Clove の特徴のひとつが「外部言語の埋め込み」です。
-Ruby はデフォルト外部言語なので、埋め込みは `$rb{...}` を基本に書きつつ `${...}` でも書けます（同義）。
+外部言語の埋め込みは Clove の特徴の 1 つです。
+Ruby がデフォルトの外部言語で、`$rb{...}` とその別名 `${...}` は同じ意味になります。
 
 ```clojure
 (defn ruby-version []
@@ -140,20 +138,21 @@ Ruby はデフォルト外部言語なので、埋め込みは `$rb{...}` を基
 (println (py-sqrt 9)) ; => 3.0
 ```
 
-JSON / YAML は reader タグでも読めます。
+JSON / YAML は reader タグで直接書けます。
+JSON のキーは文字列のままなので、`:host` ではなく `"host"` で参照します。
 
 ```clojure
 (def config
   #json{"host":"localhost","port":8080})
 
-config[:host] ; => "localhost"
+config["host"] ; => "localhost"
 ```
 
 ---
 
-### 並行プリミティブ（最小）
+### 並行処理プリミティブ
 
-`atom` / `chan` / `promise` / `task` / `future` / `agent` などを用意しています。
+`atom` / `chan` / `promise` / `task` / `future` / `agent` を最小構成で用意しています。
 
 ```clojure
 (def c (chan 1))
@@ -161,17 +160,16 @@ config[:host] ; => "localhost"
 (chan-take! c) ; => :ok
 ```
 
-より踏み込んだ例は [`examples/concurrency/`](examples/concurrency/) と [`docs/language/concurrency.md`](docs/language/concurrency.md) にあります。
+より踏み込んだ例: [`examples/concurrency/`](examples/concurrency/)、[`docs/language/concurrency.md`](docs/language/concurrency.md)
 
 ---
 
 ## 次に読む場所
 
-* まず動かす: [`docs/getting_started.md`](docs/getting_started.md)
-* ドキュメントの入口: [`docs/index.md`](docs/index.md)
-* 動くサンプル集: [`examples/`](examples/)
-* VS Code 拡張: [`packages/vscode-clove/`](packages/vscode-clove/)（ソース同梱。現時点では Marketplace 未公開）
-* 例の実行:
+- まず動かす: [`docs/getting_started.md`](docs/getting_started.md)
+- ドキュメントの入口: [`docs/index.md`](docs/index.md)
+- 動くサンプル集: [`examples/`](examples/)
+- 例の実行:
 
   ```bash
   clove --main examples/concurrency/async_scope_nested.clv
@@ -181,115 +179,96 @@ config[:host] ; => "localhost"
 
 ## インストール / ビルド
 
-### いちばん確実（ソースから）
+Clove は Rust ワークスペースとして開発しており、ソースからのビルドが基本の導入経路です。
 
-現時点では Rust ワークスペースとして開発中です。
-
-```bash
-git clone https://github.com/inakaegg/clove-lang clove
-cd clove
-cargo build -p clove-lang --release
-./target/release/clove --help
-```
-
-PATH に入れて使いたい場合は次のコマンドでインストールできます。
-
-```bash
-cargo install --path crates/clove-lang --force
-clove --repl
-```
-
-LSP（補完/型ヒント等）も使う場合:
-
-```bash
-cargo install --path crates/clove-lsp --force
-```
-
-### clone 後にまず実行する手順（REPL / run / build）
+### ソースから
 
 ```bash
 git clone https://github.com/inakaegg/clove-lang clove
 cd clove
 
-# CLI + LSP サーバーをPATHへ
+# CLI を PATH へインストール（エディタ補完/LSP を使う場合は clove-lsp も）
 cargo install --path crates/clove-lang --force
 cargo install --path crates/clove-lsp --force
 
-# REPL
+# 動作確認
 clove --repl
-
-# スクリプト実行
 clove examples/hello.clv
 
-# ネイティブバイナリ生成（phase2 C backend 経路）
+# ネイティブバイナリ生成（phase2 C backend）
 clove build examples/build/high_value_report.clv --out target/clove/bin/high_value_report
 ./target/clove/bin/high_value_report
 ```
 
-`clove-lsp` は stdio で動く言語サーバーです。通常はエディタ拡張/クライアントから起動します（ターミナル直接起動は想定外）。
+インストールせずに試す場合は `cargo build -p clove-lang --release` でビルドし、
+`./target/release/clove` を直接実行してください。
 
-### Rust が入っているなら（clone せずに）
+`clove-lsp` は stdio で動く言語サーバーです。通常はエディタ拡張や LSP クライアントから起動し、
+ターミナルから直接起動するものではありません。
+
+### clone せずにインストール
 
 ```bash
 cargo install --git https://github.com/inakaegg/clove-lang --locked --package clove-lang --bin clove
 ```
 
-## build確認済みサンプル（ベンチ以外）
-
-`examples/build/high_value_report.clv` は `clove build` での生成・実行を確認済みの、簡単な売上集計サンプルです。
-
-注意: 現在の `examples/` には「インタプリタ向け例」と「build向け例」が混在しており、すべての例が `clove build` を通る状態ではありません。
-
 ### Ruby 埋め込みを使う場合の注意
 
-Ruby ブリッジは `rb-sys` / `magnus` を経由するため、**Ruby 3.x 系**を使ってください
-（macOS 付属の `/usr/bin/ruby` 2.6 などだとビルドに失敗することがあります）。
+Ruby ブリッジは `rb-sys` / `magnus` を経由するため、**Ruby 3.x 系**が必要です。
+macOS 付属の `/usr/bin/ruby`（2.6）などの古い Ruby ではビルドに失敗することがあります。
+
+### `clove build` について
+
+`examples/build/high_value_report.clv` は `clove build` での生成・実行を確認済みのサンプルで、
+簡単な売上集計を行います。現在の `examples/` にはインタプリタ向けの例と build 向けの例が
+混在しており、すべての例が `clove build` を通る状態ではありません。
 
 ---
 
-## CLI の使い方（要点）
+## CLI の概要
 
-* `clove` / `clove --repl` : REPL
-* `clove -e '(+ 1 2 3)'` : 1 式だけ評価
-* `clove path/to/file.clv` : ファイル実行（末尾の式を表示）
-* `clove --main path/to/file.clv` : eval 後に `-main` を呼ぶ（examples 用）
-* `clove --repl path/to/file.clv` : eval 後、そのまま REPL に入る
-* `clove fmt ...` : フォーマッタ
-* `clove build ...` : ネイティブバイナリ生成（オプションあり）
-* ネイティブプラグインは `plugins/` 同梱が前提（`<project>/plugins` / `~/.clove/plugins` はデフォルト許可、pkg 配下は lock の sha256 一致が必須。詳細は [`docs/tooling/cli.md`](docs/tooling/cli.md)）
+- `clove` / `clove --repl` — REPL を起動
+- `clove -e '(+ 1 2 3)'` — 式を 1 つだけ評価
+- `clove path/to/file.clv` — ファイル実行（最後の値を表示）
+- `clove --main path/to/file.clv` — ファイル評価後に `-main` を呼ぶ（examples で使用）
+- `clove --repl path/to/file.clv` — ファイル評価後、そのまま REPL に入る
+- `clove fmt ...` — フォーマッタ
+- `clove build ...` — ネイティブバイナリ生成
+- ネイティブプラグインは `plugins/` 同梱が前提（`<project>/plugins` / `~/.clove/plugins` はデフォルト許可、pkg 配下は lock の sha256 一致が必須。詳細は [`docs/tooling/cli.md`](docs/tooling/cli.md)）
 
-詳しいオプションは `clove --help` / `clove build --help` を参照してください。
+すべてのオプションは `clove --help` / `clove build --help` を参照してください。
 
 ---
 
 ## VS Code 拡張
 
-このリポジトリには VS Code 拡張 `vscode-clove` が含まれています。
-主にシンタックスハイライト、S 式の選択拡張、REPL 送信、`clove fmt` 連携などを提供します。
+このリポジトリには VS Code 拡張 `vscode-clove` を同梱しています
+（ソース配布。現時点では Marketplace 未公開）。
+シンタックスハイライト、S 式単位の選択拡張、REPL への送信、`clove fmt` 連携などを提供します。
 
-設定やキーバインド例は [`packages/vscode-clove/README.md`](packages/vscode-clove/README.md) を参照してください。
+設定やキーバインド例: [`packages/vscode-clove/README.md`](packages/vscode-clove/README.md)
 
 ---
 
-## Clojure との主な違い（短く）
+## Clojure との主な違い
 
-* `protocol` / `multimethod` は持たない（代わりに `deftype` / `defenum` / `match` を重視）
-* 現時点ではマクロ（`defmacro` / 準クォート）は未実装
-* `/.../` をデフォルトの正規表現リテラルとして採用（曖昧な場合は `#/.../`）
-* `10ms` などの Duration リテラルを標準サポート
-* Ruby / Python をタグ/ブロックで埋め込める
+- `protocol` / `multimethod` は持たない（`deftype` / `defenum` / `match` で代替）
+- マクロ（`defmacro` / 準クォート）は未実装
+- `/.../` をデフォルトの正規表現リテラルとして採用（曖昧な場合は `#/.../`）
+- `10ms` などの Duration リテラルを標準サポート
+- Ruby / Python をタグ / ブロックで埋め込める
 
 ---
 
 ## Contributing
 
-* 開発環境: [`docs/contributing/dev_setup.md`](docs/contributing/dev_setup.md)
-* テスト: [`docs/contributing/testing.md`](docs/contributing/testing.md)
-* リポジトリ構成: [`docs/contributing/repo_layout.md`](docs/contributing/repo_layout.md)
+- 開発環境: [`docs/contributing/dev_setup.md`](docs/contributing/dev_setup.md)
+- テスト: [`docs/contributing/testing.md`](docs/contributing/testing.md)
+- リポジトリ構成: [`docs/contributing/repo_layout.md`](docs/contributing/repo_layout.md)
 
 ---
 
 ## ライセンス
 
-MIT または Apache-2.0 のデュアルライセンスです（利用者が選択）。  
+MIT または Apache-2.0 のデュアルライセンスです（利用者が選択）。
 [LICENSE-MIT](LICENSE-MIT) と [LICENSE-APACHE](LICENSE-APACHE) を参照してください。
