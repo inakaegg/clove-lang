@@ -231,10 +231,9 @@
 (>= 3 3 1) ; => true
 (>= 1 2) ; => false
 (str "a" 1) ; => "a1"
-(name :foo/bar) ; => "bar"
+(name :foo::bar) ; => "foo::bar"
+(name :bar) ; => "bar"
 (name "baz") ; => "baz"
-(namespace :foo/bar) ; => "foo"
-(namespace :bar) ; => nil
 (get {:a 1} :a) ; => 1
 (not true) ; => false
 (count [1 2 3]) ; => 3

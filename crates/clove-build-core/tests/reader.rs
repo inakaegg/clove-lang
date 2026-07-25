@@ -63,3 +63,68 @@ fn read_expr_type_annotation() {
         ])]
     );
 }
+
+#[test]
+fn rejects_slash_namespace_separator() {
+    // `/` was abolished as a namespace separator (TASK/DONE/名前空間.md, 2025-12-17).
+    // The phase1 reader errors at parse time; phase2 must agree.
+    for src in [
+        "(println 'foo/bar)",
+        "(println :foo/bar)",
+        "(name :foo/bar)",
+    ] {
+        let err = read_all(src)
+            .expect_err(&format!("{src} must be rejected"))
+            .to_string();
+        assert!(
+            err.contains("namespace separator '/' has been removed"),
+            "{src} should report the '/' abolition, got: {err}"
+        );
+    }
+}
+
+#[test]
+fn keeps_slash_as_division_operator() {
+    // The bare `/` symbol stays valid: it is the division operator.
+    let forms = read_all("(/ 6 2)").unwrap();
+    assert_eq!(
+        forms,
+        vec![Expr::list(vec![
+            Expr::symbol("/"),
+            Expr::literal(Literal::Int(6)),
+            Expr::literal(Literal::Int(2)),
+        ])]
+    );
+}
+
+#[test]
+fn keeps_regex_literal_with_slashes() {
+    // Regex literals must not be caught by the `/` rejection.
+    read_all(r#"(re-find /a+/ "aa")"#).expect("regex literal should still read");
+}
+
+#[test]
+fn reports_unsupported_syntax_as_unsupported_not_malformed() {
+    // These are valid Clove (phase1 accepts them); phase2 simply has not
+    // implemented them. A bare "unsupported reader tag" / "expected token"
+    // reads like a syntax error, which sent readers looking for a typo.
+    let cases = [
+        (r#"(def c #json{"h":1})"#, "#json"),
+        ("(def c #yaml{\n  h: 1\n})", "#yaml"),
+        (r#"(re-find #/a+/ "aa")"#, "#/"),
+        ("(println ${1 + 2})", "${"),
+    ];
+    for (src, needle) in cases {
+        let err = read_all(src)
+            .expect_err(&format!("{src} is not supported by phase2 yet"))
+            .to_string();
+        assert!(
+            err.contains(needle),
+            "error for {src:?} should name {needle:?}, got: {err}"
+        );
+        assert!(
+            err.contains("not supported"),
+            "error for {src:?} should say it is unsupported, got: {err}"
+        );
+    }
+}

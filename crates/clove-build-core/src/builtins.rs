@@ -28,7 +28,6 @@ pub const BUILTIN_NAMES: &[&str] = &[
     ">=",
     "str",
     "name",
-    "namespace",
     "gensym",
     "get",
     "not",

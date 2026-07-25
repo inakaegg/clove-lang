@@ -335,6 +335,7 @@ name = "clove-lang"
 version = "0.1.0"
 dependencies = [
  "clove-build-backend-c",
+ "clove-build-core",
  "clove-build-front",
  "clove-build-runtime-c",
  "clove-core",

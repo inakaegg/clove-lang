@@ -827,7 +827,6 @@ impl Evaluator {
             "keyword" => self.eval_cast_keyword(args, env),
             "symbol" => self.eval_cast_symbol(args, env),
             "name" => self.eval_name(args, env),
-            "namespace" => self.eval_namespace(args, env),
             "gensym" => self.eval_gensym(args, env),
             "get" => {
                 if args.len() != 2 && args.len() != 3 {
@@ -2195,18 +2194,6 @@ impl Evaluator {
         let value = self.eval_expr(&args[0], env)?;
         let name = name_from_value(&value)?;
         Ok(Value::Str(name))
-    }
-
-    fn eval_namespace(&mut self, args: &[AstExpr], env: EnvRef) -> Result<Value, Clove2Error> {
-        if args.len() != 1 {
-            return Err(Clove2Error::new("namespace expects 1 argument"));
-        }
-        let value = self.eval_expr(&args[0], env)?;
-        let namespace = namespace_from_value(&value)?;
-        Ok(match namespace {
-            Some(value) => Value::Str(value),
-            None => Value::Nil,
-        })
     }
 
     fn eval_gensym(&mut self, args: &[AstExpr], env: EnvRef) -> Result<Value, Clove2Error> {
@@ -4922,7 +4909,6 @@ impl Evaluator {
             "keyword" => self.eval_cast_keyword_value(args),
             "symbol" => self.eval_cast_symbol_value(args),
             "name" => self.eval_name_value(args),
-            "namespace" => self.eval_namespace_value(args),
             "gensym" => self.eval_gensym_values(args),
             "count" => {
                 if args.len() != 1 {
@@ -8171,17 +8157,6 @@ impl Evaluator {
         Ok(Value::Str(name))
     }
 
-    fn eval_namespace_value(&self, args: Vec<Value>) -> Result<Value, Clove2Error> {
-        if args.len() != 1 {
-            return Err(Clove2Error::new("namespace expects 1 argument"));
-        }
-        let namespace = namespace_from_value(&args[0])?;
-        Ok(match namespace {
-            Some(value) => Value::Str(value),
-            None => Value::Nil,
-        })
-    }
-
     fn eval_gensym_values(&self, args: Vec<Value>) -> Result<Value, Clove2Error> {
         let prefix = match args.as_slice() {
             [] => "G__".to_string(),
@@ -8315,10 +8290,9 @@ fn eval_body(eval: &mut Evaluator, body: &[AstExpr], env: EnvRef) -> Result<Valu
 
 fn name_from_value(value: &Value) -> Result<String, Clove2Error> {
     match value {
-        Value::Keyword(name) | Value::Symbol(name) => {
-            let (_, tail) = split_namespace(name);
-            Ok(tail.to_string())
-        }
+        // `/` is not a namespace separator (see TASK/DONE/名前空間.md), and the
+        // reader rejects it, so the whole token is the name.
+        Value::Keyword(name) | Value::Symbol(name) => Ok(name.clone()),
         Value::Str(value) => Ok(value.clone()),
         _ => Err(Clove2Error::new("name expects keyword, symbol, or string")),
     }
@@ -8331,30 +8305,6 @@ fn keyword_part(value: &Value) -> Result<String, Clove2Error> {
         _ => Err(Clove2Error::new(
             "keyword expects string, symbol, or keyword",
         )),
-    }
-}
-
-fn namespace_from_value(value: &Value) -> Result<Option<String>, Clove2Error> {
-    match value {
-        Value::Keyword(name) | Value::Symbol(name) => {
-            let (ns, _) = split_namespace(name);
-            Ok(ns.map(|value| value.to_string()))
-        }
-        _ => Err(Clove2Error::new("namespace expects keyword or symbol")),
-    }
-}
-
-fn split_namespace(raw: &str) -> (Option<&str>, &str) {
-    if let Some(idx) = raw.find('/') {
-        let (ns, rest) = raw.split_at(idx);
-        let name = &rest[1..];
-        if ns.is_empty() {
-            (None, name)
-        } else {
-            (Some(ns), name)
-        }
-    } else {
-        (None, raw)
     }
 }
 

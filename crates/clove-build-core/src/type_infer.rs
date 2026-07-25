@@ -1483,9 +1483,6 @@ fn infer_known_call(
     if name == "name" {
         return Some(infer_name_call(args, env, diags, level));
     }
-    if name == "namespace" {
-        return Some(infer_namespace_call(args, env, diags, level));
-    }
     if name == "keyword" {
         if args.len() != 1 && args.len() != 2 {
             diags.push(error_diag("keyword expects 1 or 2 arguments".to_string()));
@@ -8298,31 +8295,6 @@ fn infer_name_call(
     Type::Str
 }
 
-fn infer_namespace_call(
-    args: &[AstExpr],
-    env: &mut TypeEnv,
-    diags: &mut Vec<Diagnostic>,
-    level: NativeLevel,
-) -> Type {
-    if args.len() != 1 {
-        diags.push(error_diag("namespace expects 1 argument".to_string()));
-        return Type::union(vec![Type::Str, Type::Nil]);
-    }
-    let arg_ty = infer_expr(&args[0], env, diags, level);
-    let expected = Type::union(vec![Type::Keyword, Type::Symbol]);
-    if !is_assignable_with_env(&arg_ty, &expected, env) {
-        if is_optional_assignable(&arg_ty, &expected, env) {
-            report_optional_usage(&arg_ty, level, diags, "namespace");
-        } else {
-            diags.push(error_diag(format!(
-                "namespace expects keyword or symbol, got {}",
-                arg_ty
-            )));
-        }
-    }
-    Type::union(vec![Type::Str, Type::Nil])
-}
-
 fn infer_conj_call(
     args: &[AstExpr],
     env: &mut TypeEnv,
@@ -11633,11 +11605,6 @@ fn builtin_type(name: &str) -> Option<Type> {
             params: vec![Type::union(vec![Type::Keyword, Type::Symbol, Type::Str])],
             rest: None,
             ret: Box::new(Type::Str),
-        }),
-        "namespace" => Some(Type::Function {
-            params: vec![Type::union(vec![Type::Keyword, Type::Symbol])],
-            rest: None,
-            ret: Box::new(Type::union(vec![Type::Str, Type::Nil])),
         }),
         "gensym" => Some(Type::Function {
             params: Vec::new(),

@@ -4234,18 +4234,6 @@ impl<'a> Compiler<'a> {
                     repr: CRepr::Expr(format!("clv_name_str({})", s)),
                 })
             }
-            "namespace" => {
-                if args.len() != 1 {
-                    return Err(BackendError {
-                        message: "namespace expects 1 arg".to_string(),
-                    });
-                }
-                let s = self.as_str_expr(&args[0])?;
-                Ok(CValue {
-                    ctype: CType::Str,
-                    repr: CRepr::Expr(format!("clv_namespace_str({})", s)),
-                })
-            }
             "slurp" => {
                 if args.len() != 1 {
                     return Err(BackendError {
@@ -7426,28 +7414,14 @@ static char* clv_gensym(const char* prefix) {
   return out;
 }
 
+/* `/` is not a namespace separator (see TASK/DONE/名前空間.md) and the reader
+   rejects it, so the whole token after any leading ':' is the name. */
 static char* clv_name_str(const char* s) {
   const char* base = s;
   if (*base == ':') {
     base++;
   }
-  const char* slash = strchr(base, '/');
-  if (!slash) {
-    return clv_str_clone(base);
-  }
-  return clv_str_clone(slash + 1);
-}
-
-static char* clv_namespace_str(const char* s) {
-  const char* base = s;
-  if (*base == ':') {
-    base++;
-  }
-  const char* slash = strchr(base, '/');
-  if (!slash) {
-    return clv_str_clone("");
-  }
-  return clv_str_clone_n(base, (size_t)(slash - base));
+  return clv_str_clone(base);
 }
 
 static int64_t clv_now_ns(void) {
@@ -12187,13 +12161,6 @@ mod tests {
                     },
                 },
                 TopLevel::Def {
-                    name: "ns".to_string(),
-                    value: Expr::Call {
-                        callee: "namespace".to_string(),
-                        args: vec![Expr::Symbol("k".to_string())],
-                    },
-                },
-                TopLevel::Def {
                     name: "fmti".to_string(),
                     value: Expr::Call {
                         callee: "format".to_string(),
@@ -12281,7 +12248,7 @@ mod tests {
                 }),
                 TopLevel::Expr(Expr::Call {
                     callee: "err".to_string(),
-                    args: vec![Expr::Symbol("ns".to_string())],
+                    args: vec![Expr::Symbol("n".to_string())],
                 }),
                 TopLevel::Expr(Expr::Call {
                     callee: "println".to_string(),
@@ -12296,7 +12263,6 @@ mod tests {
         assert!(c.source.contains("clv_keyword_from_str"));
         assert!(c.source.contains("clv_symbol_from_str"));
         assert!(c.source.contains("clv_name_str"));
-        assert!(c.source.contains("clv_namespace_str"));
         assert!(c.source.contains("clv_format1_i64"));
         assert!(c.source.contains("clv_format1_str"));
         assert!(c.source.contains("clv_format1_bool"));

@@ -584,11 +584,11 @@ fn frequencies_checks() {
 }
 
 #[test]
-fn name_namespace_checks() {
-    let forms = read_all(
-        "(def a (name :foo/bar))\n(def b (namespace :foo/bar))\n(def c (name :bar))\n(def d (namespace :bar))",
-    )
-    .unwrap();
+fn name_checks() {
+    // `namespace` was removed and `/` is no longer a namespace separator, so
+    // `name` returns the whole token (see TASK/DONE/名前空間.md).
+    let forms =
+        read_all("(def a (name :foo::bar))\n(def c (name :bar))\n(def s (name 'sym))").unwrap();
     let ast = parse_forms(&forms).unwrap();
     let diags = check_program(&ast, NativeLevel::Strict);
     assert!(!diags.iter().any(|d| d.level == DiagnosticLevel::Error));

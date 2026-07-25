@@ -923,7 +923,7 @@
     "origin": "core",
     "examples": [
       "(symbol? (gensym)) ; => true",
-      "(string/starts-with? (str (gensym \"tmp\")) \"tmp\") ; => true"
+      "(string::starts-with? (str (gensym \"tmp\")) \"tmp\") ; => true"
     ]
   },
   {
@@ -1455,18 +1455,8 @@
     "doc": "Return the name part of a keyword/symbol, or the string itself.",
     "origin": "core",
     "examples": [
-      "(name :foo/bar) ; => \"bar\"",
+      "(name :foo::bar) ; => \"foo::bar\"",
       "(name \"baz\") ; => \"baz\""
-    ]
-  },
-  {
-    "name": "namespace",
-    "signature": "namespace x",
-    "doc": "Return the namespace part of a keyword or symbol, or nil if absent.",
-    "origin": "core",
-    "examples": [
-      "(namespace :foo/bar) ; => \"foo\"",
-      "(namespace :bar) ; => nil"
     ]
   },
   {

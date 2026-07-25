@@ -87,6 +87,7 @@ impl Reader {
                 if name.is_empty() {
                     return Err(self.err("empty keyword"));
                 }
+                self.reject_slash_separator(&name)?;
                 let end = self.pos;
                 Ok(Expr::new(ExprKind::Keyword(name), Span::new(start, end)))
             }
@@ -251,6 +252,11 @@ impl Reader {
     }
 
     fn read_foreign_block(&mut self) -> Result<ExprKind, Clove2Error> {
+        if self.peek_char() == Some('{') {
+            return Err(self.err(
+                "tag-less foreign block '${...}' is not supported in the native build yet; use $rb{...} or $py{...}",
+            ));
+        }
         let tag = self.read_token()?;
         if tag.is_empty() {
             return Err(self.err("missing foreign tag"));
@@ -290,9 +296,21 @@ impl Reader {
                 if let Some(literal) = parse_number(token) {
                     return Ok(ExprKind::Literal(literal));
                 }
+                self.reject_slash_separator(token)?;
                 Ok(ExprKind::Symbol(token.to_string()))
             }
         }
+    }
+
+    /// `/` was abolished as a namespace separator; only the bare division
+    /// operator keeps it. Mirrors the phase1 reader so both agree.
+    fn reject_slash_separator(&self, token: &str) -> Result<(), Clove2Error> {
+        if token.contains('/') && token != "/" {
+            return Err(self.err(
+                "namespace separator '/' has been removed; use '::' (e.g. foo::bar). If you meant a regex literal, use #/.../",
+            ));
+        }
+        Ok(())
     }
 
     fn read_token(&mut self) -> Result<String, Clove2Error> {
@@ -406,7 +424,27 @@ impl Reader {
                 let idx = self.read_sharp_index()?;
                 self.expand_sharp_accessor(idx, start)
             }
-            _ => Err(self.err("unsupported reader tag")),
+            '/' => Err(self.err(
+                "regex literal '#/.../' is not supported in the native build yet; use /.../ instead",
+            )),
+            _ => {
+                // Name the tag so the message says "not implemented here" rather
+                // than implying the source is malformed.
+                let tag: String = self
+                    .chars
+                    .get(self.pos..)
+                    .unwrap_or(&[])
+                    .iter()
+                    .take_while(|c| c.is_ascii_alphanumeric() || **c == '-' || **c == '_')
+                    .collect();
+                if tag.is_empty() {
+                    Err(self.err("unsupported reader tag"))
+                } else {
+                    Err(self.err(format!(
+                        "reader tag '#{tag}' is not supported in the native build yet"
+                    )))
+                }
+            }
         }
     }
 

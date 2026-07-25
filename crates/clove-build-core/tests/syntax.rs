@@ -439,3 +439,33 @@ fn rest_param_must_be_last() {
     let err = parse_forms(&forms).unwrap_err();
     assert!(err.to_string().contains("rest parameter must be last"));
 }
+
+#[test]
+fn def_accepts_postfix_type_hint_on_name() {
+    // `name<Type>` is the postfix hint form phase1 supports. phase2 used to keep
+    // the whole token as the binding name, so `(def x<Int> 1)` defined a variable
+    // literally called `x<Int>` and every later reference to `x` failed.
+    let forms = read_all("(def x<Int> 1)").unwrap();
+    let ast = parse_forms(&forms).unwrap();
+    match &ast[0] {
+        TopLevel::Def { name, ty, .. } => {
+            assert_eq!(name, "x", "hint must be stripped from the binding name");
+            assert_eq!(ty.as_ref(), Some(&Type::Int));
+        }
+        other => panic!("expected Def, got {other:?}"),
+    }
+}
+
+#[test]
+fn def_rejects_invalid_postfix_type_hint() {
+    // phase1 reports `invalid type hint 'Int Int'` at parse time; phase2 used to
+    // accept the token and fail much later with "unknown symbol: foo".
+    let forms = read_all("(def foo<Int Int> 1)").unwrap();
+    let err = parse_forms(&forms)
+        .expect_err("invalid type hint must be rejected")
+        .to_string();
+    assert!(
+        err.contains("Int Int"),
+        "error should name the offending annotation, got: {err}"
+    );
+}

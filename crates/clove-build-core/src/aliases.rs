@@ -85,8 +85,6 @@ pub const BUILTIN_ALIASES: &[(&str, &str)] = &[
     ("string::blank?", "blank?"),
     ("string::starts-with?", "starts-with?"),
     ("string::ends-with?", "ends-with?"),
-    ("string/starts-with?", "starts-with?"),
-    ("string/ends-with?", "ends-with?"),
     ("string::split-lines", "split-lines"),
     ("string::lines", "lines"),
     ("string::reverse", "reverse-str"),

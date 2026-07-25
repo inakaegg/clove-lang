@@ -45,3 +45,5 @@ harness = false
 
 [dev-dependencies]
 tempfile = "3"
+# Used by tests/reader_parity.rs to compare the phase1 and phase2 readers.
+clove-build-core = { path = "../clove-build-core" }

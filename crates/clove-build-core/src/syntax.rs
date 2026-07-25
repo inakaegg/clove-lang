@@ -1704,7 +1704,41 @@ fn parse_typed_name(
         let ty = parse_type_expr(ty_expr)?;
         return Ok((trimmed.to_string(), Some(ty), 2));
     }
+    if let Some((base, annot)) = split_postfix_type_hint(name) {
+        let ty = Type::parse(annot)
+            .map_err(|err| Clove2Error::new(format!("invalid type hint '{}': {}", annot, err)))?;
+        return Ok((base.to_string(), Some(ty), 1));
+    }
     Ok((name.clone(), None, 1))
+}
+
+/// Splits the postfix `name<Type>` hint form into `(name, Type)`.
+///
+/// Returns `None` when the token is not that shape — including whole generic
+/// type names such as `Map<Str, Int>`, which have no name part.
+fn split_postfix_type_hint(symbol: &str) -> Option<(&str, &str)> {
+    let open = symbol.find('<')?;
+    if open == 0 || !symbol.ends_with('>') {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (offset, ch) in symbol[open..].char_indices() {
+        match ch {
+            '<' => depth += 1,
+            '>' => {
+                depth -= 1;
+                if depth == 0 && open + offset + 1 != symbol.len() {
+                    // The `<...>` group closes before the end: not a postfix hint.
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        return None;
+    }
+    Some((&symbol[..open], &symbol[open + 1..symbol.len() - 1]))
 }
 
 fn parse_type_expr(expr: &Expr) -> Result<Type, Clove2Error> {
