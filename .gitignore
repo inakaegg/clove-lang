@@ -13,6 +13,7 @@ AGENTS.md
 # export/publication artifacts
 clove.deps.json
 clove.lock.json
+.export-source
 .DS_Store
 # examples/
 .cache/
