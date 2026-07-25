@@ -7,7 +7,6 @@ tmp/
 tmp[0-9]/
 .clj-condo/
 .lsp/
-AGENTS.md
 /packages/vscode-clove/node_modules
 /packages/vscode-clove/dist
 # export/publication artifacts

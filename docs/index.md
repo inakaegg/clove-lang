@@ -55,6 +55,20 @@ Clove is based on a Clojure-style Lisp, and adds more implementation-oriented fe
 
 - [SDL2 examples](../examples/sdl2/README.md)
 
+## Design Notes
+
+Why Clove is the way it is — the reasoning behind the specifications, and the
+alternatives that were dropped.
+
+- [Index of design notes](design-notes/README.md)
+- [No macros](design-notes/no-macros.md)
+- [No `/` as a namespace separator](design-notes/namespace-separator.md)
+- [What was not taken from Clojure](design-notes/differences-from-clojure.md)
+- [Two implementations: interpreter and native build](design-notes/two-phase-implementation.md)
+- [Types stay optional annotations](design-notes/gradual-typing.md)
+- [`mut` and `imut`](design-notes/mutability.md)
+- [Borrowed notation](design-notes/borrowed-syntax.md)
+
 ## Advanced Topics
 
 - [Namespace design notes](advanced/namespaces_design.md)
