@@ -130,7 +130,7 @@ fn parse_source_for_lsp_inner(
     Ok(tagged)
 }
 
-fn split_data_section(source: &str) -> (&str, Option<&str>) {
+pub(crate) fn split_data_section(source: &str) -> (&str, Option<&str>) {
     let bytes = source.as_bytes();
     let mut line_start = 0usize;
     let mut idx = 0usize;

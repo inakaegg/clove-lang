@@ -905,7 +905,24 @@ spacing = "single"
 
 > Python ブロックの整形には未対応です。
 
-## 3. 方針
+## 3. reader タグは展開される
+
+`#json{...}` / `#yaml{...}` は読み込み時に解決されるため、フォーマッタは元のタグではなく
+変換後の Clove データを出力します。
+
+```clojure
+; 入力
+(def config #json{"host": "localhost", "port": 8080})
+
+; 出力
+(def config {"host" "localhost" "port" 8080})
+```
+
+結果は等価で冪等ですが、`#json` / `#yaml` のリテラル自体は保持されません。
+JSON/YAML の形のまま残したい設定は別ファイルに置き、`json::read-file` /
+`yaml::read-file` で読み込んでください。
+
+## 4. 方針
 
 - なるべく “読んでそのまま実行できる” 形にする
 - Reader の糖衣（range, indexer, dot-chain）は **糖衣のまま** 出力する

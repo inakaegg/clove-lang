@@ -12,6 +12,7 @@
     port: 8080
   })
 
+;; #json / #yaml keep keys as strings, so index with "host" (not :host).
 (defn -main []
-  (println "json host =" config-json[:host])
-  (println "yaml host =" config-yaml[:host]))
+  (println "json host =" config-json["host"])
+  (println "yaml host =" config-yaml["host"]))

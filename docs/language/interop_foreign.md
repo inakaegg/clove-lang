@@ -160,6 +160,14 @@ Typical use cases:
 
   * Parses YAML similarly
 
+**Both keep map keys as strings**, so index with `"host"`, not `:host`:
+
+```clojure
+(keys config-yaml)   ; => ["host" "port"]
+config-yaml["host"]  ; => "localhost"
+config-yaml[:host]   ; => nil
+```
+
 **Safety difference:**
 
 * `$rb{}` / `$py{}` etc. are “arbitrary code execution”

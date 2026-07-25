@@ -883,7 +883,24 @@ There is no flag for this: `clove fmt` formats the inside of Ruby blocks
 
 > Python blocks are not reformatted yet.
 
-## 3. Policy
+## 3. Reader tags are expanded
+
+`#json{...}` / `#yaml{...}` are resolved while reading, so the formatter emits the
+resulting Clove data rather than the original tag:
+
+```clojure
+; input
+(def config #json{"host": "localhost", "port": 8080})
+
+; output
+(def config {"host" "localhost" "port" 8080})
+```
+
+The result is equivalent and idempotent, but the `#json` / `#yaml` literal itself is
+not preserved. Keep configuration you want to stay in JSON/YAML form in a separate
+file and load it with `json::read-file` / `yaml::read-file`.
+
+## 4. Policy
 
 - Prefer output that can be “read and run as-is”.
 - Keep reader sugar (range, indexer, dot-chain) **as sugar** in output.

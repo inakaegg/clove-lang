@@ -3,8 +3,8 @@ use crate::compiler::APPLY_SYM;
 use crate::form_to_string::form_to_string;
 use crate::pretty_print::{preformat_foreign_blocks, PrettyOptions};
 use crate::reader::{
-    CommentTrivia, Reader, MAP_REF_SYM, OOP_AS_SYM, OOP_BARE_SYM, OOP_DOT_STAGE_SYM, OOP_INDEX_SYM,
-    OOP_LET_SYM, OOP_NIL_SAFE_SYM, OOP_SYNTAX_SYM,
+    CommentTrivia, Reader, ReaderOptions, MAP_REF_SYM, OOP_AS_SYM, OOP_BARE_SYM, OOP_DOT_STAGE_SYM,
+    OOP_INDEX_SYM, OOP_LET_SYM, OOP_NIL_SAFE_SYM, OOP_SYNTAX_SYM,
 };
 use crate::type_syntax::normalize_type_syntax_forms;
 use crate::types::TypeHintStyle;
@@ -845,7 +845,9 @@ fn ensure_blank_line(out: &mut String) {
 }
 
 fn format_source_once(source: &str, options: &FormatOptions) -> Result<String, String> {
-    let mut reader = Reader::new(source);
+    // Use the language reader defaults so builtin reader tags (`#json` / `#yaml`)
+    // resolve. `ReaderOptions::default()` carries no tag handlers.
+    let mut reader = Reader::new_with_options(source, ReaderOptions::language_defaults(Vec::new()));
     let forms = reader.read_all().map_err(|e| e.to_string())?;
     let forms = normalize_type_syntax_forms(forms, false).map_err(|e| e.to_string())?;
     let string_escapes = reader.take_string_escapes();
@@ -886,16 +888,43 @@ fn format_source_once(source: &str, options: &FormatOptions) -> Result<String, S
 }
 
 pub fn format_source(source: &str, options: FormatOptions) -> Result<String, String> {
+    // A `__DATA__` / `__END__` section is raw payload, not code. The runtime strips it
+    // before parsing, so the formatter must do the same and re-attach it verbatim.
+    let (code, data) = crate::runtime::split_data_section(source);
+    let formatted = format_code_source(code, &options)?;
+    let Some(data) = data else {
+        return Ok(formatted);
+    };
+    let marker = data_section_marker(source).unwrap_or("__DATA__");
+    let mut out = formatted;
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(marker);
+    out.push('\n');
+    out.push_str(data);
+    Ok(out)
+}
+
+/// Returns the literal marker line (`__DATA__` or `__END__`) that opened the data section.
+fn data_section_marker(source: &str) -> Option<&str> {
+    source
+        .lines()
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+        .find(|line| *line == "__DATA__" || *line == "__END__")
+}
+
+fn format_code_source(source: &str, options: &FormatOptions) -> Result<String, String> {
     let source_line_ending = detect_line_ending(source);
-    let mut current = format_source_once(source, &options)?;
+    let mut current = format_source_once(source, options)?;
     for _ in 0..2 {
-        let next = format_source_once(&current, &options)?;
+        let next = format_source_once(&current, options)?;
         if next == current {
-            return Ok(finalize_output(current, &options, Some(source_line_ending)));
+            return Ok(finalize_output(current, options, Some(source_line_ending)));
         }
         current = next;
     }
-    Ok(finalize_output(current, &options, Some(source_line_ending)))
+    Ok(finalize_output(current, options, Some(source_line_ending)))
 }
 
 pub fn format_forms(forms: &[Form], options: &FormatOptions) -> String {

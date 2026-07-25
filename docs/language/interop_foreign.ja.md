@@ -164,6 +164,14 @@ Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby /
 
   * YAML を同様に変換
 
+**どちらもマップのキーは文字列のまま**なので、`:host` ではなく `"host"` で参照します。
+
+```clojure
+(keys config-yaml)   ; => ["host" "port"]
+config-yaml["host"]  ; => "localhost"
+config-yaml[:host]   ; => nil
+```
+
 **安全性の違い:**
 
 * `$rb{}` / `$py{}` などは「任意コード実行」

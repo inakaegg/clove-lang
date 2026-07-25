@@ -371,3 +371,56 @@ fn reader_deref_macro_renders_as_at_symbol() {
         formatted
     );
 }
+
+#[test]
+fn formatter_handles_json_and_yaml_reader_tags() {
+    // Regression: format_source built its Reader with ReaderOptions::default(),
+    // whose tag_handlers map is empty, so documented `#json` / `#yaml` literals
+    // failed with "unknown reader tag" even for the repository's own examples.
+    let src = "(def config\n  #json{\"host\": \"localhost\", \"port\": 8080})\n";
+    let formatted = format_source(src, FormatOptions::default())
+        .expect("formatter should accept the #json reader tag");
+    assert!(
+        formatted.contains("localhost"),
+        "formatted output should keep the parsed data: {formatted}"
+    );
+
+    let yaml_src = "(def config\n  #yaml{\n    host: localhost\n  })\n";
+    let yaml_formatted = format_source(yaml_src, FormatOptions::default())
+        .expect("formatter should accept the #yaml reader tag");
+    assert!(
+        yaml_formatted.contains("localhost"),
+        "formatted output should keep the parsed data: {yaml_formatted}"
+    );
+}
+
+#[test]
+fn pretty_print_handles_json_reader_tag() {
+    // Same defect in pretty_print_source, which backs `pp` on source text.
+    let src = "(def config #json{\"host\": \"localhost\"})\n";
+    let printed = pretty_print_source(src, PrettyOptions::default())
+        .expect("pretty printer should accept the #json reader tag");
+    assert!(
+        printed.contains("localhost"),
+        "pretty printed output should keep the parsed data: {printed}"
+    );
+}
+
+#[test]
+fn formatter_keeps_data_section_verbatim() {
+    // Regression: the runtime splits a `__DATA__` section before parsing, but the
+    // formatter parsed the whole file and failed on the raw data payload.
+    let src = "(def data __DATA__)\ndata\n__DATA__\n{\"a\":1,\"b\":2}\n(unknown-symbol)\n";
+    let formatted = format_source(src, FormatOptions::default())
+        .expect("formatter should accept a __DATA__ section");
+    assert!(
+        formatted.contains("__DATA__\n{\"a\":1,\"b\":2}\n(unknown-symbol)\n"),
+        "data payload must be preserved verbatim: {formatted:?}"
+    );
+    // Formatting must stay idempotent with a data section present.
+    let again = format_source(&formatted, FormatOptions::default()).expect("second format");
+    assert_eq!(
+        formatted, again,
+        "formatting a data section must be idempotent"
+    );
+}

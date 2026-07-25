@@ -1,5 +1,5 @@
 use crate::ast::{Form, FormKind, InterpolatedPart, MapItem};
-use crate::reader::Reader;
+use crate::reader::{Reader, ReaderOptions};
 use crate::types::TypeHintStyle;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -26,7 +26,9 @@ impl Default for PrettyOptions {
 }
 
 pub fn pretty_print_source(source: &str, options: PrettyOptions) -> Result<String, String> {
-    let mut reader = Reader::new(source);
+    // Use the language reader defaults so builtin reader tags (`#json` / `#yaml`)
+    // resolve. `ReaderOptions::default()` carries no tag handlers.
+    let mut reader = Reader::new_with_options(source, ReaderOptions::language_defaults(Vec::new()));
     let forms = reader.read_all().map_err(|e| e.to_string())?;
     let owned_forms;
     let formatted_forms = if options.foreign_formatter.is_some() {
