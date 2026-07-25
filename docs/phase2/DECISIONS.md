@@ -137,7 +137,9 @@ Working rules for measurement and optimization are in
 
 ## Backend for the run path
 
-- `clove --vm` runs on a lightweight VM specific to the native build path; the
+There is a plan for a `run` path that executes without building.
+
+- `run` uses a lightweight VM specific to the native build path; the
   interpreter's VM is not reused
 - The VM is **typed-opcode centric**, minimizing dependence on `Value`
 - `clove build` continues to use native codegen; the VM is for `run` only
@@ -145,6 +147,11 @@ Working rules for measurement and optimization are in
 - The REPL prefers dynamic execution, applying typed opcodes only where they
   optimize
 - `Value` is not used on the build hot path
+
+**It is not reachable from the CLI.** The only caller of
+`crates/clove-build-core/src/vm/` is `crates/clove-build-core/tests/vm.rs`. The
+CLI's `clove --vm` is the **interpreter's** VM (`crates/clove-lang/src/vm/`),
+which is a different thing.
 
 `Value` is limited to:
 

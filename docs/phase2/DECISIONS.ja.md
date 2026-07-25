@@ -123,12 +123,18 @@ Map / Path 系（`get` / `get-in` / `update` / `update-in` / `assoc-in` など�
 
 ## 実行経路（run）のバックエンド
 
-- `clove --vm` はネイティブビルド経路専用の軽量 VM で実行する。インタプリタの VM は流用しない
+ビルドせずに実行する `run` 経路を設ける計画があります。
+
+- `run` はネイティブビルド経路専用の軽量 VM で実行する。インタプリタの VM は流用しない
 - VM は **typed opcode 中心**とし、`Value` 依存を最小化する
 - `clove build` は native codegen を継続し、VM は run 専用とする
 - run は typed opcode を優先しつつ、dynamic fallback を許可する
 - REPL は dynamic を優先し、typed opcode は最適化できる範囲のみ適用する
 - ビルドの hot path では `Value` を使用しない
+
+**CLI からは到達できません。** `crates/clove-build-core/src/vm/` を呼んでいるのは
+`crates/clove-build-core/tests/vm.rs` だけです。CLI の `clove --vm` は
+**インタプリタ側の VM**（`crates/clove-lang/src/vm/`）であり、別物です。
 
 `Value` を使ってよいのは次に限ります。
 
