@@ -53,7 +53,37 @@ English version: [type_hints.md](type_hints.md)
 (def v [1 2]: [Int Int])
 ```
 
-## 2. ヒントは実行時の値を変えない
+## 2. 総称型
+
+型引数は `<...>` の中にカンマ区切りで書きます。どちらのヒント位置でも使えます。
+
+| 型 | 引数 | 例 |
+| --- | --- | --- |
+| `Vec` / `Vector` | 1 | `Vec<Int>` |
+| `Map` | 2 | `Map<Str, Int>` |
+| `Set` | 1 | `Set<Int>` |
+| `Mut` | 1（必須） | `Mut<Vec<Int>>` |
+
+```clojure
+(def scores: Map<Str, Int> {"a" 1 "b" 2})
+(def nested: Map<Str, Vec<Int>> {"a" [1 2]})
+(def tags<Set<Str>> #{"x"})
+```
+
+`<...>` を省略すると引数は `Any` になります。
+
+```clojure
+(def anything: Map {"k" 1})   ; Map<Any, Any> と同じ
+```
+
+引数の個数が合わない場合はエラーです。
+
+```clojure
+(def bad: Map<Str> {"k" 1})
+; => エラー: invalid type hint 'Map<Str>': Map expects two type parameters
+```
+
+## 3. ヒントは実行時の値を変えない
 
 `type` は **実行時の値の型** を返すので、ヒントには追従しません。
 
@@ -72,7 +102,7 @@ English version: [type_hints.md](type_hints.md)
 (add 1.5 2.5) ; => 4.0  ; エラーにならない
 ```
 
-## 3. 何に使われるか
+## 4. 何に使われるか
 
 - `doc` / `describe` の出力
 - LSP の表示と補完

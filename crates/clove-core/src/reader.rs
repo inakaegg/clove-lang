@@ -2626,6 +2626,13 @@ impl Reader {
             let hint = match parse_type_hint(annot) {
                 Ok(hint) => hint,
                 Err(err) => {
+                    // `name<Type>` did not split into a binding plus a hint. The token may
+                    // instead be a whole generic type such as `Map<Str, Int>`, where the
+                    // comma-separated parameters are not a standalone type on their own.
+                    // Leave it as a plain symbol so the type-syntax pass can parse it.
+                    if crate::types::TypeKind::parse(raw.as_str()).is_ok() {
+                        return Ok(Form::new(FormKind::Symbol(raw), span));
+                    }
                     if self.options.allow_invalid_type_hints {
                         return Ok(Form::new(FormKind::Symbol(raw), span));
                     }
@@ -4533,6 +4540,78 @@ mod tests {
         let hint = forms[0].type_hint.as_ref().expect("type hint");
         assert_eq!(hint.kind, TypeKind::Int);
         assert!(hint.from_syntax);
+    }
+
+    /// Reads `(def NAME: <ty> nil)`, runs the type-syntax normalization the
+    /// evaluator and formatter both use, and returns the hint attached to `NAME`.
+    fn colon_hint(ty: &str) -> TypeKind {
+        let src = format!("(def name: {ty} nil)");
+        let mut reader = Reader::new_with_options(&src, ReaderOptions::default());
+        let forms = reader
+            .read_all()
+            .unwrap_or_else(|e| panic!("failed to read {src:?}: {e}"));
+        let forms = crate::type_syntax::normalize_type_syntax_forms(forms, false)
+            .unwrap_or_else(|e| panic!("failed to normalize {src:?}: {e}"));
+        let FormKind::List(items) = &forms[0].kind else {
+            panic!("expected list for {src:?}");
+        };
+        items[1]
+            .type_hint
+            .as_ref()
+            .unwrap_or_else(|| panic!("no type hint for {src:?}"))
+            .kind
+            .clone()
+    }
+
+    #[test]
+    fn colon_annotation_accepts_multi_param_generics() {
+        // Regression: in `expr: TYPE` position the symbol reader treated
+        // `Map<Str, Int>` as the variable `Map` carrying the hint `Str, Int`,
+        // so a comma-separated generic never reached TypeKind::parse.
+        assert_eq!(
+            colon_hint("Map<Str, Int>"),
+            TypeKind::map(TypeKind::Str, TypeKind::Int)
+        );
+        assert_eq!(
+            colon_hint("Map<Str,Int>"),
+            TypeKind::map(TypeKind::Str, TypeKind::Int)
+        );
+    }
+
+    #[test]
+    fn colon_annotation_accepts_nested_multi_param_generics() {
+        assert_eq!(
+            colon_hint("Map<Str, Vec<Int>>"),
+            TypeKind::map(TypeKind::Str, TypeKind::vector(TypeKind::Int))
+        );
+    }
+
+    #[test]
+    fn colon_annotation_keeps_existing_forms() {
+        // Forms that already worked must keep working.
+        assert_eq!(colon_hint("Int"), TypeKind::Int);
+        assert_eq!(colon_hint("Vec<Int>"), TypeKind::vector(TypeKind::Int));
+        assert_eq!(colon_hint(":int"), TypeKind::Int);
+        assert!(matches!(
+            colon_hint("[Int Int] -> Str"),
+            TypeKind::Function { .. }
+        ));
+    }
+
+    #[test]
+    fn binding_position_still_splits_symbol_type_hint() {
+        // `name<Type>` in binding position must still mean "variable + hint",
+        // not a generic type named `name`.
+        let mut reader = Reader::new_with_options("foo<Int>", ReaderOptions::default());
+        let forms = reader.read_all().unwrap();
+        match &forms[0].kind {
+            FormKind::Symbol(name) => assert_eq!(name, "foo<Int>"),
+            other => panic!("expected symbol, got {other:?}"),
+        }
+        assert_eq!(
+            forms[0].type_hint.as_ref().expect("hint").kind,
+            TypeKind::Int
+        );
     }
 }
 

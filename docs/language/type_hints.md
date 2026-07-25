@@ -55,7 +55,37 @@ In `expr: TYPE`, the reader parses the part after `:` as a **type expression**.
 (def v [1 2]: [Int Int])
 ```
 
-## 2. Hints do not change runtime values
+## 2. Generic types
+
+Type parameters go in `<...>`, separated by commas. They work in both hint positions.
+
+| Type | Parameters | Example |
+| --- | --- | --- |
+| `Vec` / `Vector` | 1 | `Vec<Int>` |
+| `Map` | 2 | `Map<Str, Int>` |
+| `Set` | 1 | `Set<Int>` |
+| `Mut` | 1 (required) | `Mut<Vec<Int>>` |
+
+```clojure
+(def scores: Map<Str, Int> {"a" 1 "b" 2})
+(def nested: Map<Str, Vec<Int>> {"a" [1 2]})
+(def tags<Set<Str>> #{"x"})
+```
+
+Omitting `<...>` leaves the parameters as `Any`:
+
+```clojure
+(def anything: Map {"k" 1})   ; same as Map<Any, Any>
+```
+
+Passing the wrong number of parameters is an error:
+
+```clojure
+(def bad: Map<Str> {"k" 1})
+; => error: invalid type hint 'Map<Str>': Map expects two type parameters
+```
+
+## 3. Hints do not change runtime values
 
 `type` reports the **runtime value type**, so it does not follow the hint:
 
@@ -74,7 +104,7 @@ Nor are hints enforced on call:
 (add 1.5 2.5) ; => 4.0  ; no error
 ```
 
-## 3. What hints are used for
+## 4. What hints are used for
 
 - `doc` / `describe` output
 - LSP display and completion
