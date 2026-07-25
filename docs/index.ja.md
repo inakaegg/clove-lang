@@ -38,6 +38,7 @@ Clove は Clojure 風の Lisp を土台にしつつ、
   - [並行/非同期（chan / future / go-loop / scope-loop / async-scope）](language/concurrency.ja.md)
   - [外部連携（foreign blocks / Ruby / Python）](language/interop_foreign.ja.md)
   - [型/enum/match（deftype/defenum/match）](language/types_enum_match.ja.md)
+  - [型ヒント](language/type_hints.ja.md)
   - [標準ライブラリ `std` の使い方](language/stdlib.ja.md)
 
 ## ツール
@@ -56,7 +57,6 @@ Clove は Clojure 風の Lisp を土台にしつつ、
 
 ## 応用トピック
 
-- [型（設計・型ヒント・typed build の前提）](advanced/typing.ja.md)
 - [名前空間設計ノート](advanced/namespaces_design.ja.md)
 - [メモ化と永続キャッシュ（memo / memoize）](advanced/memoization.ja.md)
 - [実行時設定（use / use-syntax）](advanced/runtime_settings.ja.md)

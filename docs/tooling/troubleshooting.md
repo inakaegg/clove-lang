@@ -45,6 +45,6 @@ This page collects common issues and quick fixes.
 ---
 <!-- NAV:START -->
 **Previous:** [VS Code Extension](vscode.md)
-**Next:** [Types (design, type hints, typed build assumptions)](../advanced/typing.md)
+**Next:** [Namespace design notes](../advanced/namespaces_design.md)
 <!-- NAV:END -->
 

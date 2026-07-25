@@ -1,5 +1,6 @@
 /target
 **/target/
+.worktrees/
 **/*.rs.bk
 _ai/
 tmp/
@@ -27,6 +28,3 @@ docs/phase2/_internal/bench_p2/**/bin
 docs/phase2/_internal/bench21/**/bin
 docs/phase2/_internal/bench21/**/records/*.json
 docs/phase2/_internal/bench21/**/records/*.hyperfine.txt
-
-# git worktrees
-.worktrees/

@@ -484,6 +484,6 @@ Clove には `protocol` / `multimethod` が無い代わりに、
 ---
 <!-- NAV:START -->
 **前へ:** [外部連携（foreign blocks / Ruby / Python）](interop_foreign.ja.md)
-**次へ:** [標準ライブラリ `std` の使い方](stdlib.ja.md)
+**次へ:** [型ヒント](type_hints.ja.md)
 <!-- NAV:END -->
 

@@ -473,6 +473,6 @@ In the future, LSP/formatter/doc generation/optimization will further leverage t
 ---
 <!-- NAV:START -->
 **Previous:** [Interop (foreign blocks / Ruby / Python)](interop_foreign.md)
-**Next:** [Standard library `std`](stdlib.md)
+**Next:** [Type hints](type_hints.md)
 <!-- NAV:END -->
 

@@ -172,7 +172,7 @@ Clove は Ruby より Clojure 寄りですが、
 
 ---
 <!-- NAV:START -->
-**前へ:** [型（設計・型ヒント・typed build の前提）](typing.ja.md)
+**前へ:** [トラブルシュート](../tooling/troubleshooting.ja.md)
 **次へ:** [メモ化と永続キャッシュ（memo / memoize）](memoization.ja.md)
 <!-- NAV:END -->
 

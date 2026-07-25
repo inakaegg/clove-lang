@@ -38,6 +38,7 @@ Clove is based on a Clojure-style Lisp, and adds more implementation-oriented fe
   - [Concurrency / async (chan / future / go-loop / scope-loop / async-scope)](language/concurrency.md)
   - [Interop (foreign blocks / Ruby / Python)](language/interop_foreign.md)
   - [Types/enum/match (deftype/defenum/match)](language/types_enum_match.md)
+  - [Type hints](language/type_hints.md)
   - [Standard library `std`](language/stdlib.md)
 
 ## Tooling
@@ -56,7 +57,6 @@ Clove is based on a Clojure-style Lisp, and adds more implementation-oriented fe
 
 ## Advanced Topics
 
-- [Types (design, type hints, typed build assumptions)](advanced/typing.md)
 - [Namespace design notes](advanced/namespaces_design.md)
 - [Memoization and persistent cache (memo / memoize)](advanced/memoization.md)
 - [Runtime settings (use / use-syntax)](advanced/runtime_settings.md)

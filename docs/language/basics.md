@@ -184,7 +184,7 @@ and **argument** types use the postfix `name<Type>` form:
 
 * `defn name <ret-type?> [arg1<Type?> arg2<Type?> ...] body...`
 * Writing an argument type as a bare keyword (`[x :int]`) is **not** valid syntax.
-  See the type-hint appendix in [Typing](../advanced/typing.md).
+  See [Type hints](type_hints.md).
 * `defn` is top-level only (error inside functions).
 * Hints are used for docs (`doc` / `describe`), LSP / completion,
   and the typed `clove build` path. They are not enforced at runtime.

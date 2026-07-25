@@ -179,7 +179,7 @@ JSON helpers: `http-get-json` / `http-post-json`.
 
 ---
 <!-- NAV:START -->
-**Previous:** [Types/enum/match (deftype/defenum/match)](types_enum_match.md)
+**Previous:** [Type hints](type_hints.md)
 **Next:** [CLI (clove / clove fmt / clove build)](../tooling/cli.md)
 <!-- NAV:END -->
 

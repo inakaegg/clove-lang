@@ -174,7 +174,7 @@ vector/list に対して index 以外を `contains?` へ渡すと、`false` で�
 
 ---
 <!-- NAV:START -->
-**前へ:** [型/enum/match（deftype/defenum/match）](types_enum_match.ja.md)
+**前へ:** [型ヒント](type_hints.ja.md)
 **次へ:** [CLI（clove / clove fmt / clove build）](../tooling/cli.ja.md)
 <!-- NAV:END -->
 

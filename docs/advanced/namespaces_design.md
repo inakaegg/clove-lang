@@ -165,7 +165,7 @@ but prefers “guided by conventions and warnings” rather than strict hard err
 
 ---
 <!-- NAV:START -->
-**Previous:** [Types (design, type hints, typed build assumptions)](typing.md)
+**Previous:** [Troubleshooting](../tooling/troubleshooting.md)
 **Next:** [Memoization and persistent cache (memo / memoize)](memoization.md)
 <!-- NAV:END -->
 

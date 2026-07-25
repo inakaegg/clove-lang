@@ -181,7 +181,7 @@ x ; => 2
 
 * `defn name <ret-type?> [arg1<Type?> arg2<Type?> ...] body...`
 * 引数の型を素のキーワードで書く形（`[x :int]`）は構文として **無効** です。
-  [型ヒント](../advanced/typing.ja.md) を参照してください。
+  [型ヒント](type_hints.ja.md) を参照してください。
 * `defn` はトップレベル専用です（関数内で使うとエラー）。
 * 型ヒントはドキュメント（`doc` / `describe`）、LSP / 補完、
   typed な `clove build` 経路で使われます。実行時の型チェックは行いません。

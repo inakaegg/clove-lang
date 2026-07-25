@@ -46,6 +46,6 @@ English version: [troubleshooting.md](troubleshooting.md)
 ---
 <!-- NAV:START -->
 **前へ:** [VS Code 拡張](vscode.ja.md)
-**次へ:** [型（設計・型ヒント・typed build の前提）](../advanced/typing.ja.md)
+**次へ:** [名前空間設計ノート](../advanced/namespaces_design.ja.md)
 <!-- NAV:END -->
 
