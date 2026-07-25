@@ -34,6 +34,7 @@ Common REPL commands:
 
 ```clojure
 :help           ; REPL help
+:intro          ; example one-liners (randomly picked)
 :doc map        ; show doc for a symbol
 :doc ns::name    ; doc for fully-qualified symbol
 :quit / :q      ; quit

@@ -34,6 +34,7 @@ clove
 
 ```clojure
 :help           ; REPL ヘルプ
+:intro          ; サンプルのワンライナー（毎回ランダムに選ばれる）
 :doc map        ; シンボルの doc 表示
 :doc ns::name    ; 名前空間付きシンボルの doc
 :quit / :q      ; 終了

@@ -10,6 +10,7 @@ use clove_core::runtime::RuntimeCtx;
 
 pub mod deps;
 pub mod doc;
+pub mod intro;
 mod native_plugins;
 mod native_policy;
 pub mod pkg;

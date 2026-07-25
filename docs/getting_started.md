@@ -24,6 +24,7 @@ The output binary is usually `target/release/clove`.
 Common REPL commands:
 
 - `:help` ... help
+- `:intro` ... show example one-liners (randomly picked)
 - `:doc SYMBOL` ... documentation
 - `:source PATH` ... set “which file this input came from” (for LSP/error display)
 - `:load FILE` ... evaluate a file
