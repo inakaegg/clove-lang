@@ -1,5 +1,7 @@
 # 名前空間（ns / require）
 
+English version: [namespaces.md](namespaces.md)
+
 - 更新日: 2026-01-14
 
 Clove は **`::` 区切り** の名前空間を基本にします。

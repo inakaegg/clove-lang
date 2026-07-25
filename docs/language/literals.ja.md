@@ -1,5 +1,7 @@
 # リテラル
 
+English version: [literals.md](literals.md)
+
 - 更新日: 2025-12-21
 
 ## 1. 数値

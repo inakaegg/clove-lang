@@ -9,7 +9,7 @@ VS Code extension for the Clove language.
 - Embedded Ruby/Python block selection + Ruby completion
 - Light Table-style theme
 
-> This README is for the VS Code extension. For the language itself, see the root `README.md`, `README.ja.md`, and [docs/](/docs/).
+> This README is for the VS Code extension. For the language itself, see the root `README.md`, `README.ja.md`, and [docs/](../../docs/).
 
 ---
 

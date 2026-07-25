@@ -1,5 +1,7 @@
 # 開発環境セットアップ
 
+English version: [dev_setup.md](dev_setup.md)
+
 - 更新日: 2025-12-21
 
 ## 1. 必要なもの
@@ -22,7 +24,7 @@ cargo build -p clove-lsp
 
 ## 4. VS Code 拡張
 
-拡張の README を参照（[packages/vscode-clove](/packages/vscode-clove)）。
+拡張の README を参照（[packages/vscode-clove](../../packages/vscode-clove)）。
 
 ---
 <!-- NAV:START -->

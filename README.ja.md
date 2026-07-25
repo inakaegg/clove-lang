@@ -65,7 +65,7 @@ clove examples/hello.clv
 ; => [:ok :ok]
 ```
 
-> 詳細: [`docs/language/reader_syntax.md`](docs/language/reader_syntax.md)
+> 詳細: [`docs/language/reader_syntax.ja.md`](docs/language/reader_syntax.ja.md)
 
 ---
 
@@ -95,7 +95,7 @@ xs[1...3]    ; => [11 12]       ; 末尾 exclusive
 xs[(+ 1 2)]  ; => 13  ; indexer 内には式も書ける
 ```
 
-> range、`-foo` ルール、map/set/get-in などの詳細: [`docs/language/indexer.md`](docs/language/indexer.md)
+> range、`-foo` ルール、map/set/get-in などの詳細: [`docs/language/indexer.ja.md`](docs/language/indexer.ja.md)
 
 ---
 
@@ -152,7 +152,7 @@ config["host"] ; => "localhost"
 
 ### 並行処理プリミティブ
 
-`atom` / `chan` / `promise` / `task` / `future` / `agent` を最小構成で用意しています。
+`atom` / `chan` / `promise` / `future` / `spawn`（task）/ `agent` を最小構成で用意しています。
 
 ```clojure
 (def c (chan 1))
@@ -160,14 +160,14 @@ config["host"] ; => "localhost"
 (chan-take! c) ; => :ok
 ```
 
-より踏み込んだ例: [`examples/concurrency/`](examples/concurrency/)、[`docs/language/concurrency.md`](docs/language/concurrency.md)
+より踏み込んだ例: [`examples/concurrency/`](examples/concurrency/)、[`docs/language/concurrency.ja.md`](docs/language/concurrency.ja.md)
 
 ---
 
 ## 次に読む場所
 
-- まず動かす: [`docs/getting_started.md`](docs/getting_started.md)
-- ドキュメントの入口: [`docs/index.md`](docs/index.md)
+- まず動かす: [`docs/getting_started.ja.md`](docs/getting_started.ja.md)
+- ドキュメントの入口: [`docs/index.ja.md`](docs/index.ja.md)
 - 動くサンプル集: [`examples/`](examples/)
 - 例の実行:
 
@@ -209,7 +209,7 @@ clove build examples/build/high_value_report.clv --out target/clove/bin/high_val
 ### clone せずにインストール
 
 ```bash
-cargo install --git https://github.com/inakaegg/clove-lang --locked --package clove-lang --bin clove
+cargo install --git https://github.com/inakaegg/clove-lang --locked clove-lang
 ```
 
 ### Ruby 埋め込みを使う場合の注意
@@ -234,7 +234,7 @@ macOS 付属の `/usr/bin/ruby`（2.6）などの古い Ruby ではビルドに�
 - `clove --repl path/to/file.clv` — ファイル評価後、そのまま REPL に入る
 - `clove fmt ...` — フォーマッタ
 - `clove build ...` — ネイティブバイナリ生成
-- ネイティブプラグインは `plugins/` 同梱が前提（`<project>/plugins` / `~/.clove/plugins` はデフォルト許可、pkg 配下は lock の sha256 一致が必須。詳細は [`docs/tooling/cli.md`](docs/tooling/cli.md)）
+- ネイティブプラグインは `plugins/` 同梱が前提（`<project>/plugins` / `~/.clove/plugins` はデフォルト許可、pkg 配下は lock の sha256 一致が必須。詳細は [`docs/tooling/cli.ja.md`](docs/tooling/cli.ja.md)）
 
 すべてのオプションは `clove --help` / `clove build --help` を参照してください。
 
@@ -262,9 +262,9 @@ macOS 付属の `/usr/bin/ruby`（2.6）などの古い Ruby ではビルドに�
 
 ## Contributing
 
-- 開発環境: [`docs/contributing/dev_setup.md`](docs/contributing/dev_setup.md)
-- テスト: [`docs/contributing/testing.md`](docs/contributing/testing.md)
-- リポジトリ構成: [`docs/contributing/repo_layout.md`](docs/contributing/repo_layout.md)
+- 開発環境: [`docs/contributing/dev_setup.ja.md`](docs/contributing/dev_setup.ja.md)
+- テスト: [`docs/contributing/testing.ja.md`](docs/contributing/testing.ja.md)
+- リポジトリ構成: [`docs/contributing/repo_layout.ja.md`](docs/contributing/repo_layout.ja.md)
 
 ---
 

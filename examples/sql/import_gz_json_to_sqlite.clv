@@ -1,4 +1,4 @@
-(ns examples::import_gz_json_to_sqlite)
+(ns examples::sql::import_gz_json_to_sqlite)
 
 (require clove-sqlite)
 (require clove-io-compress)

@@ -1,5 +1,7 @@
 # 制御構文（special forms）
 
+English version: [control_flow.md](control_flow.md)
+
 - 更新日: 2026-01-14
 
 Clove は一部の構文を special form として評価器が直接処理します。

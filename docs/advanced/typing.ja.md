@@ -1,5 +1,7 @@
 # HM 型推論とメタデータの同期方針
 
+English version: [typing.md](typing.md)
+
 Clove では `clove-core::fn_meta` に各関数のシグネチャ（`FnOverload` / `TypeKind`）を登録しつつ、  
 HM ベースの型推論（`typing::infer`）用には別途 `prelude_env()` で型スキームを手書きしています。  
 この二重管理は以下の問題を引き起こします。
@@ -77,14 +79,14 @@ Clove の Reader は式の末尾に型ヒントを付けられます。
 
 のための情報で、実行時チェックを強制するものではありません。
 
-## 付録: `clove build --opt=typed`
+## 付録: 型ヒントと `clove build`
 
-typed build は typed IR から Rust コード生成を行う実験機能です。
+`clove build` は、対応済みのサブセットを typed IR へ落として C を生成します。
+型ヒントはこの lowering に使われますが、**`--opt` のような切り替えはありません**。
+typed 経路が唯一の build 経路で、未対応の構文はインタプリタへフォールバックせず
+build 時にエラーになります。
 
-- 互換性が薄い箇所は WARNING が出ます
-- strict モードでは警告がエラーになります
-
-ツール側の仕様は [Build](../tooling/build.ja.md) を参照。
+現在のオプション一覧は [Build](../tooling/build.ja.md) を参照してください。
 
 ---
 <!-- NAV:START -->

@@ -24,7 +24,7 @@ cargo build -p clove-lsp
 
 ## 4. VS Code extension
 
-See the extension README ([packages/vscode-clove](/packages/vscode-clove)).
+See the extension README ([packages/vscode-clove](../../packages/vscode-clove)).
 
 ---
 <!-- NAV:START -->

@@ -72,12 +72,19 @@ Example:
 ```clojure
 (contains? {:a 1} :a)     ; => true
 (contains? [:a :b] 1)     ; => true
-(contains? [:a :b] :a)    ; => ERROR (not an index)
 
 (includes? [:a :b] :a)    ; => true
 (includes? #{:a :b} :a)   ; => true
 (includes? {:a 1} :a)     ; => true
 (includes? "clove" "lo")  ; => true
+```
+
+Passing a non-index to `contains?` on a vector/list raises instead of returning `false`:
+
+```clojure
+(contains? [:a :b] :a)
+; => error: expected index (Int) for contains? on vector/list
+;    (use includes? to test membership by value)
 ```
 
 ## Sets (Clojure `clojure.set` equivalent)

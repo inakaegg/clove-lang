@@ -1,5 +1,7 @@
 # デストラクチャリング
 
+English version: [destructuring.md](destructuring.md)
+
 - 更新日: 2025-12-21
 
 Clove の `let` と `fn` は Clojure 風のデストラクチャリングをサポートします。

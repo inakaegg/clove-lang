@@ -1,5 +1,7 @@
 # トラブルシューティング
 
+English version: [troubleshooting.md](troubleshooting.md)
+
 よくある問題と簡単な対処をまとめます。
 
 ## 1. REPL / 評価の問題

@@ -45,7 +45,7 @@ Clove is based on a Clojure-style Lisp, and adds more implementation-oriented fe
 - [CLI (clove / clove fmt / clove build)](tooling/cli.md)
 - [Package management (Phase1)](packages.md)
 - [Formatter (fmt / rubocop/syntax_tree)](tooling/formatter.md)
-- [Build (--opt=typed / --static / embed)](tooling/build.md)
+- [Build (`clove build`)](tooling/build.md)
 - [LSP (clove-lsp)](tooling/lsp.md)
 - [VS Code Extension](tooling/vscode.md)
 - [Troubleshooting](tooling/troubleshooting.md)
@@ -67,6 +67,7 @@ Clove is based on a Clojure-style Lisp, and adds more implementation-oriented fe
 - [Repository layout](contributing/repo_layout.md)
 - [Testing policy](contributing/testing.md)
 - [How to write docs](contributing/docs_style.md)
+- [Code style (release-facing)](contributing/code_style.md)
 
 ## FAQ / Glossary
 

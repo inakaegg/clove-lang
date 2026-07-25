@@ -1,5 +1,7 @@
 # 並行 / 非同期
 
+English version: [concurrency.md](concurrency.md)
+
 - 更新日: 2026-01-14
 
 Clove には、ゲームやツール制作で使える “軽量な並行プリミティブ” が入っています。
@@ -61,14 +63,15 @@ Clove には、ゲームやツール制作で使える “軽量な並行プリ�
 
 ## 3. timeout
 
-`timeout` は Duration か ms(int) を受け取る “通知チャネル” を返します。
+`timeout` は、指定ミリ秒後に **close される** チャネルを返します。
+そのため take の結果は `nil` です。重要なのは「何が返るか」ではなく「いつ返るか」です。
 
 ```clojure
 (def t (timeout 100))
-(<!! t) ; => :timeout など
+(<!! t) ; => nil（約 100ms 後に返る）
 ```
 
-※ 返す値は実装に準拠します。詳細は `:doc timeout`。
+主な使い道は `select` の 1 ケースとして渡すことです（後述）。
 
 ## 4. task / future / promise
 
@@ -76,7 +79,7 @@ Clove には、ゲームやツール制作で使える “軽量な並行プリ�
 
 ```clojure
 (def t (spawn (fn []
-               (sleep-ms 10)
+               (sleep 10ms)
                42)))
 @t
 ```
@@ -85,7 +88,7 @@ Clove には、ゲームやツール制作で使える “軽量な並行プリ�
 
 ```clojure
 (def f (future (fn []
-                (sleep-ms 10)
+                (sleep 10ms)
                 42)))
 @f
 ```
@@ -108,7 +111,7 @@ Clove には、ゲームやツール制作で使える “軽量な並行プリ�
   (go-loop [i 0]
     (when (< i 3)
       (println "tick" i)
-      (sleep-ms 10)
+      (sleep 10ms)
       (recur (inc i)))))
 @t
 ```
@@ -126,13 +129,34 @@ agent は “状態を持つワーカー” です。
 
 ## 6. select
 
-複数のチャネルから “どれかが先に届いたもの” を受け取ります。
+複数のチャネル操作を競わせ、“先に準備できたもの” を処理します。
+
+`select` は **ケースのベクタ**と、省略可能なオプションマップを取ります。
+`(select cases)` / `(select cases opts)` の形です。
+
+- ケースはチャネル（take）か `[:put chan value]`（put）のどちらかです。
+- 戻り値は take なら `[value chan]`、put なら `[true chan]`、
+  どれも準備できておらず `:default` を渡した場合は `[default nil]` です。
+- `opts` は `{:timeout duration :default value}` を受け付けます。`:default` を渡すと
+  ブロックしない呼び出しになります。
 
 ```clojure
-(select
-  [c1 (fn [v] [:c1 v])]
-  [c2 (fn [v] [:c2 v])])
+(def c1 (chan 1))
+(def c2 (chan 1))
+(chan-put! c2 :b)
+
+(let [[v ch] (select [c1 c2])]
+  (cond
+    (= ch c1) [:c1 v]
+    (= ch c2) [:c2 v]))
+; => [:c2 :b]
+
+(select [c1] {:default :idle}) ; => [:idle nil]
+(select [[:put c1 :ok]])       ; => [true #<chan ...>]
 ```
+
+`async::scope-select` はキャンセル対応版で、現在の async-scope の cancel チャネルも
+同時に監視し、キャンセルが勝った場合は `:cancelled` を返します。
 
 ## 7. cancellation
 
@@ -146,14 +170,20 @@ agent は “状態を持つワーカー” です。
 `async-scope` は **子タスク群 + main-body** をまとめ、
 main-body が終わったら “キャンセル” を流すことで子を片付けます。
 
+評価結果は body の値ではなく **スコープハンドル** です。
+`:cancel!` / `:await` / `:cancelled?` / `:cancel-chan` と観測用キーを持つ map が返るので、
+body の値を取り出すには `:await` を呼びます。
+
 ```clojure
-(async-scope
-  [(future (fn []
-             (loop []
-               (when (not (cancelled?))
-                 (sleep-ms 10)
-                 (recur)))))]
-  42)
+(let [{:keys [await]}
+      (async-scope
+        [(future (fn []
+                   (loop []
+                     (when (not (cancelled?))
+                       (sleep 10ms)
+                       (recur)))))]
+        42)]
+  (await))
 ;; => 42
 ```
 
@@ -169,14 +199,17 @@ main-body が終わったら “キャンセル” を流すことで子を片�
 `async::scope-loop` は同義の別名です。
 
 ```clojure
-(async-scope
-  [(future (fn []
-             (scope-loop [i 0]
-               (when (< i 3)
-                 (println "child" i)
-                 (sleep-ms 10)
-                 (recur (inc i))))))]
-  42)
+(let [{:keys [await]}
+      (async-scope
+        [(future (fn []
+                   (scope-loop [i 0]
+                     (when (< i 3)
+                       (println "child" i)
+                       (sleep 10ms)
+                       (recur (inc i))))))]
+        42)]
+  (await))
+;; => 42
 ```
 
 ## 10. `pmap` / `pfilter`

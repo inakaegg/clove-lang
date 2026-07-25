@@ -1,5 +1,7 @@
 # ドキュメントの書き方
 
+English version: [docs_style.md](docs_style.md)
+
 - 更新日: 2025-12-21
 
 ## 1. 基本
@@ -12,7 +14,7 @@
 
 - REPL でコピペできる
 - 余計な前提（別ファイル）に依存しない
-- OOP examples は [data/clove_docs/clove-docs.json](/data/clove_docs/clove-docs.json) の examples から自動生成される
+- OOP examples は [data/clove_docs/clove-docs.json](../../data/clove_docs/clove-docs.json) の examples から自動生成される
 
 ## 3. 記法
 
@@ -28,6 +30,6 @@
 ---
 <!-- NAV:START -->
 **前へ:** [テスト方針](testing.ja.md)
-**次へ:** [FAQ](../faq.ja.md)
+**次へ:** [コードスタイル（公開向け）](code_style.ja.md)
 <!-- NAV:END -->
 

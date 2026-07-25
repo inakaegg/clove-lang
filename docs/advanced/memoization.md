@@ -40,7 +40,7 @@ This document describes their behavior and how to choose between them.
 ### 2.1 Basic usage
 
 ```clojure
-(defn fib :int [n :int]
+(defn fib :int [n<Int>]
   (if (< n 2)
     n
     (+ (fib (- n 1))

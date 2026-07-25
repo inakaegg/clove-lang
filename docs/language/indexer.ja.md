@@ -1,5 +1,7 @@
 # ブラケット indexer（`[]`）
 
+English version: [indexer.md](indexer.md)
+
 - 更新日: 2025-12-21
 
 Clove の **indexer** は Reader の構文糖で、配列/文字列/map/set/ネスト構造へのアクセスを短く書けます。

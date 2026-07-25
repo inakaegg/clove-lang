@@ -1,5 +1,7 @@
 # メモ化と永続キャッシュ (`memo` / `memoize`)
 
+English version: [memoization.md](memoization.md)
+
 Clove には「関数の結果をキャッシュする」ための仕組みとして
 
 * `memoize` … プロセス内メモリだけに保持するシンプルなメモ化
@@ -42,7 +44,7 @@ Clove には「関数の結果をキャッシュする」ための仕組みと�
 ### 2.1 基本的な使い方
 
 ```clojure
-(defn fib :int [n :int]
+(defn fib :int [n<Int>]
   (if (< n 2)
     n
     (+ (fib (- n 1))

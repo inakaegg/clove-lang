@@ -63,14 +63,15 @@ Clove includes “lightweight concurrency primitives” useful for games and too
 
 ## 3. timeout
 
-`timeout` returns a “notification channel” that becomes ready after Duration or ms(int).
+`timeout` returns a channel that **closes** after the given number of milliseconds.
+Taking from it therefore yields `nil` — the point is *when* the take returns, not what.
 
 ```clojure
 (def t (timeout 100))
-(<!! t) ; => :timeout, etc.
+(<!! t) ; => nil (returns after ~100ms)
 ```
 
-Note: return value follows implementation. See `:doc timeout`.
+It is mostly used as one case of a `select` (see below).
 
 ## 4. task / future / promise
 
@@ -78,7 +79,7 @@ Note: return value follows implementation. See `:doc timeout`.
 
 ```clojure
 (def t (spawn (fn []
-               (sleep-ms 10)
+               (sleep 10ms)
                42)))
 @t
 ```
@@ -87,7 +88,7 @@ Note: return value follows implementation. See `:doc timeout`.
 
 ```clojure
 (def f (future (fn []
-                (sleep-ms 10)
+                (sleep 10ms)
                 42)))
 @f
 ```
@@ -110,7 +111,7 @@ It returns a `task`.
   (go-loop [i 0]
     (when (< i 3)
       (println "tick" i)
-      (sleep-ms 10)
+      (sleep 10ms)
       (recur (inc i)))))
 @t
 ```
@@ -128,13 +129,34 @@ An agent is a “stateful worker”.
 
 ## 6. select
 
-Receive from “whichever arrives first” among multiple channels.
+Race several channel operations and act on “whichever is ready first”.
+
+`select` takes a **vector of cases** and an optional option map:
+`(select cases)` / `(select cases opts)`.
+
+- A case is either a channel (take) or `[:put chan value]` (put).
+- It returns `[value chan]` for a take, `[true chan]` for a put,
+  and `[default nil]` when nothing is ready and `:default` was given.
+- `opts` accepts `{:timeout duration :default value}`. Passing `:default` makes
+  the call non-blocking.
 
 ```clojure
-(select
-  [c1 (fn [v] [:c1 v])]
-  [c2 (fn [v] [:c2 v])])
+(def c1 (chan 1))
+(def c2 (chan 1))
+(chan-put! c2 :b)
+
+(let [[v ch] (select [c1 c2])]
+  (cond
+    (= ch c1) [:c1 v]
+    (= ch c2) [:c2 v]))
+; => [:c2 :b]
+
+(select [c1] {:default :idle}) ; => [:idle nil]
+(select [[:put c1 :ok]])       ; => [true #<chan ...>]
 ```
+
+`async::scope-select` is the cancel-aware variant: it also watches the current
+async-scope cancel channel and returns `:cancelled` when cancellation wins.
 
 ## 7. cancellation
 
@@ -148,14 +170,20 @@ These are especially important inside `async-scope`.
 `async-scope` groups **child tasks + main body**,
 and when the main body finishes, it signals cancel to clean up children.
 
+It evaluates to a **scope handle**, not to the body value:
+a map with `:cancel!` / `:await` / `:cancelled?` / `:cancel-chan` plus
+observability keys. Call `:await` to get the body value.
+
 ```clojure
-(async-scope
-  [(future (fn []
-             (loop []
-               (when (not (cancelled?))
-                 (sleep-ms 10)
-                 (recur)))))]
-  42)
+(let [{:keys [await]}
+      (async-scope
+        [(future (fn []
+                   (loop []
+                     (when (not (cancelled?))
+                       (sleep 10ms)
+                       (recur)))))]
+        42)]
+  (await))
 ;; => 42
 ```
 
@@ -171,14 +199,17 @@ and when the main body finishes, it signals cancel to clean up children.
 `async::scope-loop` is an alias.
 
 ```clojure
-(async-scope
-  [(future (fn []
-             (scope-loop [i 0]
-               (when (< i 3)
-                 (println "child" i)
-                 (sleep-ms 10)
-                 (recur (inc i))))))]
-  42)
+(let [{:keys [await]}
+      (async-scope
+        [(future (fn []
+                   (scope-loop [i 0]
+                     (when (< i 3)
+                       (println "child" i)
+                       (sleep 10ms)
+                       (recur (inc i))))))]
+        42)]
+  (await))
+;; => 42
 ```
 
 ## 10. `pmap` / `pfilter`

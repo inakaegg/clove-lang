@@ -1,4 +1,4 @@
-(ns examples::interop::ruby-basic)
+(ns examples::interop::ruby_basic)
 
 (defn ruby-version []
   $rb{

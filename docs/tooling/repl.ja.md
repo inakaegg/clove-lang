@@ -1,5 +1,7 @@
 # REPL ガイド
 
+English version: [repl.md](repl.md)
+
 - 更新日: 2026-01-14
 
 Clove の REPL は “評価 + 補完 + doc 表示” を統合した対話環境です。

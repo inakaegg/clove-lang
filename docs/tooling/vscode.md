@@ -3,7 +3,7 @@
 Japanese version: [vscode.ja.md](vscode.ja.md)
 
 This document summarizes features and usage of the VS Code extension in
-[packages/vscode-clove](/packages/vscode-clove).
+[packages/vscode-clove](../../packages/vscode-clove).
 
 * Syntax highlighting
 * Structural S-expression selection (expand / shrink)
@@ -12,7 +12,7 @@ This document summarizes features and usage of the VS Code extension in
 * Embedded Ruby / Python support
 * Light Table–style theme
 
-See also [packages/vscode-clove/README.md](/packages/vscode-clove/README.md) for the extension README.
+See also [packages/vscode-clove/README.md](../../packages/vscode-clove/README.md) for the extension README.
 
 ---
 
@@ -84,14 +84,23 @@ Integrates VS Code format with `clove fmt`.
 
 * On “Format Document”:
 
-  1. Read document content
-  2. Invoke configured command (default: `clove`) with `fmt --stdin --indent <indentWidth>`
-  3. Replace document with stdout
+  1. Read document content (or each selected range)
+  2. Run `clove fmt --stdin` — the `clove` on `PATH`, with no extra flags,
+     so `clovefmt.toml` decides indent and width
+  3. Replace the document with stdout; on failure the document is left untouched
 
-Extension settings:
+`Clove: Formatter Preview` (`clove.formatterPreview`) shows the before/after diff
+without modifying the document.
 
-* `clove.format.command` ... command to run (`clove` / absolute path)
-* `clove.format.indentWidth` ... indent hint (default 2)
+Extension settings (all current keys):
+
+* `clove.lsp.serverPath` ... `clove-lsp` path or command name (default `"clove-lsp"`, `~` expanded)
+* `clove.suggest.autoShowDocumentation` ... auto-open the completion docs pane (default `true`)
+* `clove.selection.hyphenExpansion` ... `segment` / `full` for hyphenated symbol selection
+* `clove.refactor.access.preferKeywordChain` ... prefer `m:kw` in access refactors (default `true`)
+
+There is no setting for the formatter command or indent width; adjust indent via
+`clovefmt.toml` instead.
 
 ---
 
@@ -259,13 +268,34 @@ Notes:
 * Formatting fails:
 
   * Try `clove fmt --stdin` in a terminal to see the error
-  * Check `clove.format.command` path
+  * Make sure `clove` is on the `PATH` that VS Code sees
+* Completion / hover / go-to-definition do not work:
+
+  * Make sure `clove-lsp` is installed and reachable, or set `clove.lsp.serverPath`
+  * Check the **“Clove LSP”** output channel for startup logs
 
 ---
 
-## 8. Future extensions
+## 8. LSP and refactor commands
 
-* LSP server integration (completion / go-to-definition / hover, etc.)
+The extension launches `clove-lsp` for completion, hover, go-to-definition, and
+signature help, and adds access-syntax refactors on top of it.
+
+* `Clove: Jump to Matching Bracket` (`clove.jumpToMatchingBracket`, `Ctrl+Shift+\`)
+* `Clove: Formatter Preview` (`clove.formatterPreview`)
+* `Clove: Refactor - Rewrite to Shortest Access` (`clove.refactor.shortestAccess`)
+* `Clove: Refactor - Rewrite to Canonical Access` (`clove.refactor.canonicalAccess`)
+* `Clove: Refactor - Toggle S-exp / OOP (Safe)` (`clove.refactor.toggleOop`)
+* `Clove: Refactor - Toggle Access Syntax` (`clove.refactor.toggleAccess`)
+
+For the full command table, requirements, and behavior notes see
+[packages/vscode-clove/README.md](../../packages/vscode-clove/README.md)
+and [LSP (clove-lsp)](lsp.md).
+
+---
+
+## 9. Future extensions
+
 * Task runner integration for `clove build` / `clove test`
 * Language server for embedded Python
 * REPL variable sync and inline value display

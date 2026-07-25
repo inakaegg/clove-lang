@@ -65,7 +65,9 @@ See [Formatter](tooling/formatter.md).
 ./target/release/clove build path/to/app.clv
 ```
 
-This generates a Rust project under `build/`, and you can run `cargo build --release` to produce an executable.
+This compiles the script through the C backend and emits a native binary at
+`target/clove/bin/<file-stem>`. Use `--out PATH` to choose a different path.
+A working system C compiler is required.
 
 See [Build](tooling/build.md).
 

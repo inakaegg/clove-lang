@@ -1,5 +1,7 @@
 # テスト方針
 
+English version: [testing.md](testing.md)
+
 - 更新日: 2025-12-21
 
 ## 1. Rust のテスト

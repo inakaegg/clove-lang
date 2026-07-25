@@ -13,3 +13,9 @@ This document captures release-facing language rules for the public repository.
 
 - Public releases should be readable by a wider audience.
 - Consistent language in code and CLI improves discoverability and support.
+
+---
+<!-- NAV:START -->
+**Previous:** [How to write docs](docs_style.md)
+**Next:** [FAQ](../faq.md)
+<!-- NAV:END -->

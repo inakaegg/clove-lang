@@ -1,6 +1,8 @@
 # VS Code 拡張
 
-このドキュメントでは、[packages/vscode-clove](/packages/vscode-clove) に含まれる
+English version: [vscode.md](vscode.md)
+
+このドキュメントでは、[packages/vscode-clove](../../packages/vscode-clove) に含まれる
 VS Code 拡張の機能と使い方をまとめます。
 
 * シンタックスハイライト
@@ -10,7 +12,7 @@ VS Code 拡張の機能と使い方をまとめます。
 * 埋め込み Ruby / Python サポート
 * Light Table 風テーマ
 
-拡張そのものの README は [packages/vscode-clove/README.md](/packages/vscode-clove/README.md) も参照してください。
+拡張そのものの README は [packages/vscode-clove/README.md](../../packages/vscode-clove/README.md) も参照してください。
 
 ---
 
@@ -87,15 +89,23 @@ VS Code のフォーマット機能と `clove fmt` を連携させています�
 
 * 「Format Document」実行時:
 
-  1. ドキュメントの中身を取得
-  2. 設定されたコマンド（デフォルト: `clove`）に
-     `fmt --stdin --indent <indentWidth>` を渡す
-  3. 標準出力に返ってきたコードで置き換える
+  1. ドキュメント全体（選択がある場合は各選択範囲）を取得
+  2. `PATH` 上の `clove` を `clove fmt --stdin` として実行する。
+     追加フラグは渡さないため、インデントや行幅は `clovefmt.toml` が決める
+  3. 標準出力に返ってきたコードで置き換える。失敗時はドキュメントを変更しない
 
-拡張設定例:
+`Clove: Formatter Preview`（`clove.formatterPreview`）で、ドキュメントを変更せずに
+整形前後の差分を確認できます。
 
-* `clove.format.command` … フォーマットに使うコマンド (`clove` / 絶対パスなど)
-* `clove.format.indentWidth` … 幅のヒント（デフォルト 2）
+拡張設定（現状の全キー）:
+
+* `clove.lsp.serverPath` … `clove-lsp` のパスまたはコマンド名（既定 `"clove-lsp"`、`~` 展開あり）
+* `clove.suggest.autoShowDocumentation` … 補完のドキュメントペインを自動表示（既定 `true`）
+* `clove.selection.hyphenExpansion` … ハイフン付きシンボルの選択単位（`segment` / `full`）
+* `clove.refactor.access.preferKeywordChain` … アクセス構文の refactor で `m:kw` を優先（既定 `true`）
+
+フォーマッタのコマンドやインデント幅を指定する設定はありません。インデントは
+`clovefmt.toml` で調整してください。
 
 ---
 
@@ -265,13 +275,34 @@ Light Table 風の配色（括弧レインボー含む）を適用するには�
 * フォーマットが失敗する:
 
   * `clove fmt --stdin` を別途ターミナルで試し、エラー内容を確認
-  * `clove.format.command` のパス設定を確認
+  * VS Code から見える `PATH` に `clove` があるか確認
+* 補完 / hover / go-to-definition が効かない:
+
+  * `clove-lsp` が導入され起動できるか確認するか、`clove.lsp.serverPath` を設定
+  * **「Clove LSP」** 出力チャンネルで起動ログを確認
 
 ---
 
-## 8. 今後の拡張候補
+## 8. LSP と refactor コマンド
 
-* LSP サーバ（補完 / go-to-definition / hover など）の統合
+拡張は補完・hover・go-to-definition・シグネチャヘルプのために `clove-lsp` を起動し、
+その上にアクセス構文の refactor を追加しています。
+
+* `Clove: Jump to Matching Bracket`（`clove.jumpToMatchingBracket`、`Ctrl+Shift+\`）
+* `Clove: Formatter Preview`（`clove.formatterPreview`）
+* `Clove: Refactor - Rewrite to Shortest Access`（`clove.refactor.shortestAccess`）
+* `Clove: Refactor - Rewrite to Canonical Access`（`clove.refactor.canonicalAccess`）
+* `Clove: Refactor - Toggle S-exp / OOP (Safe)`（`clove.refactor.toggleOop`）
+* `Clove: Refactor - Toggle Access Syntax`（`clove.refactor.toggleAccess`）
+
+コマンド一覧・必要条件・挙動の詳細は
+[packages/vscode-clove/README.md](../../packages/vscode-clove/README.md) と
+[LSP（clove-lsp）](lsp.ja.md) を参照してください。
+
+---
+
+## 9. 今後の拡張候補
+
 * `clove build` / `clove test` などのタスクランナー連携
 * 埋め込み Python への言語サーバ接続
 * REPL との変数同期や「現在値のインライン表示」

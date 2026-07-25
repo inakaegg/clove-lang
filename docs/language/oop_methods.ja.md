@@ -1,8 +1,10 @@
 # OOP 新仕様: オブジェクト内メソッド / self / method
 
+English version: [oop_methods.md](oop_methods.md)
+
 このページは OOP 記法（`obj.method(...)`）のうち、
 **オブジェクト内メソッド**と **self 参照**の新仕様だけをまとめたものです。
-チェイン自体の基本は [docs/language/oop_syntax.md](/docs/language/oop_syntax.ja.md) を参照してください。
+チェイン自体の基本は [docs/language/oop_syntax.md](oop_syntax.ja.md) を参照してください。
 
 ## 目的
 

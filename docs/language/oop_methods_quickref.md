@@ -3,7 +3,7 @@
 Japanese version: [oop_methods_quickref.ja.md](oop_methods_quickref.ja.md)
 
 This page summarizes **only the new OOP method syntax**.
-See [docs/language/oop_methods.md](/docs/language/oop_methods.md) for details.
+See [docs/language/oop_methods.md](oop_methods.md) for details.
 
 ## 1. `.foo` call rules
 

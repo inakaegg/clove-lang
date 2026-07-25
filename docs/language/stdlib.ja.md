@@ -1,5 +1,7 @@
 # 標準ライブラリ (`std`) 概要
 
+English version: [stdlib.md](stdlib.md)
+
 Clove には、コア言語とは別に「電池込み」な標準ライブラリ `std` が付属します。`clove run` / REPL では `clove::core` とともに `std` を読み込むことを想定しています。
 
 ## プレリュード
@@ -68,12 +70,19 @@ Clove には、コア言語とは別に「電池込み」な標準ライブラ�
 ```clojure
 (contains? {:a 1} :a)     ; => true
 (contains? [:a :b] 1)     ; => true
-(contains? [:a :b] :a)    ; => ERROR (index ではない)
 
 (includes? [:a :b] :a)    ; => true
 (includes? #{:a :b} :a)   ; => true
 (includes? {:a 1} :a)     ; => true
 (includes? "clove" "lo")  ; => true
+```
+
+vector/list に対して index 以外を `contains?` へ渡すと、`false` ではなくエラーになります。
+
+```clojure
+(contains? [:a :b] :a)
+; => エラー: expected index (Int) for contains? on vector/list
+;    （値の存在判定には includes? を使う）
 ```
 
 ## 集合 (`clojure.set` 相当)

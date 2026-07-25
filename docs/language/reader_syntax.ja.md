@@ -1,5 +1,7 @@
 # Reader / 構文一覧
 
+English version: [reader_syntax.md](reader_syntax.md)
+
 - 更新日: 2026-01-14
 
 このページは「Clove の Reader が読み取れる構文（リテラル、糖衣構文、コメント、引用）」をまとめます。

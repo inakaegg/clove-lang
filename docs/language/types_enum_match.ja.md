@@ -1,5 +1,7 @@
 # 型・enum・match
 
+English version: [types_enum_match.md](types_enum_match.md)
+
 Clove は「まずは動的・マップ中心」で設計された Lisp 方言ですが、  
 `deftype` / `defenum` / `match` を組み合わせることで、軽量な代数的データ型（ADT）風に書けます。
 

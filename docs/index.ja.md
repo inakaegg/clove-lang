@@ -1,5 +1,7 @@
 # Clove ドキュメント
 
+English version: [index.md](index.md)
+
 - 更新日: 2026-01-14
 
 Clove は Clojure 風の Lisp を土台にしつつ、
@@ -43,7 +45,7 @@ Clove は Clojure 風の Lisp を土台にしつつ、
 - [CLI（clove / clove fmt / clove build）](tooling/cli.ja.md)
 - [パッケージ管理（Phase1）](packages.ja.md)
 - [Formatter（fmt / rubocop/syntax_tree）](tooling/formatter.ja.md)
-- [Build（--opt=typed / --static / embed）](tooling/build.ja.md)
+- [Build（`clove build`）](tooling/build.ja.md)
 - [LSP（clove-lsp）](tooling/lsp.ja.md)
 - [VS Code 拡張](tooling/vscode.ja.md)
 - [トラブルシュート](tooling/troubleshooting.ja.md)
@@ -65,6 +67,7 @@ Clove は Clojure 風の Lisp を土台にしつつ、
 - [リポジトリ構成](contributing/repo_layout.ja.md)
 - [テスト方針](contributing/testing.ja.md)
 - [ドキュメントの書き方](contributing/docs_style.ja.md)
+- [コードスタイル（公開向け）](contributing/code_style.ja.md)
 
 ## FAQ / 用語
 

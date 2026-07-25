@@ -45,7 +45,7 @@ Unknown keys are **warned and ignored**. Unsupported `version` is an error.
 
 ### Config example
 
-The same sample is also in [docs/clovefmt.toml](/docs/clovefmt.toml).
+The same sample is also in [docs/clovefmt.toml](../clovefmt.toml).
 
 ```toml
 version = 1
@@ -855,12 +855,33 @@ Below are examples that show “where differences appear”.
 
 ## 2. Formatting foreign blocks
 
-`clove fmt` can choose a foreign formatter via `--lang`.
+There is no flag for this: `clove fmt` formats the inside of Ruby blocks
+(`$rb{...}` and the tag-less `${...}`) automatically.
 
-- `--lang=clove` ... format as Clove
-- `--lang=ruby` ... format as Ruby (may use rubocop / syntax_tree)
+- Requires the `ruby` build feature (on by default).
+- Requires an external Ruby formatter on `PATH`; the first one that works is used:
+  `rubocop`, `bundle exec rubocop`, then `ruby -rsyntax_tree`.
+- If none is available, the block body is left as-is — this is not an error.
 
-> Ruby formatting may require the build feature (`ruby`).
+```clojure
+; input
+(defn f []
+  $rb{
+    x=1
+     y   =2
+    x+y
+  })
+
+; output
+(defn f []
+  ${
+    x = 1
+    y = 2
+    x + y
+  })
+```
+
+> Python blocks are not reformatted yet.
 
 ## 3. Policy
 
@@ -870,6 +891,6 @@ Below are examples that show “where differences appear”.
 ---
 <!-- NAV:START -->
 **Previous:** [Package management (Phase1)](../packages.md)
-**Next:** [Build (--opt=typed / --static / embed)](build.md)
+**Next:** [Build (`clove build`)](build.md)
 <!-- NAV:END -->
 

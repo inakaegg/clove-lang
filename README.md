@@ -153,7 +153,7 @@ config["host"] ; => "localhost"
 
 ### Concurrency primitives
 
-Clove ships a minimal set: `atom` / `chan` / `promise` / `task` / `future` / `agent`.
+Clove ships a minimal set: `atom` / `chan` / `promise` / `future` / `spawn` (task) / `agent`.
 
 ```clojure
 (def c (chan 1))
@@ -211,7 +211,7 @@ extension or LSP client, not from the terminal.
 ### Without cloning
 
 ```bash
-cargo install --git https://github.com/inakaegg/clove-lang --locked --package clove-lang --bin clove
+cargo install --git https://github.com/inakaegg/clove-lang --locked clove-lang
 ```
 
 ### Note for Ruby embedding

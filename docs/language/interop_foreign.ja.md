@@ -1,5 +1,7 @@
 # 外部エンジン埋め込み (Ruby / Python など)
 
+English version: [interop_foreign.md](interop_foreign.md)
+
 Clove の特徴のひとつが「外部言語エンジン」を埋め込めることです。
 Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby / Python などを呼び出せます。
 
@@ -42,7 +44,7 @@ Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby /
 例:
 
 ```clojure
-(ns examples::interop::ruby-basic)
+(ns examples::interop::ruby_basic)
 
 (defn ruby-version []
   $rb{
@@ -50,11 +52,14 @@ Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby /
   })
 
 (defn upcase [s]
-  $rb{String(s).upcase}
+  $rb{String(s).upcase})
 
-(println "Ruby version:" (ruby-version))
-(println (upcase "hello from clove"))
+(defn -main []
+  (println "Ruby version:" (ruby-version))
+  (println (upcase "hello from clove")))
 ```
+
+`clove --main examples/interop/ruby_basic.clv` で実行できます。
 
 ### 2.1 実行モデル
 
@@ -111,7 +116,7 @@ Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby /
 例:
 
 ```clojure
-(ns examples::interop::python-basic)
+(ns examples::interop::python_basic)
 
 (defn py-sqrt [x]
   $py{
@@ -200,248 +205,6 @@ Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby /
 * `#json{}` / `#yaml{}` はコード実行ではなく「データ読み込み」用の reader タグ。
 * デプロイ構成や依存ランタイムの重さも考慮しつつ、
   「Clove で書くべきところ」と「既存言語に任せるところ」を切り分けるのが吉。
-  EOF
-  fi
-
-######################################
-
-# docs/language/concurrency.md
-
-######################################
-if [ -e "docs/language/concurrency.md" ]; then
-echo "[skip] docs/language/concurrency.md already exists"
-else
-echo "[create] docs/language/concurrency.md"
-cat > docs/language/concurrency.md <<'EOF'
-
-# 非同期 / 並行処理
-
-Clove には、Clojure / core.async に影響を受けた非同期・並行プリミティブが
-標準ライブラリとして組み込まれています。
-
-* `atom` … 単一値のスレッドセーフな参照
-* `chan` … メッセージパッシング用チャネル
-* `future` / `promise` … 将来の値
-* `task` … キャンセル可能なジョブ
-* `agent` … actor 風の状態マシン
-* `select` / `timeout` … 複数チャネル待ち
-
-ここではざっくりした使い方とイメージをまとめます。
-
-> 細かい戻り値の型・エラーメッセージは実装に依存します。
-> 以下はおおまかな挙動イメージです。
-
----
-
-## 1. Atom
-
-### 1.1 基本
-
-```clojure
-(def counter (atom 0))
-
-(atom-set! counter 10)         ; reset!
-(atom-update! counter inc)     ; swap!
-(atom-update! counter + 5)     ; => 15 になる
-@counter                        ; deref
-```
-
-主なビルトイン:
-
-* `atom` … 初期値から Atom を作る
-* `atom?` … Atom かどうか
-* `atom-set!` … 値を丸ごと置き換え（`reset!` 相当）
-* `atom-update!` … 関数を使って更新（`swap!` 相当）
-* `add-watch` / `remove-watch` … Atom や agent / promise / task / future の監視者の追加・削除（`atom-add-watch` / `atom-remove-watch` は互換エイリアス）
-* `atom-set-validator!` … validator 関数の設定
-* `deref` / `@` … 中身の取得
-
-### 1.2 例
-
-```clojure
-(defn inc-counter! []
-  (atom-update! counter inc))
-
-(atom-add-watch counter :log
-  (fn [key atom old new]
-    (println "counter changed:" old "->" new)))
-```
-
----
-
-## 2. Channel (`chan`)
-
-### 2.1 基本操作
-
-```clojure
-(def c (chan 1))            ; バッファ 1 のチャネルを作る
-
-(chan-put! c :foo)          ; ブロッキング put
-(def value (chan-take! c))  ; ブロッキング take
-
-(chan-close! c)
-(chan-closed? c)            ; => true
-```
-
-主なビルトイン:
-
-* `chan` … バッファサイズ付きチャネルを作る
-* `chan?`
-* `chan-put!` … 値を書き込む（成功したかどうかを bool で返す）
-* `chan-take!` … 値を読み出す（チャネルが閉じて空なら `nil`）
-* `chan-close!`
-* `chan-closed?`
-
-### 2.2 `timeout` / `select`
-
-`timeout` は、一定時間後に「閉じるチャネル」を返します。
-
-```clojure
-(def t (timeout 500))  ; 500ms 後に閉じるチャネル
-```
-
-`select` は **複数のチャネルからの読み書き** をまとめて待つための関数です。
-
-```clojure
-(select [c1 c2]
-        {:timeout 5s
-         :default :idle})
-```
-
-* 第 1 引数: 「ケース」のコレクション
-
-  * `chan` … そのチャネルからの take
-  * `[:put chan value]` … そのチャネルへの put
-* オプション map（任意）:
-
-  * `:timeout` … Duration または秒数（数値）
-  * `:default` … どのケースもすぐには準備できないときの戻り値
-
-戻り値のイメージ:
-
-* 値を受信した場合: `[value chan]`
-* put が成功した場合: `[true chan]`
-* timeout の場合: `nil` または default 指定に応じた値
-
-`:default` を付けた場合は **非ブロッキング（即時ポーリング）** になり、ケースがすぐに準備できていればそちらを返し、全く準備できていない場合のみ `[default nil]` が返ります。省略した場合は、いずれかのケースが完了するまでブロックします。
-
----
-
-## 3. `spawn` / `task`
-
-`spawn` は、与えた関数を別スレッドで実行し、そのハンドルを `Task` として返します。
-
-```clojure
-(def t (spawn (fn [] (heavy-work))))
-
-(task? t)           ; => true
-(task-done? t)      ; => 実行完了したかどうか
-(task-deref t)      ; => 結果が返ってくる（完了までブロック）
-```
-
-主なビルトイン:
-
-* `spawn` … `(spawn (fn [] ...))` で Task を生成
-* `task?`
-* `task-deref`
-* `task-done?`
-* `task-cancel!`（キャンセルが間に合えば true を返すイメージ）
-* `done?` … promise / task / future / agent をまとめて完了チェックする共通関数
-
----
-
-## 4. Future
-
-`future` は「遅延評価＋バックグラウンド実行」のようなものです。
-
-```clojure
-(def f (future (fn [] (heavy-work))))
-
-(future? f)
-(future-done? f)
-(future-deref f)      ; 完了するまで待って結果を返す
-(future-cancel! f)    ; キャンセルを試みる
-```
-
-* `spawn` / `task` に近いですが、より「値志向」な API を持ちます。
-* 将来 `future-then` / `future-catch` / `future-finally` 的な combinator が増える可能性があります。
-* 完了チェックは `future-done?` のほか `done?` でも共通的に確認できます。
-
----
-
-## 5. Promise
-
-`promise` は「外部から解決される future」です。
-
-```clojure
-(def p (promise))
-
-(spawn
-  (fn []
-    (chan-put! some-chan :ready)
-    (promise-deliver! p 42)))
-
-(def result (promise-deref p)) ; => 42
-```
-
-主なビルトイン:
-
-* `promise` … 空の Promise を作る
-* `promise?`
-* `promise-deref`
-* `promise-deliver!` … 値を解決
-* `promise-error` … エラーで決着したときのメッセージ取得（promise / task / future 共通）
-* `done?` … promise / task / future / agent の完了確認
-
----
-
-## 6. Agent
-
-`agent` は「状態を持ったワーカー」のようなものです。
-
-```clojure
-(def a (agent 0))
-
-(agent-send! a + 1)
-(agent-send! a + 2)
-
-(agent-deref a) ; => 3 （キューが全部処理されていれば）
-```
-
-特徴:
-
-* `atom` と違い、更新は非同期にキューに積まれる
-* 処理は 1 エージェントにつき 1 スレッド（順番は保証される）
-* `agent-error` でエラー状態をチェックできる
-
----
-
-## 7. 設計イメージと使い分け
-
-ざっくりした使い分けのイメージ:
-
-* **atom** … 単純な共有状態。同期的 / 即時更新。
-* **chan** … スレッド間のメッセージパッシング。パイプライン構成。
-* **spawn / task / future** … バックグラウンドで重い処理を回したいとき。
-* **promise** … 「誰かがあとで結果を流し込む」ための箱。
-* **agent** … 状態を持つ actor。ログキューや集約処理など。
-
-Clove のコアは Clojure に近い設計思想を持ちつつ、
-型情報（`deftype` / `defenum`）や Duration リテラルなどと組み合わせて
-「ほどよく型付きの並行コード」を書けるようにすることを目指しています。
-
----
-
-## セキュリティと実行モード
-
-foreign blocks は強力ですが、外部エンジンのロードは実行環境次第で制限されます。
-
-- `clove` 実行時に `--auto-fallback` を付けると、
-  “外部エンジンが使えない場合” に Ruby→Python→Clove の順で代替実行を試みます。
-- `clove build --embed-ruby/--embed-python` は、
-  生成された実行ファイルにエンジンを同梱するためのオプションです（制約あり）。
-
-詳しくは [Build](../tooling/build.ja.md)。
 
 ---
 <!-- NAV:START -->

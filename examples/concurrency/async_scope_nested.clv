@@ -1,4 +1,4 @@
-(ns examples::concurrency::async-scope-nested)
+(ns examples::concurrency::async_scope_nested)
 
 ;; Nested async-scope examples and fail-fast behavior checks.
 

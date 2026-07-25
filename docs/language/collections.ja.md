@@ -1,5 +1,7 @@
 # コレクション
 
+English version: [collections.md](collections.md)
+
 - 更新日: 2026-01-14
 
 Clove の基本コレクションは次の 4 つです。
@@ -26,9 +28,12 @@ vector も index で呼べます。
 ```clojure
 (def v [10 20 30])
 (v 0)      ; => 10
-(v 99)     ; => nil
-(v 99 :d)  ; => :d
+(v 99 :d)  ; => :d   ; 範囲外に既定値を明示した場合
+(v 99)     ; => エラー: index out of bounds
 ```
+
+map の呼び出しと違い、vector の呼び出しは **既定値を省くと範囲外でエラー**になります
+（`nil` は返りません）。既定値を渡すか、`v[99 || :d]` を使ってください。
 
 > `indexer` 構文糖（`v[0]`）と組み合わせると読みやすくなります。
 

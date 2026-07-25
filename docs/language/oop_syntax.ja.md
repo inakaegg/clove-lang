@@ -1,9 +1,11 @@
 # OOP メソッドチェインと Ruby デフォルトタグの扱い
 
+English version: [oop_syntax.md](oop_syntax.md)
+
 - `oop-syntax` はデフォルトで有効。無効にしたい場合は `(use oop-syntax false)`（必要なら再度 `(use oop-syntax true)` でオン）。
 - レシーバ位置は **関数メタ (`{:subject-pos n}` or `:last`) > `$arg` > 引数名推論（`coll`/`xs`/`seq`）** の順で決まる。FnMeta が存在するのに位置が決まらない場合はエラーにする（静かに1へ倒れない）。
 - `:last`（または `-1`）を指定すると、レシーバは「引数リストの末尾」に入る。可変長でも末尾を選びたいときに使う。
-- オブジェクト内メソッド / `method` / `&` self 糖衣は [docs/language/oop_methods.md](/docs/language/oop_methods.ja.md) を参照。
+- オブジェクト内メソッド / `method` / `&` self 糖衣は [docs/language/oop_methods.md](oop_methods.ja.md) を参照。
 - 例（どれもデフォルト設定で動作）:
   - `"a".str("b")` → `"ab"`
   - `{:a 1}.keys` → `[:a]`

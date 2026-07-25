@@ -1,5 +1,7 @@
 # スレッディング / パイプ
 
+English version: [threading.md](threading.md)
+
 - 更新日: 2026-01-14
 
 Clove は Clojure の “threading macro 風” の special form を持ちます。

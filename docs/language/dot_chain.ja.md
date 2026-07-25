@@ -1,5 +1,7 @@
 # dot-chain（`x.(f ?)`）
 
+English version: [dot_chain.md](dot_chain.md)
+
 - 更新日: 2026-01-14
 
 dot-chain は “メソッドチェーン風” の読みやすさのための Reader 構文糖です。

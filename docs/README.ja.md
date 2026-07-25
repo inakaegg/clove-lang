@@ -10,12 +10,12 @@
 
 ## 構成
 
-- [docs/index.md](/docs/index.ja.md) … 目次（入口）
-- [docs/getting_started.md](/docs/getting_started.ja.md) … まず動かす
-- [docs/language/](/docs/language/) … 言語仕様（読書き・評価・構文糖）
-- [docs/tooling/](/docs/tooling/) … CLI / REPL / fmt / build / LSP / VS Code
-- [docs/advanced/](/docs/advanced/) … 設計ノート・将来の型AOTなど
-- [docs/contributing/](/docs/contributing/) … 開発/貢献ガイド
+- [docs/index.md](index.ja.md) … 目次（入口）
+- [docs/getting_started.md](getting_started.ja.md) … まず動かす
+- [docs/language/](language/) … 言語仕様（読書き・評価・構文糖）
+- [docs/tooling/](tooling/) … CLI / REPL / fmt / build / LSP / VS Code
+- [docs/advanced/](advanced/) … 設計ノート・将来の型AOTなど
+- [docs/contributing/](contributing/) … 開発/貢献ガイド
 
 ## ドキュメント運用ルール
 
@@ -23,11 +23,11 @@
 2. 仕様案は **“予定” セクション** に隔離する。
 3. 例は REPL で貼ってすぐ試せる形にする。
 4. 大きい仕様変更（構文・namespace など）は、
-   - [docs/index.md](/docs/index.ja.md) の目次
+   - [docs/index.md](index.ja.md) の目次
    - 影響ページの *互換性/移行* 節
    を同時に更新する。
 
 ## ドキュメント生成物との関係
 
 - API 仕様（関数ごとの細かい説明）は REPL の `:doc` / `doc` を優先。
-- [docs/](/docs/) は「概念/設計/使い方」中心（なぜそうなるか、落とし穴、例）。
+- [docs/](./) は「概念/設計/使い方」中心（なぜそうなるか、落とし穴、例）。

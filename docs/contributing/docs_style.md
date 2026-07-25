@@ -14,7 +14,7 @@ Japanese version: [docs_style.ja.md](docs_style.ja.md)
 
 - Copy/paste runnable in REPL
 - Avoid extra dependencies (other files)
-- OOP examples are generated from examples in [data/clove_docs/clove-docs.json](/data/clove_docs/clove-docs.json)
+- OOP examples are generated from examples in [data/clove_docs/clove-docs.json](../../data/clove_docs/clove-docs.json)
 
 ## 3. Notation
 
@@ -30,6 +30,6 @@ Japanese version: [docs_style.ja.md](docs_style.ja.md)
 ---
 <!-- NAV:START -->
 **Previous:** [Testing policy](testing.md)
-**Next:** [FAQ](../faq.md)
+**Next:** [Code style (release-facing)](code_style.md)
 <!-- NAV:END -->
 

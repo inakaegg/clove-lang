@@ -1,5 +1,7 @@
 # 名前空間設計ノート (`ns` / `require`)
 
+English version: [namespaces_design.md](namespaces_design.md)
+
 このドキュメントは、Clove の名前空間 (`ns`) と `require` 周りの設計メモです。
 
 * Clove の `ns` は Clojure に近いが、実装上の制約や方針が少し異なる
@@ -120,7 +122,7 @@ Clove のランタイム側では
 
 * 探索パス:
 
-  * プロジェクトルート配下（例: `src/` や [examples/](/examples/)）
+  * プロジェクトルート配下（例: `src/` や [examples/](../../examples/)）
   * `CLASSPATH` 的な設定が入る可能性もある（要検討）
 * 1 つの名前空間が別のファイルにも見つかった場合:
 

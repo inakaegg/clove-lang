@@ -1,5 +1,7 @@
 # 用語集
 
+English version: [glossary.md](glossary.md)
+
 - 更新日: 2026-01-14
 
 - **Form**: Reader が読み取った構文木ノード（位置情報つき）

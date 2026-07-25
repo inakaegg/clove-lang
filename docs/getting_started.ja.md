@@ -1,5 +1,7 @@
 # Getting Started
 
+English version: [getting_started.md](getting_started.md)
+
 - 更新日: 2025-12-21
 
 このページは「Clove を起動して、スクリプトを実行して、REPL で試す」までを最短で案内します。
@@ -63,7 +65,8 @@ REPL で使える主なコマンド:
 ./target/release/clove build path/to/app.clv
 ```
 
-`build/` 以下に Rust プロジェクトを生成し、`cargo build --release` で実行可能ファイルを作れます。
+C backend を経由してネイティブバイナリを生成し、`target/clove/bin/<ファイル名>` へ出力します。
+出力先を変えたい場合は `--out PATH` を指定します。実行にはシステムの C コンパイラが必要です。
 
 詳しくは [Build](tooling/build.ja.md)。
 

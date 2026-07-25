@@ -28,9 +28,12 @@ Vectors can be called by index as well.
 ```clojure
 (def v [10 20 30])
 (v 0)      ; => 10
-(v 99)     ; => nil
-(v 99 :d)  ; => :d
+(v 99 :d)  ; => :d   ; out of range with an explicit default
+(v 99)     ; => error: index out of bounds
 ```
+
+Unlike a map call, a vector call **without a default raises** on an out-of-range
+index rather than returning `nil`. Pass a default, or use `v[99 || :d]`.
 
 > Combined with the `indexer` sugar (`v[0]`), it reads nicely.
 

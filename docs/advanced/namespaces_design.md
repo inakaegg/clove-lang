@@ -118,7 +118,7 @@ The runtime side resolves dependencies as follows:
 
 * Search paths:
 
-  * under project root (e.g., `src/` or [examples/](/examples/))
+  * under project root (e.g., `src/` or [examples/](../../examples/))
   * possibly a CLASSPATH-like setting (TBD)
 * If a namespace is found in multiple files:
 

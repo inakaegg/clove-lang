@@ -26,7 +26,7 @@ For children that should not fail-fast, catch exceptions inside and turn them in
       (metrics-loop)
       (catch RuntimeError e
         ;; report without killing the scope
-        (chan-put! events [:metrics-error (str e)]))))
+        (chan-put! events [:metrics-error (str e)])))))
 ```
 
 ## Retry

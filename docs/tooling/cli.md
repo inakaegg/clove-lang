@@ -2,11 +2,15 @@
 
 Japanese version: [cli.ja.md](cli.ja.md)
 
+- Updated: 2026-07-25
+
 This section describes Clove's command-line tools.
 
 * `clove` ... REPL / script execution / one-liner eval
 * `clove fmt` ... formatter
 * `clove build` ... native binary build
+* `clove pkg` ... package management (see [Packages](../packages.md))
+* `clove plugin` ... native plugin helpers (`write-meta`)
 
 > ⚠️ For exact option specs, follow `clove --help` / `clove build --help`.
 > This page focuses on concepts and common patterns.
@@ -168,7 +172,7 @@ plugins/
 Subcommand to format Clove code.
 
 ```bash
-# Format file in-place
+# Format a file (result goes to stdout; the file is not modified)
 clove fmt src/main.clv
 
 # Read from stdin, output to stdout
@@ -199,15 +203,19 @@ clove build path/to/main.clv
 High-level flow:
 
 1. Read Clove source
-2. Generate IR / LUT, etc.
-3. Emit a binary linked with the Rust runtime
+2. Lower it through `clove-build-front`
+3. Generate C with `clove-build-backend-c` and link it against the C runtime
+   (`clove-build-runtime-c`) using the system C compiler
 
-**Common option examples** (subject to change with implementation):
+The default output path is `target/clove/bin/<file-stem>`.
 
-* Output file name: `--output ./target/app`
-* Static link: `--static`, etc.
-* Ruby/Python embed: `--embed-ruby`, `--embed-python`, etc.
-* Optimization level: `--release`-like flag (if available)
+**Options** (the full current set):
+
+* `--out PATH` / `-o`, `--output PATH` — output binary path
+* `--emit-c` — still builds the binary, but prints the generated C file path instead
+
+Legacy options such as `--opt`, `--static`, `--embed-ruby`, and `--embed-python`
+are no longer available. See [Build](build.md).
 
 For the exact option list:
 
@@ -233,7 +241,7 @@ Recommended workflow:
 
 ## 5. Future extensions
 
-* `clove doc` ... generate HTML from [docs/](/docs/)
+* `clove doc` ... generate HTML from [docs/](../)
 * `clove new` ... create project from template
 * `clove test` ... test runner command
 

@@ -3,7 +3,7 @@
 Japanese version: [oop_methods.ja.md](oop_methods.ja.md)
 
 This page focuses on **object-internal methods** and **self references** in OOP syntax.
-For chain basics, see [docs/language/oop_syntax.md](/docs/language/oop_syntax.md).
+For chain basics, see [docs/language/oop_syntax.md](oop_syntax.md).
 
 ## Goal
 

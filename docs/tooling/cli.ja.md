@@ -1,10 +1,16 @@
 # CLI ツール (`clove` / `clove fmt` / `clove build`)
 
+English version: [cli.md](cli.md)
+
+- Updated: 2026-07-25
+
 ここでは Clove のコマンドラインツールについて説明します。
 
 * `clove` … REPL / スクリプト実行 / ワンライナー評価
 * `clove fmt` … フォーマッタ
 * `clove build` … ネイティブバイナリビルド
+* `clove pkg` … パッケージ管理（[パッケージ](../packages.ja.md) を参照）
+* `clove plugin` … ネイティブプラグイン補助（`write-meta`）
 
 > ⚠️ オプションの細かい仕様は `clove --help` / `clove build --help` に従ってください。
 > ここでは概念とよく使うパターンだけを説明します。
@@ -167,7 +173,7 @@ plugins/
 Clove コードを整形するためのサブコマンドです。
 
 ```bash
-# ファイルを直接整形（上書き）
+# ファイルを整形（結果は stdout。ファイルは書き換えない）
 clove fmt src/main.clv
 
 # stdin から読み込み、stdout に出力
@@ -198,15 +204,19 @@ clove build path/to/main.clv
 大まかな流れ:
 
 1. Clove ソースを読み込む
-2. 中間表現 / LUT などを生成
-3. Rust 側のランタイムとリンクしたバイナリを出力
+2. `clove-build-front` で中間表現へ落とす
+3. `clove-build-backend-c` で C を生成し、システムの C コンパイラで
+   C ランタイム（`clove-build-runtime-c`）とリンクしたバイナリを出力
 
-**よくあるオプション例**（実装に応じて変わる可能性があります）:
+既定の出力先は `target/clove/bin/<ファイル名>` です。
 
-* 出力ファイル名指定: `--output ./target/app`
-* 静的リンク関連: `--static` など
-* Ruby/Python 埋め込み: `--embed-ruby`, `--embed-python` など
-* 最適化レベル: `--release` 的なフラグ（あれば）
+**オプション**（現状の全一覧）:
+
+* `--out PATH` / `-o`, `--output PATH` — 出力バイナリのパス
+* `--emit-c` — バイナリは生成した上で、生成された C ファイルのパスを表示する
+
+`--opt` / `--static` / `--embed-ruby` / `--embed-python` などの旧オプションは
+現在は使えません。詳細は [Build](build.ja.md) を参照してください。
 
 正確なオプション一覧は:
 
@@ -234,7 +244,7 @@ clove build --help
 
 ## 5. 今後の拡張候補
 
-* `clove doc` … [docs/](/docs/) を元に HTML を生成するツール
+* `clove doc` … [docs/](../) を元に HTML を生成するツール
 * `clove new` … テンプレートからプロジェクトを生成
 * `clove test` … テスト実行用コマンド
 

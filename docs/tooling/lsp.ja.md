@@ -1,5 +1,7 @@
 # LSP（clove-lsp）
 
+English version: [lsp.md](lsp.md)
+
 - 更新日: 2025-12-21
 
 `clove-lsp` は Clove のための最小 LSP サーバです。
@@ -27,7 +29,7 @@ VS Code 拡張が `clove-lsp` を起動し、`.clv` の解析を行います。
 
 ---
 <!-- NAV:START -->
-**前へ:** [Build（--opt=typed / --static / embed）](build.ja.md)
+**前へ:** [Build（`clove build`）](build.ja.md)
 **次へ:** [VS Code 拡張](vscode.ja.md)
 <!-- NAV:END -->
 

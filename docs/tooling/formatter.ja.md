@@ -1,5 +1,7 @@
 # Formatter
 
+English version: [formatter.md](formatter.md)
+
 - 更新日: 2026-01-14
 
 Clove には 2 種類のフォーマットがあります。
@@ -43,7 +45,7 @@ cat file.clv | clove fmt --stdin
 
 ### 設定例
 
-[docs/clovefmt.toml](/docs/clovefmt.toml) にも同じ内容のサンプルを置いています。
+[docs/clovefmt.toml](../clovefmt.toml) にも同じ内容のサンプルを置いています。
 
 ```toml
 version = 1
@@ -875,12 +877,33 @@ spacing = "single"
 
 ## 2. foreign blocks のフォーマット
 
-`clove fmt` は `--lang` で foreign の整形器を選べます。
+専用のフラグはありません。`clove fmt` は Ruby ブロック
+（`$rb{...}` とタグ無しの `${...}`）の中身を自動的に整形します。
 
-- `--lang=clove` … Clove として整形
-- `--lang=ruby` … Ruby として整形（rubocop / syntax_tree を使用する場合あり）
+- ビルド時の `ruby` feature が必要です（既定で有効）。
+- 外部の Ruby 整形器が `PATH` に必要です。`rubocop` → `bundle exec rubocop` →
+  `ruby -rsyntax_tree` の順に試し、最初に成功したものを使います。
+- どれも使えない場合はブロックの中身をそのまま残します（エラーにはなりません）。
 
-> Ruby の整形はビルド時の feature（`ruby`）が必要な場合があります。
+```clojure
+; 入力
+(defn f []
+  $rb{
+    x=1
+     y   =2
+    x+y
+  })
+
+; 出力
+(defn f []
+  ${
+    x = 1
+    y = 2
+    x + y
+  })
+```
+
+> Python ブロックの整形には未対応です。
 
 ## 3. 方針
 
@@ -890,6 +913,6 @@ spacing = "single"
 ---
 <!-- NAV:START -->
 **前へ:** [パッケージ管理（Phase1）](../packages.ja.md)
-**次へ:** [Build（--opt=typed / --static / embed）](build.ja.md)
+**次へ:** [Build（`clove build`）](build.ja.md)
 <!-- NAV:END -->
 

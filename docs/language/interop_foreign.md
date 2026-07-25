@@ -42,7 +42,7 @@ This doc focuses on 1 and 2.
 Example:
 
 ```clojure
-(ns examples::interop::ruby-basic)
+(ns examples::interop::ruby_basic)
 
 (defn ruby-version []
   $rb{
@@ -50,11 +50,14 @@ Example:
   })
 
 (defn upcase [s]
-  $rb{String(s).upcase}
+  $rb{String(s).upcase})
 
-(println "Ruby version:" (ruby-version))
-(println (upcase "hello from clove"))
+(defn -main []
+  (println "Ruby version:" (ruby-version))
+  (println (upcase "hello from clove")))
 ```
+
+Run it with `clove --main examples/interop/ruby_basic.clv`.
 
 ### 2.1 Execution model
 
@@ -111,7 +114,7 @@ are designed to round-trip easily.
 Example:
 
 ```clojure
-(ns examples::interop::python-basic)
+(ns examples::interop::python_basic)
 
 (defn py-sqrt [x]
   $py{

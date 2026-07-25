@@ -30,7 +30,7 @@ See: [Namespaces](../language/namespaces.md)
 
 ---
 <!-- NAV:START -->
-**Previous:** [Build (--opt=typed / --static / embed)](build.md)
+**Previous:** [Build (`clove build`)](build.md)
 **Next:** [VS Code Extension](vscode.md)
 <!-- NAV:END -->
 

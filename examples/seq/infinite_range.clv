@@ -1,4 +1,4 @@
-(ns examples::seq::infinite-range)
+(ns examples::seq::infinite_range)
 
 ;; Demo: build an infinite Seq and consume only what you need
 

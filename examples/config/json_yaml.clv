@@ -1,4 +1,4 @@
-(ns examples::config::json-yaml)
+(ns examples::config::json_yaml)
 
 (def config-json
   #json{

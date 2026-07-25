@@ -1,4 +1,4 @@
-(ns examples::interop::python-basic)
+(ns examples::interop::python_basic)
 
 (defn py-sqrt [x]
   $py{

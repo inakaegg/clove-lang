@@ -83,14 +83,14 @@ Currently they are mainly for:
 
 They do not enforce runtime checks.
 
-## Appendix: `clove build --opt=typed`
+## Appendix: type hints and `clove build`
 
-typed build is an experimental feature that generates Rust from typed IR.
+`clove build` lowers a supported subset of the language through a typed IR and
+emits C. Type hints feed that lowering, but there is **no `--opt` switch**: the
+typed path is the only build path, and unsupported constructs are rejected at
+build time instead of falling back to the interpreter.
 
-- Incompatible parts emit WARNINGs
-- In strict mode, warnings become errors
-
-See [Build](../tooling/build.md) for tool-side specs.
+See [Build](../tooling/build.md) for the current option list.
 
 ---
 <!-- NAV:START -->

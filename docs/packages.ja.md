@@ -1,5 +1,7 @@
 # パッケージ（Phase1）
 
+English version: [packages.md](packages.md)
+
 Phase1 は **pure Clove ライブラリ**を対象に、Git リポジトリから取得して `require` できる状態にする段階です。
 native/plugin/docs 外出し/fn_meta などは扱いません。
 

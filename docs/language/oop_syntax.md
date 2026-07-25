@@ -6,7 +6,7 @@ Japanese version: [oop_syntax.ja.md](oop_syntax.ja.md)
 - The receiver position is resolved in this order: **function meta (`{:subject-pos n}` or `:last`) > `$arg` > argument name inference (`coll`/`xs`/`seq`)**.
   If `FnMeta` exists but position cannot be determined, it is an error (do not silently fall back to 1).
 - `:last` (or `-1`) places the receiver at the **end of the argument list**. Use this when you want the last arg even for variadic functions.
-- For object methods / `method` / `&` self sugar, see [docs/language/oop_methods.md](/docs/language/oop_methods.md).
+- For object methods / `method` / `&` self sugar, see [docs/language/oop_methods.md](oop_methods.md).
 - Examples (all work with default settings):
   - `"a".str("b")` -> `"ab"`
   - `{:a 1}.keys` -> `[:a]`

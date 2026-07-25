@@ -28,11 +28,11 @@ Note: mean values are from `hyperfine`.
 
 ## Source Files
 
-- [docs/phase2/bench/bench_release_clove2.clv](/docs/phase2/bench/bench_release_clove2.clv)
-- [docs/phase2/bench/bench_release_rust.rs](/docs/phase2/bench/bench_release_rust.rs)
-- [docs/phase2/bench/bench_release_go.go](/docs/phase2/bench/bench_release_go.go)
-- [docs/phase2/bench/bench_release_ruby.rb](/docs/phase2/bench/bench_release_ruby.rb)
-- [docs/phase2/bench/bench_release_clj.clj](/docs/phase2/bench/bench_release_clj.clj)
+- [docs/phase2/bench/bench_release_clove2.clv](../bench_release_clove2.clv)
+- [docs/phase2/bench/bench_release_rust.rs](../bench_release_rust.rs)
+- [docs/phase2/bench/bench_release_go.go](../bench_release_go.go)
+- [docs/phase2/bench/bench_release_ruby.rb](../bench_release_ruby.rb)
+- [docs/phase2/bench/bench_release_clj.clj](../bench_release_clj.clj)
 
 ## /usr/bin/time -l (max RSS)
 

@@ -166,19 +166,28 @@ x ; => 2
 ### 4.2 Function definition `defn`
 
 ```clojure
-(defn add :int [x :int y :int]
+(defn add [x y]
   (+ x y))
 
 (add 1 2) ; => 3
 ```
 
-* `defn name <ret-type?> [arg1 <type?> arg2 <type?> ...] body...`
-* `defn` is top-level only (error inside functions).
-* Return/arg type hints are **optional**, but useful for:
+Type hints are optional. The **return** type is a keyword placed right after the name,
+and **argument** types use the postfix `name<Type>` form:
 
-  * docs (`doc` / `describe`)
-  * future LSP / completion
-  * light optimizations (planned)
+```clojure
+(defn add :int [x<Int> y<Int>]
+  (+ x y))
+
+(add 1 2) ; => 3
+```
+
+* `defn name <ret-type?> [arg1<Type?> arg2<Type?> ...] body...`
+* Writing an argument type as a bare keyword (`[x :int]`) is **not** valid syntax.
+  See the type-hint appendix in [Typing](../advanced/typing.md).
+* `defn` is top-level only (error inside functions).
+* Hints are used for docs (`doc` / `describe`), LSP / completion,
+  and the typed `clove build` path. They are not enforced at runtime.
 
 * attr-map can be placed **right after the name** or **after the docstring** (not both).
   * `{:subject-pos N}` or `{:subject-pos :last}`/`-1` fixes receiver position in OOP chains.
@@ -188,7 +197,7 @@ x ; => 2
 (defn greet {:subject-pos :last} "docstring" [name suffix]
   (str name suffix))
 
-(meta greet) ; => {:subject-pos :last}
+(meta greet) ; => {:source-file "..." :subject-pos :last}
 ```
 
 ### 4.3 Short lambdas
@@ -222,7 +231,7 @@ Only representative forms are listed (largely similar to Clojure).
 `loop` / `recur` are supported (tail recursion style).
 
 ```clojure
-(defn sum-to :int [n :int]
+(defn sum-to :int [n<Int>]
   (loop [i 0 acc 0]
     (if (> i n)
       acc
@@ -251,7 +260,7 @@ Only representative forms are listed (largely similar to Clojure).
 (ns myapp::ui
   (require myapp::core :as core))
 
-(core::pi) ; => 3.1415
+core::pi ; => 3.1415  ; a var, so no parentheses
 ```
 
 As in Clojure, supports `:as` / `:refer` / `:rename`.

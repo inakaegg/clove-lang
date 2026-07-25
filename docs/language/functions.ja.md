@@ -1,5 +1,7 @@
 # 関数
 
+English version: [functions.md](functions.md)
+
 - 更新日: 2026-07-24
 
 ## 1. `defn` / `fn`
