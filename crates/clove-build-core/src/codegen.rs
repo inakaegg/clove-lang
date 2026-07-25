@@ -322,6 +322,11 @@ fn record_range_usage(
                 record_range_usage(item, range_defs, usage, false);
             }
         }
+        AstExpr::Do(items) => {
+            for item in items {
+                record_range_usage(item, range_defs, usage, false);
+            }
+        }
         AstExpr::Map(entries) => {
             for (key, value) in entries {
                 record_range_usage(key, range_defs, usage, false);
@@ -385,6 +390,11 @@ fn record_range_usage_unsafe(
             }
         }
         AstExpr::Vector(items) | AstExpr::Set(items) => {
+            for item in items {
+                record_range_usage_unsafe(item, range_defs, usage);
+            }
+        }
+        AstExpr::Do(items) => {
             for item in items {
                 record_range_usage_unsafe(item, range_defs, usage);
             }
@@ -7558,6 +7568,7 @@ fn emit_native_expr(
             out.push_str("    env.apply_builtin(\"hash-map\", args)\n}");
             Ok(out)
         }
+        AstExpr::Do(items) => emit_native_do(codegen, ctx, items),
         AstExpr::Quote(expr) => emit_quote_expr(expr),
         AstExpr::ForeignBlock { .. } => Ok(format!(
             "Err(Clove2Error::new({}))",
@@ -7660,6 +7671,10 @@ fn count_symbol_uses_in_expr(expr: &AstExpr, target: &str, shadowed: bool) -> us
         | AstExpr::ForeignBlock { .. }
         | AstExpr::Quote(_) => 0,
         AstExpr::Vector(items) | AstExpr::Set(items) => items
+            .iter()
+            .map(|item| count_symbol_uses_in_expr(item, target, shadowed))
+            .sum(),
+        AstExpr::Do(items) => items
             .iter()
             .map(|item| count_symbol_uses_in_expr(item, target, shadowed))
             .sum(),

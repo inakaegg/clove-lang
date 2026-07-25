@@ -1,7 +1,12 @@
 use std::path::PathBuf;
 
-use clove_build_core::ast::{Expr as SExpr, ExprKind, Literal};
+use clove_build_core::ast::Literal;
 use clove_build_core::reader::read_all;
+use clove_build_core::syntax::parse_forms;
+use clove_build_core::typed_ir::{
+    lower_program, Expr as IrExpr, ExprKind as IrExprKind, Program as IrProgram,
+    TopLevel as IrTopLevel,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
@@ -22,6 +27,7 @@ pub enum TopLevel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
+    Nil,
     Int(i64),
     Bool(bool),
     Str(String),
@@ -29,6 +35,16 @@ pub enum Expr {
     Keyword(String),
     Map(Vec<(Expr, Expr)>),
     Vector(Vec<Expr>),
+    Do(Vec<Expr>),
+    If {
+        cond: Box<Expr>,
+        then_expr: Box<Expr>,
+        else_expr: Box<Expr>,
+    },
+    Let {
+        bindings: Vec<(String, Expr)>,
+        body: Box<Expr>,
+    },
     Lambda1 {
         param: String,
         body: Box<Expr>,
@@ -64,205 +80,145 @@ impl std::fmt::Display for FrontError {
 impl std::error::Error for FrontError {}
 
 pub fn parse_source(src: &SourceFile) -> Result<FrontProgram, FrontError> {
-    let forms = read_all(&src.text).map_err(|err| FrontError {
-        message: format!("read error: {}", err),
-    })?;
-    let top_levels = forms
+    let ir = parse_typed_ir_source(src)?;
+    let top_levels = ir
+        .top_levels
         .iter()
         .map(lower_top_level)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(FrontProgram { top_levels })
 }
 
-fn lower_top_level(expr: &SExpr) -> Result<TopLevel, FrontError> {
-    if let ExprKind::List(items) = &expr.kind {
-        if let Some(head) = items.first() {
-            if let ExprKind::Symbol(sym) = &head.kind {
-                match sym.as_str() {
-                    "def" => return lower_def(items),
-                    "defn" => return lower_defn(items),
-                    _ => {}
-                }
-            }
-        }
-    }
-    Ok(TopLevel::Expr(lower_expr(expr)?))
-}
-
-fn lower_def(items: &[SExpr]) -> Result<TopLevel, FrontError> {
-    if items.len() != 3 {
-        return Err(FrontError {
-            message: "def expects name and value".to_string(),
-        });
-    }
-    let name = expect_symbol(&items[1], "def name")?;
-    let value = lower_expr(&items[2])?;
-    Ok(TopLevel::Def { name, value })
-}
-
-fn lower_defn(items: &[SExpr]) -> Result<TopLevel, FrontError> {
-    if items.len() < 4 {
-        return Err(FrontError {
-            message: "defn expects name, params, and body".to_string(),
-        });
-    }
-    let name = expect_symbol(&items[1], "defn name")?;
-    let params = match &items[2].kind {
-        ExprKind::Vector(v) => v,
-        _ => {
-            return Err(FrontError {
-                message: "defn params must be vector".to_string(),
-            });
-        }
-    };
-    if !(1..=3).contains(&params.len()) {
-        return Err(FrontError {
-            message: "defn currently supports one to three params".to_string(),
-        });
-    }
-    let param1 = expect_symbol(&params[0], "defn param1")?;
-    let param2 = if params.len() >= 2 {
-        Some(expect_symbol(&params[1], "defn param2")?)
-    } else {
-        None
-    };
-    let body_index = if items.len() >= 6 {
-        if let ExprKind::Symbol(sym) = &items[3].kind {
-            if sym == "->" {
-                5
-            } else {
-                3
-            }
-        } else {
-            3
-        }
-    } else {
-        3
-    };
-    if body_index >= items.len() {
-        return Err(FrontError {
-            message: "defn missing body".to_string(),
-        });
-    }
-    if items.len() != body_index + 1 {
-        return Err(FrontError {
-            message: "defn currently supports a single body form".to_string(),
-        });
-    }
-    let body = lower_expr(&items[body_index])?;
-    Ok(TopLevel::Def {
-        name,
-        value: make_lambda(params, param1, param2, body)?,
+pub fn parse_typed_ir_source(src: &SourceFile) -> Result<IrProgram, FrontError> {
+    let forms = read_all(&src.text).map_err(|err| FrontError {
+        message: format!("read error: {}", err),
+    })?;
+    let syntax = parse_forms(&forms).map_err(|err| FrontError {
+        message: format!("syntax error: {}", err),
+    })?;
+    lower_program(&syntax).map_err(|err| FrontError {
+        message: format!("lower error: {}", err),
     })
 }
 
-fn lower_expr(expr: &SExpr) -> Result<Expr, FrontError> {
+fn lower_top_level(top: &IrTopLevel) -> Result<TopLevel, FrontError> {
+    match top {
+        IrTopLevel::Def { name, value, .. } => Ok(TopLevel::Def {
+            name: name.clone(),
+            value: lower_expr(value)?,
+        }),
+        IrTopLevel::FnDef {
+            name, params, body, ..
+        } => {
+            let body = lower_expr(body)?;
+            Ok(TopLevel::Def {
+                name: name.clone(),
+                value: make_lambda_from_names(
+                    &params.iter().map(|p| p.name.clone()).collect::<Vec<_>>(),
+                    body,
+                )?,
+            })
+        }
+        IrTopLevel::Expr { expr, .. } => Ok(TopLevel::Expr(lower_expr(expr)?)),
+        IrTopLevel::DefType { .. } => Err(FrontError {
+            message: "deftype is not supported in phase2 C front yet".to_string(),
+        }),
+        IrTopLevel::DefForeign { .. } => Err(FrontError {
+            message: "def-foreign is not supported in phase2 C front yet".to_string(),
+        }),
+    }
+}
+
+fn lower_expr(expr: &IrExpr) -> Result<Expr, FrontError> {
     match &expr.kind {
-        ExprKind::Literal(Literal::Int(v)) => Ok(Expr::Int(*v)),
-        ExprKind::Literal(Literal::Bool(v)) => Ok(Expr::Bool(*v)),
-        ExprKind::Literal(Literal::Str(v)) => Ok(Expr::Str(v.clone())),
-        ExprKind::Literal(other) => Err(FrontError {
+        IrExprKind::Const(Literal::Nil) => Ok(Expr::Nil),
+        IrExprKind::Const(Literal::Int(v)) => Ok(Expr::Int(*v)),
+        IrExprKind::Const(Literal::Bool(v)) => Ok(Expr::Bool(*v)),
+        IrExprKind::Const(Literal::Str(v)) => Ok(Expr::Str(v.clone())),
+        IrExprKind::Const(other) => Err(FrontError {
             message: format!("unsupported literal in phase2 C front: {:?}", other),
         }),
-        ExprKind::Symbol(sym) => Ok(Expr::Symbol(sym.clone())),
-        ExprKind::Vector(items) => {
-            let elems = items
+        IrExprKind::Var(sym) => Ok(Expr::Symbol(sym.clone())),
+        IrExprKind::Keyword(name) => Ok(Expr::Keyword(name.clone())),
+        IrExprKind::Do(items) => Ok(Expr::Do(
+            items
                 .iter()
                 .map(lower_expr)
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(Expr::Vector(elems))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        IrExprKind::VectorLit(items) => Ok(Expr::Vector(
+            items
+                .iter()
+                .map(lower_expr)
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        IrExprKind::MapLit(entries) => Ok(Expr::Map(
+            entries
+                .iter()
+                .map(|(k, v)| Ok((lower_expr(k)?, lower_expr(v)?)))
+                .collect::<Result<Vec<_>, FrontError>>()?,
+        )),
+        IrExprKind::Lambda { params, body, .. } => {
+            let body = lower_expr(body)?;
+            let names = params.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+            make_lambda_from_names(&names, body)
         }
-        ExprKind::List(items) => lower_list(items),
-        ExprKind::Keyword(name) => Ok(Expr::Keyword(name.clone())),
-        ExprKind::Set(_) => Err(FrontError {
-            message: "set is not supported yet".to_string(),
+        IrExprKind::If {
+            cond,
+            then_expr,
+            else_expr,
+        } => Ok(Expr::If {
+            cond: Box::new(lower_expr(cond)?),
+            then_expr: Box::new(lower_expr(then_expr)?),
+            else_expr: Box::new(lower_expr(else_expr)?),
         }),
-        ExprKind::Map(entries) => {
-            let mut out = Vec::with_capacity(entries.len());
-            for (k, v) in entries {
-                out.push((lower_expr(k)?, lower_expr(v)?));
-            }
-            Ok(Expr::Map(out))
+        IrExprKind::Let { bindings, body } => Ok(Expr::Let {
+            bindings: bindings
+                .iter()
+                .map(|binding| Ok((binding.name.clone(), lower_expr(&binding.value)?)))
+                .collect::<Result<Vec<_>, FrontError>>()?,
+            body: Box::new(lower_expr(body)?),
+        }),
+        IrExprKind::BuiltinCall { name, args } => {
+            let args = args.iter().map(lower_expr).collect::<Result<Vec<_>, _>>()?;
+            Ok(Expr::Call {
+                callee: name.clone(),
+                args,
+            })
         }
-        ExprKind::ForeignBlock { .. } => Err(FrontError {
-            message: "foreign block is not supported yet".to_string(),
+        IrExprKind::Call { callee, args } => {
+            let callee = lower_symbol_callee(callee)?;
+            let args = args.iter().map(lower_expr).collect::<Result<Vec<_>, _>>()?;
+            Ok(Expr::Call { callee, args })
+        }
+    }
+}
+
+fn lower_symbol_callee(callee: &IrExpr) -> Result<String, FrontError> {
+    match &callee.kind {
+        IrExprKind::Var(name) => Ok(name.clone()),
+        IrExprKind::BuiltinCall { name, .. } => Ok(name.clone()),
+        _ => Err(FrontError {
+            message: "non-symbol callee is not supported in phase2 C front yet".to_string(),
         }),
     }
 }
 
-fn lower_list(items: &[SExpr]) -> Result<Expr, FrontError> {
-    if items.is_empty() {
-        return Err(FrontError {
-            message: "empty list is not allowed".to_string(),
-        });
-    }
-    let callee = expect_symbol(&items[0], "call head")?;
-    if callee == "fn" {
-        if items.len() != 3 {
-            return Err(FrontError {
-                message: "fn currently expects [x] body".to_string(),
-            });
-        }
-        let params = match &items[1].kind {
-            ExprKind::Vector(v) => v,
-            _ => {
-                return Err(FrontError {
-                    message: "fn params must be vector".to_string(),
-                });
-            }
-        };
-        if !(1..=3).contains(&params.len()) {
-            return Err(FrontError {
-                message: "fn currently supports one to three params".to_string(),
-            });
-        }
-        let param1 = expect_symbol(&params[0], "fn param1")?;
-        let param2 = if params.len() >= 2 {
-            Some(expect_symbol(&params[1], "fn param2")?)
-        } else {
-            None
-        };
-        let body = lower_expr(&items[2])?;
-        return make_lambda(params, param1, param2, body);
-    }
-
-    let args = items[1..]
-        .iter()
-        .map(lower_expr)
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(Expr::Call { callee, args })
-}
-
-fn expect_symbol(expr: &SExpr, what: &str) -> Result<String, FrontError> {
-    if let ExprKind::Symbol(sym) = &expr.kind {
-        Ok(sym.clone())
-    } else {
-        Err(FrontError {
-            message: format!("{} must be symbol", what),
-        })
-    }
-}
-
-fn make_lambda(
-    params: &[SExpr],
-    param1: String,
-    param2: Option<String>,
-    body: Expr,
-) -> Result<Expr, FrontError> {
+fn make_lambda_from_names(params: &[String], body: Expr) -> Result<Expr, FrontError> {
     match params.len() {
         1 => Ok(Expr::Lambda1 {
-            param: param1,
+            param: params[0].clone(),
             body: Box::new(body),
         }),
         2 => Ok(Expr::Lambda2 {
-            param1,
-            param2: param2.expect("param2 exists when params.len() == 2"),
+            param1: params[0].clone(),
+            param2: params[1].clone(),
             body: Box::new(body),
         }),
         3 => Ok(Expr::Lambda3 {
-            param1,
-            param2: param2.expect("param2 exists when params.len() == 3"),
-            param3: expect_symbol(&params[2], "lambda param3")?,
+            param1: params[0].clone(),
+            param2: params[1].clone(),
+            param3: params[2].clone(),
             body: Box::new(body),
         }),
         _ => Err(FrontError {
@@ -349,15 +305,6 @@ mod tests {
     }
 
     #[test]
-    fn reject_defn_with_multiple_body_forms_instead_of_dropping_them() {
-        let err = parse_source(&src("(defn step [x] (+ x 1) (+ x 100))"))
-            .expect_err("multi-form body must not compile with changed semantics");
-        assert!(err
-            .to_string()
-            .contains("defn currently supports a single body form"));
-    }
-
-    #[test]
     fn parse_map_and_keyword() {
         let program = parse_source(&src("(def m {:a 1 :b 2})")).expect("parse should succeed");
         let TopLevel::Def { value, .. } = &program.top_levels[0] else {
@@ -369,5 +316,123 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert!(matches!(&entries[0].0, Expr::Keyword(k) if k == "a"));
         assert!(matches!(&entries[1].0, Expr::Keyword(k) if k == "b"));
+    }
+
+    #[test]
+    fn parse_let_as_front_let() {
+        let program = parse_source(&src("(let [x 1 y 2] (+ x y))")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::Let { bindings, body }) = &program.top_levels[0] else {
+            panic!("expected let expression");
+        };
+        assert_eq!(bindings.len(), 2);
+        assert_eq!(bindings[0].0, "x");
+        assert_eq!(bindings[1].0, "y");
+        assert!(matches!(bindings[0].1, Expr::Int(1)));
+        assert!(matches!(bindings[1].1, Expr::Int(2)));
+        assert!(matches!(body.as_ref(), Expr::Call { callee, .. } if callee == "+"));
+    }
+
+    #[test]
+    fn parse_if_not_via_syntax_rewrite() {
+        let program = parse_source(&src("(if-not false 10 20)")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::If {
+            cond,
+            then_expr,
+            else_expr,
+        }) = &program.top_levels[0]
+        else {
+            panic!("expected if expression");
+        };
+        assert!(matches!(cond.as_ref(), Expr::Call { callee, .. } if callee == "not"));
+        assert!(matches!(then_expr.as_ref(), Expr::Int(10)));
+        assert!(matches!(else_expr.as_ref(), Expr::Int(20)));
+    }
+
+    #[test]
+    fn parse_defn_multi_body_as_do() {
+        let program =
+            parse_source(&src("(defn f [x] (println x) (+ x 1))")).expect("parse should succeed");
+        let TopLevel::Def { value, .. } = &program.top_levels[0] else {
+            panic!("expected def");
+        };
+        let Expr::Lambda1 { body, .. } = value else {
+            panic!("expected lambda1");
+        };
+        let Expr::Do(items) = body.as_ref() else {
+            panic!("expected do body");
+        };
+        assert_eq!(items.len(), 2);
+        assert!(matches!(&items[0], Expr::Call { callee, .. } if callee == "println"));
+        assert!(matches!(&items[1], Expr::Call { callee, .. } if callee == "+"));
+    }
+
+    #[test]
+    fn parse_when_let_rewrite_contains_do() {
+        let program =
+            parse_source(&src("(when-let [x 2] (println x) x)")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::Let { body, .. }) = &program.top_levels[0] else {
+            panic!("expected outer let");
+        };
+        let Expr::If { then_expr, .. } = body.as_ref() else {
+            panic!("expected if");
+        };
+        let Expr::Let { body, .. } = then_expr.as_ref() else {
+            panic!("expected inner let");
+        };
+        let Expr::Do(items) = body.as_ref() else {
+            panic!("expected do");
+        };
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn parse_dotimes_rewrite_uses_run() {
+        let program =
+            parse_source(&src("(dotimes [i 3] (println i))")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::Call { callee, .. }) = &program.top_levels[0] else {
+            panic!("expected run! call");
+        };
+        assert_eq!(callee, "run!");
+    }
+
+    #[test]
+    fn parse_each_rewrite_returns_coll_after_run() {
+        let program =
+            parse_source(&src("(each [x [1 2]] (println x))")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::Let { body, .. }) = &program.top_levels[0] else {
+            panic!("expected let");
+        };
+        let Expr::Do(items) = body.as_ref() else {
+            panic!("expected do");
+        };
+        assert!(matches!(&items[0], Expr::Call { callee, .. } if callee == "run!"));
+    }
+
+    #[test]
+    fn parse_direct_comp_call_rewrite() {
+        let program = parse_source(&src("((comp inc inc) 1)")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::Call { callee, args }) = &program.top_levels[0] else {
+            panic!("expected call");
+        };
+        assert_eq!(callee, "__comp-call");
+        assert!(matches!(
+            args.as_slice(),
+            [Expr::Vector(funcs), Expr::Vector(call_args)]
+                if funcs.len() == 2 && call_args == &[Expr::Int(1)]
+        ));
+    }
+
+    #[test]
+    fn parse_direct_juxt_call_rewrite() {
+        let program = parse_source(&src("((juxt inc dec) 10)")).expect("parse should succeed");
+        let TopLevel::Expr(Expr::Call { callee, args }) = &program.top_levels[0] else {
+            panic!("expected call");
+        };
+        assert_eq!(callee, "__juxt-call");
+        assert!(matches!(
+            args.as_slice(),
+            [Expr::Vector(funcs), Expr::Vector(call_args)]
+                if funcs.len() == 2 && call_args == &[Expr::Int(10)]
+        ));
     }
 }

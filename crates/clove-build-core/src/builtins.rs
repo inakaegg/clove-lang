@@ -72,6 +72,7 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "filter",
     "remove",
     "dorun",
+    "run!",
     "take-while",
     "drop-while",
     "reduce",

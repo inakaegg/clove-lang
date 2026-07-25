@@ -14,6 +14,18 @@ fn juxt_uses_juxt_call() {
 }
 
 #[test]
+fn run_bang_invokes_each_item_and_returns_nil() {
+    let value = run_str(
+        "(def total 0)
+         (defn add-total [x] (set! total (+ total x)))
+         (def result (run! add-total [1 2 3]))
+         [result total]",
+    )
+    .expect("run! should evaluate");
+    assert_eq!(value, Value::vec(vec![Value::Nil, Value::Int(6)]));
+}
+
+#[test]
 fn puts_alias_resolves() {
     let value = run_str("(puts \"alias\")").expect("puts should evaluate");
     assert_eq!(value, Value::Nil);

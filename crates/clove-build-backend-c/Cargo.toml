@@ -6,5 +6,5 @@ description = "phase2 C C backend skeleton"
 authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
 
 [dependencies]
-clove-build-front = { path = "../clove-build-front" }
+clove-build-core = { path = "../clove-build-core" }
 clove-build-runtime-c = { path = "../clove-build-runtime-c" }

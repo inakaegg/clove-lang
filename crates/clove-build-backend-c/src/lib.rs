@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use clove_build_front::{Expr, FrontProgram, TopLevel};
+use clove_build_core::ast::Literal;
+use clove_build_core::typed_ir::{
+    Expr as IrExpr, ExprKind as IrExprKind, Program as IrProgram, TopLevel as IrTopLevel,
+};
 use clove_build_runtime_c::RuntimeConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,16 +24,72 @@ impl std::fmt::Display for BackendError {
 
 impl std::error::Error for BackendError {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrontProgram {
+    pub top_levels: Vec<TopLevel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TopLevel {
+    Def { name: String, value: Expr },
+    Expr(Expr),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Expr {
+    Nil,
+    Int(i64),
+    Bool(bool),
+    Str(String),
+    Symbol(String),
+    Keyword(String),
+    Map(Vec<(Expr, Expr)>),
+    Vector(Vec<Expr>),
+    Do(Vec<Expr>),
+    If {
+        cond: Box<Expr>,
+        then_expr: Box<Expr>,
+        else_expr: Box<Expr>,
+    },
+    Let {
+        bindings: Vec<(String, Expr)>,
+        body: Box<Expr>,
+    },
+    Lambda1 {
+        param: String,
+        body: Box<Expr>,
+    },
+    Lambda2 {
+        param1: String,
+        param2: String,
+        body: Box<Expr>,
+    },
+    Lambda3 {
+        param1: String,
+        param2: String,
+        param3: String,
+        body: Box<Expr>,
+    },
+    Call {
+        callee: String,
+        args: Vec<Expr>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum CType {
+    Nil,
     I64,
+    OptI64,
     VecI64,
     VecVecI64,
     VecStr,
     MapKI64,
     MapI64VecI64,
     Bool,
+    OptBool,
     Str,
+    OptStr,
 }
 
 #[derive(Debug, Clone)]
@@ -159,6 +218,150 @@ pub fn emit_c(program: &FrontProgram, config: &RuntimeConfig) -> Result<CArtifac
     })
 }
 
+pub fn emit_c_ir(program: &IrProgram, config: &RuntimeConfig) -> Result<CArtifact, BackendError> {
+    let front_program = lower_ir_program(program)?;
+    emit_c(&front_program, config)
+}
+
+fn lower_ir_program(program: &IrProgram) -> Result<FrontProgram, BackendError> {
+    Ok(FrontProgram {
+        top_levels: program
+            .top_levels
+            .iter()
+            .map(lower_ir_top_level)
+            .collect::<Result<Vec<_>, _>>()?,
+    })
+}
+
+fn lower_ir_top_level(top: &IrTopLevel) -> Result<TopLevel, BackendError> {
+    match top {
+        IrTopLevel::Def { name, value, .. } => Ok(TopLevel::Def {
+            name: name.clone(),
+            value: lower_ir_expr(value)?,
+        }),
+        IrTopLevel::FnDef {
+            name, params, body, ..
+        } => Ok(TopLevel::Def {
+            name: name.clone(),
+            value: lower_ir_lambda(
+                &params
+                    .iter()
+                    .map(|param| param.name.clone())
+                    .collect::<Vec<_>>(),
+                lower_ir_expr(body)?,
+            )?,
+        }),
+        IrTopLevel::Expr { expr, .. } => Ok(TopLevel::Expr(lower_ir_expr(expr)?)),
+        IrTopLevel::DefType { .. } => Err(BackendError {
+            message: "deftype is not supported in phase2 C backend yet".to_string(),
+        }),
+        IrTopLevel::DefForeign { .. } => Err(BackendError {
+            message: "def-foreign is not supported in phase2 C backend yet".to_string(),
+        }),
+    }
+}
+
+fn lower_ir_expr(expr: &IrExpr) -> Result<Expr, BackendError> {
+    match &expr.kind {
+        IrExprKind::Const(Literal::Nil) => Ok(Expr::Nil),
+        IrExprKind::Const(Literal::Int(v)) => Ok(Expr::Int(*v)),
+        IrExprKind::Const(Literal::Bool(v)) => Ok(Expr::Bool(*v)),
+        IrExprKind::Const(Literal::Str(v)) => Ok(Expr::Str(v.clone())),
+        IrExprKind::Const(other) => Err(BackendError {
+            message: format!("unsupported literal in phase2 C backend: {:?}", other),
+        }),
+        IrExprKind::Var(name) => Ok(Expr::Symbol(name.clone())),
+        IrExprKind::Keyword(name) => Ok(Expr::Keyword(name.clone())),
+        IrExprKind::VectorLit(items) => Ok(Expr::Vector(
+            items
+                .iter()
+                .map(lower_ir_expr)
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        IrExprKind::MapLit(entries) => Ok(Expr::Map(
+            entries
+                .iter()
+                .map(|(k, v)| Ok((lower_ir_expr(k)?, lower_ir_expr(v)?)))
+                .collect::<Result<Vec<_>, BackendError>>()?,
+        )),
+        IrExprKind::If {
+            cond,
+            then_expr,
+            else_expr,
+        } => Ok(Expr::If {
+            cond: Box::new(lower_ir_expr(cond)?),
+            then_expr: Box::new(lower_ir_expr(then_expr)?),
+            else_expr: Box::new(lower_ir_expr(else_expr)?),
+        }),
+        IrExprKind::Let { bindings, body } => Ok(Expr::Let {
+            bindings: bindings
+                .iter()
+                .map(|binding| Ok((binding.name.clone(), lower_ir_expr(&binding.value)?)))
+                .collect::<Result<Vec<_>, BackendError>>()?,
+            body: Box::new(lower_ir_expr(body)?),
+        }),
+        IrExprKind::Do(items) => Ok(Expr::Do(
+            items
+                .iter()
+                .map(lower_ir_expr)
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        IrExprKind::BuiltinCall { name, args } => Ok(Expr::Call {
+            callee: name.clone(),
+            args: args
+                .iter()
+                .map(lower_ir_expr)
+                .collect::<Result<Vec<_>, _>>()?,
+        }),
+        IrExprKind::Call { callee, args } => Ok(Expr::Call {
+            callee: lower_ir_symbol_callee(callee)?,
+            args: args
+                .iter()
+                .map(lower_ir_expr)
+                .collect::<Result<Vec<_>, _>>()?,
+        }),
+        IrExprKind::Lambda { params, body, .. } => lower_ir_lambda(
+            &params
+                .iter()
+                .map(|param| param.name.clone())
+                .collect::<Vec<_>>(),
+            lower_ir_expr(body)?,
+        ),
+    }
+}
+
+fn lower_ir_symbol_callee(expr: &IrExpr) -> Result<String, BackendError> {
+    match &expr.kind {
+        IrExprKind::Var(name) => Ok(name.clone()),
+        _ => Err(BackendError {
+            message: "non-symbol callee is not supported in phase2 C backend yet".to_string(),
+        }),
+    }
+}
+
+fn lower_ir_lambda(params: &[String], body: Expr) -> Result<Expr, BackendError> {
+    match params.len() {
+        1 => Ok(Expr::Lambda1 {
+            param: params[0].clone(),
+            body: Box::new(body),
+        }),
+        2 => Ok(Expr::Lambda2 {
+            param1: params[0].clone(),
+            param2: params[1].clone(),
+            body: Box::new(body),
+        }),
+        3 => Ok(Expr::Lambda3 {
+            param1: params[0].clone(),
+            param2: params[1].clone(),
+            param3: params[2].clone(),
+            body: Box::new(body),
+        }),
+        _ => Err(BackendError {
+            message: "lambda currently supports one to three params".to_string(),
+        }),
+    }
+}
+
 struct Compiler<'a> {
     config: &'a RuntimeConfig,
     lines: Vec<String>,
@@ -170,6 +373,277 @@ struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
+    fn probe_expr_ctype(&mut self, expr: &Expr) -> Result<CType, BackendError> {
+        let saved_lines = std::mem::take(&mut self.lines);
+        let saved_vec_vars = self.vec_vars.clone();
+        let saved_map_vars = self.map_vars.clone();
+        let saved_str_vars = self.str_vars.clone();
+        let saved_temp_id = self.temp_id;
+        let value = self.compile_expr(expr);
+        self.lines = saved_lines;
+        self.vec_vars = saved_vec_vars;
+        self.map_vars = saved_map_vars;
+        self.str_vars = saved_str_vars;
+        self.temp_id = saved_temp_id;
+        value.map(|v| v.ctype)
+    }
+
+    fn merge_loop_result_type(
+        &self,
+        left: Option<CType>,
+        right: Option<CType>,
+    ) -> Result<Option<CType>, BackendError> {
+        match (left, right) {
+            (None, None) => Ok(None),
+            (Some(ty), None) | (None, Some(ty)) => Ok(Some(ty)),
+            (Some(left), Some(right)) if left == right => Ok(Some(left)),
+            (Some(CType::I64), Some(CType::Nil)) | (Some(CType::Nil), Some(CType::I64)) => {
+                Ok(Some(CType::OptI64))
+            }
+            (Some(CType::Bool), Some(CType::Nil)) | (Some(CType::Nil), Some(CType::Bool)) => {
+                Ok(Some(CType::OptBool))
+            }
+            (Some(CType::Str), Some(CType::Nil)) | (Some(CType::Nil), Some(CType::Str)) => {
+                Ok(Some(CType::OptStr))
+            }
+            _ => Err(BackendError {
+                message: "loop branches must currently have the same type".to_string(),
+            }),
+        }
+    }
+
+    fn infer_loop_result_type(
+        &mut self,
+        loop_name: &str,
+        expr: &Expr,
+    ) -> Result<Option<CType>, BackendError> {
+        match expr {
+            Expr::Do(items) => {
+                if let Some(last) = items.last() {
+                    self.infer_loop_result_type(loop_name, last)
+                } else {
+                    Ok(Some(CType::Nil))
+                }
+            }
+            Expr::If {
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                let then_ty = self.infer_loop_result_type(loop_name, then_expr)?;
+                let else_ty = self.infer_loop_result_type(loop_name, else_expr)?;
+                self.merge_loop_result_type(then_ty, else_ty)
+            }
+            Expr::Call { callee, .. } if callee == loop_name => Ok(None),
+            _ => self.probe_expr_ctype(expr).map(Some),
+        }
+    }
+
+    fn compile_loop_tail_expr(
+        &mut self,
+        loop_name: &str,
+        loop_bindings: &[(String, String, CType)],
+        result_name: &str,
+        result_type: &CType,
+        expr: &Expr,
+    ) -> Result<(), BackendError> {
+        match expr {
+            Expr::Do(items) => {
+                if items.is_empty() {
+                    self.assign_result_var(
+                        result_name,
+                        result_type,
+                        CValue {
+                            ctype: CType::Nil,
+                            repr: CRepr::Expr("NULL".to_string()),
+                        },
+                    )?;
+                    self.lines.push("break;".to_string());
+                    return Ok(());
+                }
+                for item in &items[..items.len() - 1] {
+                    let _ = self.compile_expr(item)?;
+                }
+                self.compile_loop_tail_expr(
+                    loop_name,
+                    loop_bindings,
+                    result_name,
+                    result_type,
+                    &items[items.len() - 1],
+                )
+            }
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                let cond_raw = self.compile_expr(cond)?;
+                let cond_value = self.materialize_value("loop_cond", cond_raw)?;
+                let cond_expr = self.truthy_expr_from_value(&cond_value);
+                self.lines.push(format!("if ({}) {{", cond_expr));
+                self.compile_loop_tail_expr(
+                    loop_name,
+                    loop_bindings,
+                    result_name,
+                    result_type,
+                    then_expr,
+                )?;
+                self.lines.push("} else {".to_string());
+                self.compile_loop_tail_expr(
+                    loop_name,
+                    loop_bindings,
+                    result_name,
+                    result_type,
+                    else_expr,
+                )?;
+                self.lines.push("}".to_string());
+                Ok(())
+            }
+            Expr::Call { callee, args } if callee == loop_name => {
+                if args.len() != loop_bindings.len() {
+                    return Err(BackendError {
+                        message: format!("{} expects {} args", loop_name, loop_bindings.len()),
+                    });
+                }
+                let mut next_values = Vec::with_capacity(args.len());
+                for arg in args {
+                    let raw = self.compile_expr(arg)?;
+                    next_values.push(self.materialize_value("recur_arg", raw)?);
+                }
+                for ((_, loop_var, loop_type), value) in loop_bindings.iter().zip(next_values) {
+                    self.assign_result_var(loop_var, loop_type, value)?;
+                }
+                self.lines.push("continue;".to_string());
+                Ok(())
+            }
+            _ => {
+                let value = self.compile_expr(expr)?;
+                self.assign_result_var(result_name, result_type, value)?;
+                self.lines.push("break;".to_string());
+                Ok(())
+            }
+        }
+    }
+
+    fn try_compile_loop_let(
+        &mut self,
+        bindings: &[(String, Expr)],
+        body: &Expr,
+    ) -> Option<Result<CValue, BackendError>> {
+        if bindings.len() != 1 {
+            return None;
+        }
+        let (loop_name, lambda_expr) = &bindings[0];
+        if !loop_name.starts_with("__loop__") {
+            return None;
+        }
+        let Expr::Call {
+            callee,
+            args: init_args,
+        } = body
+        else {
+            return None;
+        };
+        if callee != loop_name {
+            return None;
+        }
+        let (params, loop_body) = match lambda_expr {
+            Expr::Lambda1 { param, body } => (vec![param.clone()], body.as_ref().clone()),
+            Expr::Lambda2 {
+                param1,
+                param2,
+                body,
+            } => (vec![param1.clone(), param2.clone()], body.as_ref().clone()),
+            Expr::Lambda3 {
+                param1,
+                param2,
+                param3,
+                body,
+            } => (
+                vec![param1.clone(), param2.clone(), param3.clone()],
+                body.as_ref().clone(),
+            ),
+            _ => return None,
+        };
+        if params.len() != init_args.len() {
+            return Some(Err(BackendError {
+                message: "loop init arity mismatch".to_string(),
+            }));
+        }
+
+        let mut run = || -> Result<CValue, BackendError> {
+            let mut loop_bindings = Vec::with_capacity(params.len());
+            let mut saved = Vec::with_capacity(params.len());
+            for (param, init_arg) in params.iter().zip(init_args.iter()) {
+                let raw = self.compile_expr(init_arg)?;
+                let value = self.materialize_value("loop_init", raw)?;
+                let loop_var = self.next_tmp("loop_var");
+                self.lines.push(format!(
+                    "{} {} = {};",
+                    Self::c_type_name(&value.ctype),
+                    loop_var,
+                    Self::c_type_zero(&value.ctype).unwrap_or("0")
+                ));
+                self.assign_result_var(&loop_var, &value.ctype, value.clone())?;
+                let prev = self.bindings.insert(
+                    param.clone(),
+                    Binding::Value(CValue {
+                        ctype: value.ctype.clone(),
+                        repr: CRepr::Var(loop_var.clone()),
+                    }),
+                );
+                saved.push((param.clone(), prev));
+                loop_bindings.push((param.clone(), loop_var, value.ctype));
+            }
+
+            let result_type = self
+                .infer_loop_result_type(loop_name, &loop_body)?
+                .unwrap_or(CType::Nil);
+            let result_name = self.next_tmp("loop_result");
+            match Self::c_type_zero(&result_type) {
+                Some(init) => self.lines.push(format!(
+                    "{} {} = {};",
+                    Self::c_type_name(&result_type),
+                    result_name,
+                    init
+                )),
+                None => self.lines.push(format!(
+                    "{} {};",
+                    Self::c_type_name(&result_type),
+                    result_name
+                )),
+            }
+            if matches!(result_type, CType::Str) {
+                self.str_vars.push(result_name.clone());
+            }
+
+            self.lines.push("while (true) {".to_string());
+            self.compile_loop_tail_expr(
+                loop_name,
+                &loop_bindings,
+                &result_name,
+                &result_type,
+                &loop_body,
+            )?;
+            self.lines.push("}".to_string());
+
+            for (name, prev) in saved.into_iter().rev() {
+                if let Some(prev) = prev {
+                    self.bindings.insert(name, prev);
+                } else {
+                    self.bindings.remove(&name);
+                }
+            }
+
+            Ok(CValue {
+                ctype: result_type,
+                repr: CRepr::Var(result_name),
+            })
+        };
+
+        Some(run())
+    }
+
     fn emit_program(&mut self, program: &FrontProgram) -> Result<(), BackendError> {
         // Pass 1: collect lambda defs to allow symbol references from later forms.
         for tl in &program.top_levels {
@@ -248,6 +722,9 @@ impl<'a> Compiler<'a> {
         src.push_str("#include <sys/types.h>\n\n");
         src.push_str("#include <time.h>\n\n");
         src.push_str("#include <regex.h>\n\n");
+        src.push_str("typedef struct { bool has; int64_t value; } clv_opt_i64;\n");
+        src.push_str("typedef struct { bool has; bool value; } clv_opt_bool;\n");
+        src.push_str("typedef struct { bool has; char* value; } clv_opt_str;\n\n");
         src.push_str(&runtime_prelude(self.config.allow_external_c_libs));
         src.push_str("int main(void) {\n");
         for line in &self.lines {
@@ -337,11 +814,28 @@ impl<'a> Compiler<'a> {
         pr_mode: bool,
     ) -> Result<String, BackendError> {
         match value.ctype {
+            CType::Nil => Ok("clv_str_clone(\"nil\")".to_string()),
             CType::I64 => Ok(match value.repr {
                 CRepr::Expr(e) | CRepr::Var(e) => format!("clv_i64_to_str({})", e),
             }),
+            CType::OptI64 => Ok(match value.repr {
+                CRepr::Expr(e) | CRepr::Var(e) => {
+                    format!(
+                        "(({}).has ? clv_i64_to_str(({}).value) : clv_str_clone(\"nil\"))",
+                        e, e
+                    )
+                }
+            }),
             CType::Bool => Ok(match value.repr {
                 CRepr::Expr(e) | CRepr::Var(e) => format!("clv_bool_to_str({})", e),
+            }),
+            CType::OptBool => Ok(match value.repr {
+                CRepr::Expr(e) | CRepr::Var(e) => {
+                    format!(
+                        "(({}).has ? clv_bool_to_str(({}).value) : clv_str_clone(\"nil\"))",
+                        e, e
+                    )
+                }
             }),
             CType::Str => Ok(match value.repr {
                 CRepr::Expr(e) | CRepr::Var(e) => {
@@ -349,6 +843,21 @@ impl<'a> Compiler<'a> {
                         format!("clv_pr_str_str({})", e)
                     } else {
                         format!("clv_str_clone({})", e)
+                    }
+                }
+            }),
+            CType::OptStr => Ok(match value.repr {
+                CRepr::Expr(e) | CRepr::Var(e) => {
+                    if pr_mode {
+                        format!(
+                            "(({}).has ? clv_pr_str_str(({}).value) : clv_str_clone(\"nil\"))",
+                            e, e
+                        )
+                    } else {
+                        format!(
+                            "(({}).has ? clv_str_clone(({}).value) : clv_str_clone(\"nil\"))",
+                            e, e
+                        )
                     }
                 }
             }),
@@ -361,6 +870,17 @@ impl<'a> Compiler<'a> {
     fn materialize_value(&mut self, prefix: &str, value: CValue) -> Result<CValue, BackendError> {
         match value {
             CValue {
+                ctype: CType::Nil,
+                repr: CRepr::Expr(e),
+            } => {
+                let var = self.next_tmp(prefix);
+                self.lines.push(format!("void* {} = {};", var, e));
+                Ok(CValue {
+                    ctype: CType::Nil,
+                    repr: CRepr::Var(var),
+                })
+            }
+            CValue {
                 ctype: CType::I64,
                 repr: CRepr::Expr(e),
             } => {
@@ -368,6 +888,17 @@ impl<'a> Compiler<'a> {
                 self.lines.push(format!("int64_t {} = {};", var, e));
                 Ok(CValue {
                     ctype: CType::I64,
+                    repr: CRepr::Var(var),
+                })
+            }
+            CValue {
+                ctype: CType::OptI64,
+                repr: CRepr::Expr(e),
+            } => {
+                let var = self.next_tmp(prefix);
+                self.lines.push(format!("clv_opt_i64 {} = {};", var, e));
+                Ok(CValue {
+                    ctype: CType::OptI64,
                     repr: CRepr::Var(var),
                 })
             }
@@ -383,6 +914,17 @@ impl<'a> Compiler<'a> {
                 })
             }
             CValue {
+                ctype: CType::OptBool,
+                repr: CRepr::Expr(e),
+            } => {
+                let var = self.next_tmp(prefix);
+                self.lines.push(format!("clv_opt_bool {} = {};", var, e));
+                Ok(CValue {
+                    ctype: CType::OptBool,
+                    repr: CRepr::Var(var),
+                })
+            }
+            CValue {
                 ctype: CType::Str,
                 repr: CRepr::Expr(e),
             } => {
@@ -392,6 +934,17 @@ impl<'a> Compiler<'a> {
                 self.str_vars.push(var.clone());
                 Ok(CValue {
                     ctype: CType::Str,
+                    repr: CRepr::Var(var),
+                })
+            }
+            CValue {
+                ctype: CType::OptStr,
+                repr: CRepr::Expr(e),
+            } => {
+                let var = self.next_tmp(prefix);
+                self.lines.push(format!("clv_opt_str {} = {};", var, e));
+                Ok(CValue {
+                    ctype: CType::OptStr,
                     repr: CRepr::Var(var),
                 })
             }
@@ -570,11 +1123,35 @@ impl<'a> Compiler<'a> {
                     repr: CRepr::Var(var),
                 })
             }
+            (CType::OptI64, CRepr::Expr(expr)) => {
+                let var = format!("v_{}", sanitize(name));
+                self.lines.push(format!("clv_opt_i64 {} = {};", var, expr));
+                Ok(CValue {
+                    ctype: CType::OptI64,
+                    repr: CRepr::Var(var),
+                })
+            }
             (CType::Bool, CRepr::Expr(expr)) => {
                 let var = format!("v_{}", sanitize(name));
                 self.lines.push(format!("bool {} = {};", var, expr));
                 Ok(CValue {
                     ctype: CType::Bool,
+                    repr: CRepr::Var(var),
+                })
+            }
+            (CType::OptBool, CRepr::Expr(expr)) => {
+                let var = format!("v_{}", sanitize(name));
+                self.lines.push(format!("clv_opt_bool {} = {};", var, expr));
+                Ok(CValue {
+                    ctype: CType::OptBool,
+                    repr: CRepr::Var(var),
+                })
+            }
+            (CType::Nil, CRepr::Expr(expr)) => {
+                let var = format!("v_{}", sanitize(name));
+                self.lines.push(format!("void* {} = {};", var, expr));
+                Ok(CValue {
+                    ctype: CType::Nil,
                     repr: CRepr::Var(var),
                 })
             }
@@ -585,6 +1162,14 @@ impl<'a> Compiler<'a> {
                 self.str_vars.push(var.clone());
                 Ok(CValue {
                     ctype: CType::Str,
+                    repr: CRepr::Var(var),
+                })
+            }
+            (CType::OptStr, CRepr::Expr(expr)) => {
+                let var = format!("v_{}", sanitize(name));
+                self.lines.push(format!("clv_opt_str {} = {};", var, expr));
+                Ok(CValue {
+                    ctype: CType::OptStr,
                     repr: CRepr::Var(var),
                 })
             }
@@ -617,14 +1202,247 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn truthy_expr_from_value(&self, value: &CValue) -> String {
+        let repr = match &value.repr {
+            CRepr::Expr(e) | CRepr::Var(e) => e.clone(),
+        };
+        match value.ctype {
+            CType::Nil => "false".to_string(),
+            CType::Bool => repr,
+            CType::OptBool | CType::OptI64 | CType::OptStr => format!("({}).has", repr),
+            CType::I64
+            | CType::Str
+            | CType::VecI64
+            | CType::VecVecI64
+            | CType::VecStr
+            | CType::MapKI64
+            | CType::MapI64VecI64 => "true".to_string(),
+        }
+    }
+
+    fn c_type_name(ctype: &CType) -> &'static str {
+        match ctype {
+            CType::Nil => "void*",
+            CType::I64 => "int64_t",
+            CType::OptI64 => "clv_opt_i64",
+            CType::VecI64 => "clv_vec_i64",
+            CType::VecVecI64 => "clv_vec_vec_i64",
+            CType::VecStr => "clv_vec_str",
+            CType::MapKI64 => "clv_map_ki64",
+            CType::MapI64VecI64 => "clv_map_i64_vec_i64",
+            CType::Bool => "bool",
+            CType::OptBool => "clv_opt_bool",
+            CType::Str => "char*",
+            CType::OptStr => "clv_opt_str",
+        }
+    }
+
+    fn c_type_zero(ctype: &CType) -> Option<&'static str> {
+        match ctype {
+            CType::Nil => Some("NULL"),
+            CType::I64 => Some("0"),
+            CType::OptI64 => Some("(clv_opt_i64){ .has = false, .value = 0 }"),
+            CType::Bool => Some("false"),
+            CType::OptBool => Some("(clv_opt_bool){ .has = false, .value = false }"),
+            CType::Str => Some("NULL"),
+            CType::OptStr => Some("(clv_opt_str){ .has = false, .value = NULL }"),
+            CType::VecI64
+            | CType::VecVecI64
+            | CType::VecStr
+            | CType::MapKI64
+            | CType::MapI64VecI64 => None,
+        }
+    }
+
+    fn assign_result_var(
+        &mut self,
+        target: &str,
+        ctype: &CType,
+        value: CValue,
+    ) -> Result<(), BackendError> {
+        let repr = match value.repr {
+            CRepr::Expr(e) | CRepr::Var(e) => e,
+        };
+        match ctype {
+            CType::Str => {
+                self.lines
+                    .push(format!("{} = clv_str_clone({});", target, repr));
+            }
+            CType::OptI64 => match value.ctype {
+                CType::I64 => self.lines.push(format!(
+                    "{} = (clv_opt_i64){{ .has = true, .value = {} }};",
+                    target, repr
+                )),
+                CType::Nil => self.lines.push(format!(
+                    "{} = (clv_opt_i64){{ .has = false, .value = 0 }};",
+                    target
+                )),
+                _ => self.lines.push(format!("{} = {};", target, repr)),
+            },
+            CType::OptBool => match value.ctype {
+                CType::Bool => self.lines.push(format!(
+                    "{} = (clv_opt_bool){{ .has = true, .value = {} }};",
+                    target, repr
+                )),
+                CType::Nil => self.lines.push(format!(
+                    "{} = (clv_opt_bool){{ .has = false, .value = false }};",
+                    target
+                )),
+                _ => self.lines.push(format!("{} = {};", target, repr)),
+            },
+            CType::OptStr => {
+                match value.ctype {
+                    CType::Str => self.lines.push(format!(
+                        "{} = (clv_opt_str){{ .has = true, .value = clv_str_clone({}) }};",
+                        target, repr
+                    )),
+                    CType::Nil => self.lines.push(format!(
+                        "{} = (clv_opt_str){{ .has = false, .value = NULL }};",
+                        target
+                    )),
+                    _ => self.lines.push(format!(
+                        "{} = ({}).has ? (clv_opt_str){{ .has = true, .value = clv_str_clone(({}).value) }} : (clv_opt_str){{ .has = false, .value = NULL }};",
+                        target, repr, repr
+                    )),
+                }
+            }
+            _ => {
+                self.lines.push(format!("{} = {};", target, repr));
+            }
+        }
+        Ok(())
+    }
+
+    fn compile_expr_in_branch(
+        &mut self,
+        expr: &Expr,
+    ) -> Result<(Vec<String>, CValue), BackendError> {
+        let saved_lines = std::mem::take(&mut self.lines);
+        let value = self.compile_expr(expr)?;
+        let branch_lines = std::mem::take(&mut self.lines);
+        self.lines = saved_lines;
+        Ok((branch_lines, value))
+    }
+
+    fn emit_print_arg_stmt(&mut self, value: CValue, pr_mode: bool) -> Result<(), BackendError> {
+        match (&value.ctype, &value.repr) {
+            (CType::Nil, _) => {
+                self.lines.push("printf(\"nil\");".to_string());
+            }
+            (CType::I64, CRepr::Var(e)) | (CType::I64, CRepr::Expr(e)) => {
+                self.lines
+                    .push(format!("printf(\"%lld\", (long long)({}));", e));
+            }
+            (CType::OptI64, CRepr::Var(e)) | (CType::OptI64, CRepr::Expr(e)) => {
+                self.lines.push(format!(
+                    "if (({}).has) {{ printf(\"%lld\", (long long)(({}).value)); }} else {{ printf(\"nil\"); }}",
+                    e, e
+                ));
+            }
+            (CType::Bool, CRepr::Var(e)) | (CType::Bool, CRepr::Expr(e)) => {
+                self.lines
+                    .push(format!("printf(\"%s\", ({}) ? \"true\" : \"false\");", e));
+            }
+            (CType::OptBool, CRepr::Var(e)) | (CType::OptBool, CRepr::Expr(e)) => {
+                self.lines.push(format!(
+                    "if (({}).has) {{ printf(\"%s\", (({}).value) ? \"true\" : \"false\"); }} else {{ printf(\"nil\"); }}",
+                    e, e
+                ));
+            }
+            (CType::Str, CRepr::Var(e)) | (CType::Str, CRepr::Expr(e)) => {
+                if pr_mode {
+                    let q = self.next_tmp("prn_q");
+                    self.lines
+                        .push(format!("char* {} = clv_pr_str_str({});", q, e));
+                    self.str_vars.push(q.clone());
+                    self.lines.push(format!("printf(\"%s\", {});", q));
+                } else {
+                    self.lines.push(format!("printf(\"%s\", {});", e));
+                }
+            }
+            (CType::OptStr, CRepr::Var(e)) | (CType::OptStr, CRepr::Expr(e)) => {
+                if pr_mode {
+                    self.lines.push(format!(
+                        "if (({}).has) {{ char* prn_q = clv_pr_str_str(({}).value); printf(\"%s\", prn_q); free(prn_q); }} else {{ printf(\"nil\"); }}",
+                        e, e
+                    ));
+                } else {
+                    self.lines.push(format!(
+                        "if (({}).has) {{ printf(\"%s\", ({}).value); }} else {{ printf(\"nil\"); }}",
+                        e, e
+                    ));
+                }
+            }
+            (CType::VecI64, CRepr::Var(e)) => {
+                self.lines
+                    .push(format!("clv_vec_i64_fprint(stdout, &{});", e));
+            }
+            (CType::VecStr, CRepr::Var(e)) => {
+                self.lines
+                    .push(format!("clv_vec_str_fprint(stdout, &{});", e));
+            }
+            (CType::VecVecI64, CRepr::Var(e)) => {
+                self.lines
+                    .push(format!("clv_vec_vec_i64_fprint(stdout, &{}, false);", e));
+            }
+            (CType::MapKI64, CRepr::Var(e)) => {
+                self.lines
+                    .push(format!("clv_map_ki64_print(&{}, false);", e));
+            }
+            (CType::MapI64VecI64, CRepr::Var(e)) => {
+                self.lines.push(format!(
+                    "clv_map_i64_vec_i64_fprint(stdout, &{}, false);",
+                    e
+                ));
+            }
+            _ => {
+                return Err(BackendError {
+                    message: "print currently supports Int/Bool/Str/Vec/Map values".to_string(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_print_call(&mut self, args: &[Expr], callee: &str) -> Result<CValue, BackendError> {
+        let pr_mode = callee == "prn" || callee == "pp";
+        let newline = callee == "println" || callee == "prn" || callee == "pp";
+        for (idx, arg) in args.iter().enumerate() {
+            if idx > 0 {
+                self.lines.push("printf(\" \");".to_string());
+            }
+            let arg_v = self.compile_expr(arg)?;
+            let value = self.materialize_value("print_arg", arg_v)?;
+            self.emit_print_arg_stmt(value, pr_mode)?;
+        }
+        if newline {
+            self.lines.push("printf(\"\\n\");".to_string());
+        }
+        Ok(CValue {
+            ctype: CType::Nil,
+            repr: CRepr::Expr("NULL".to_string()),
+        })
+    }
+
     fn emit_top_expr(&mut self, expr: &Expr) -> Result<(), BackendError> {
         if let Expr::Call { callee, args } = expr {
             if callee == "println" && args.len() == 1 {
                 let v = self.compile_expr(&args[0])?;
                 match (v.ctype, v.repr) {
+                    (CType::Nil, _) => {
+                        self.lines.push("printf(\"nil\\n\");".to_string());
+                        return Ok(());
+                    }
                     (CType::I64, CRepr::Expr(e)) | (CType::I64, CRepr::Var(e)) => {
                         self.lines
                             .push(format!("printf(\"%lld\\n\", (long long)({}));", e));
+                        return Ok(());
+                    }
+                    (CType::OptI64, CRepr::Expr(e)) | (CType::OptI64, CRepr::Var(e)) => {
+                        self.lines.push(format!(
+                            "if (({}).has) {{ printf(\"%lld\\n\", (long long)(({}).value)); }} else {{ printf(\"nil\\n\"); }}",
+                            e, e
+                        ));
                         return Ok(());
                     }
                     (CType::Bool, CRepr::Expr(e)) | (CType::Bool, CRepr::Var(e)) => {
@@ -634,12 +1452,38 @@ impl<'a> Compiler<'a> {
                         ));
                         return Ok(());
                     }
+                    (CType::OptBool, CRepr::Expr(e)) | (CType::OptBool, CRepr::Var(e)) => {
+                        self.lines.push(format!(
+                            "if (({}).has) {{ printf(\"%s\\n\", (({}).value) ? \"true\" : \"false\"); }} else {{ printf(\"nil\\n\"); }}",
+                            e, e
+                        ));
+                        return Ok(());
+                    }
                     (CType::Str, CRepr::Expr(e)) | (CType::Str, CRepr::Var(e)) => {
                         self.lines.push(format!("printf(\"%s\\n\", {});", e));
                         return Ok(());
                     }
+                    (CType::OptStr, CRepr::Expr(e)) | (CType::OptStr, CRepr::Var(e)) => {
+                        self.lines.push(format!(
+                            "if (({}).has) {{ printf(\"%s\\n\", ({}).value); }} else {{ printf(\"nil\\n\"); }}",
+                            e, e
+                        ));
+                        return Ok(());
+                    }
                     (CType::MapKI64, CRepr::Var(e)) => {
                         self.lines.push(format!("clv_map_ki64_println(&{});", e));
+                        return Ok(());
+                    }
+                    (CType::VecI64, CRepr::Var(e)) => {
+                        self.lines
+                            .push(format!("clv_vec_i64_fprint(stdout, &{});", e));
+                        self.lines.push("printf(\"\\n\");".to_string());
+                        return Ok(());
+                    }
+                    (CType::VecStr, CRepr::Var(e)) => {
+                        self.lines
+                            .push(format!("clv_vec_str_fprint(stdout, &{});", e));
+                        self.lines.push("printf(\"\\n\");".to_string());
                         return Ok(());
                     }
                     (CType::VecVecI64, CRepr::Var(e)) => {
@@ -651,13 +1495,12 @@ impl<'a> Compiler<'a> {
                             .push(format!("clv_map_i64_vec_i64_println(&{});", e));
                         return Ok(());
                     }
-                    _ => {
-                        return Err(BackendError {
-                            message: "println currently supports Int/Bool/Str/Map/VecVec"
-                                .to_string(),
-                        });
-                    }
+                    _ => {}
                 }
+            }
+            if matches!(callee.as_str(), "print" | "println" | "prn" | "pp") {
+                self.emit_print_call(args, callee)?;
+                return Ok(());
             }
         }
         let _ = self.compile_expr(expr)?;
@@ -666,6 +1509,10 @@ impl<'a> Compiler<'a> {
 
     fn compile_expr(&mut self, expr: &Expr) -> Result<CValue, BackendError> {
         match expr {
+            Expr::Nil => Ok(CValue {
+                ctype: CType::Nil,
+                repr: CRepr::Expr("NULL".to_string()),
+            }),
             Expr::Int(v) => Ok(CValue {
                 ctype: CType::I64,
                 repr: CRepr::Expr(format!("{}LL", v)),
@@ -734,6 +1581,38 @@ impl<'a> Compiler<'a> {
                         repr: CRepr::Var(var),
                     });
                 }
+                let mut compiled_items = Vec::with_capacity(items.len());
+                let mut all_vec_i64 = true;
+                for item in items {
+                    let value = self.compile_expr(item)?;
+                    all_vec_i64 &= matches!(value.ctype, CType::VecI64);
+                    compiled_items.push(value);
+                }
+                if all_vec_i64 {
+                    let var = self.next_tmp("vecvv");
+                    self.lines.push(format!(
+                        "clv_vec_vec_i64 {} = clv_vec_vec_i64_new({});",
+                        var,
+                        items.len()
+                    ));
+                    for value in compiled_items {
+                        let CRepr::Var(name) = value.repr else {
+                            return Err(BackendError {
+                                message: "internal error: nested Vec must be materialized variable"
+                                    .to_string(),
+                            });
+                        };
+                        self.lines.push(format!(
+                            "clv_vec_vec_i64_push(&{}, clv_vec_copy_i64(&{}));",
+                            var, name
+                        ));
+                    }
+                    self.track_vec_var(var.clone(), VecKind::VecI64);
+                    return Ok(CValue {
+                        ctype: CType::VecVecI64,
+                        repr: CRepr::Var(var),
+                    });
+                }
                 let var = self.next_tmp("vec");
                 self.lines.push(format!(
                     "clv_vec_i64 {} = clv_vec_new({});",
@@ -749,6 +1628,140 @@ impl<'a> Compiler<'a> {
                     ctype: CType::VecI64,
                     repr: CRepr::Var(var),
                 })
+            }
+            Expr::Do(items) => {
+                let mut last = CValue {
+                    ctype: CType::Nil,
+                    repr: CRepr::Expr("NULL".to_string()),
+                };
+                for item in items {
+                    last = self.compile_expr(item)?;
+                }
+                Ok(last)
+            }
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                let cond_raw = self.compile_expr(cond)?;
+                let cond_value = self.materialize_value("if_cond", cond_raw)?;
+                let cond_expr = self.truthy_expr_from_value(&cond_value);
+                let (then_lines, then_value) = self.compile_expr_in_branch(then_expr)?;
+                let (else_lines, else_value) = self.compile_expr_in_branch(else_expr)?;
+                let c_type = match (&then_value.ctype, &else_value.ctype) {
+                    (left, right) if left == right => left.clone(),
+                    (CType::I64, CType::Nil) | (CType::Nil, CType::I64) => CType::OptI64,
+                    (CType::Bool, CType::Nil) | (CType::Nil, CType::Bool) => CType::OptBool,
+                    (CType::Str, CType::Nil) | (CType::Nil, CType::Str) => CType::OptStr,
+                    _ => {
+                        return Err(BackendError {
+                            message: "if branches must currently have the same type".to_string(),
+                        });
+                    }
+                };
+                let result_name = self.next_tmp("if_result");
+                if !matches!(
+                    c_type,
+                    CType::Nil
+                        | CType::I64
+                        | CType::OptI64
+                        | CType::Bool
+                        | CType::OptBool
+                        | CType::Str
+                        | CType::OptStr
+                ) {
+                    return Err(BackendError {
+                        message: "if currently supports Nil/Int/Bool/Str branches only".to_string(),
+                    });
+                }
+                match Self::c_type_zero(&c_type) {
+                    Some(init) => self.lines.push(format!(
+                        "{} {} = {};",
+                        Self::c_type_name(&c_type),
+                        result_name,
+                        init
+                    )),
+                    None => {
+                        self.lines
+                            .push(format!("{} {};", Self::c_type_name(&c_type), result_name))
+                    }
+                }
+                match c_type {
+                    CType::Str => self.str_vars.push(result_name.clone()),
+                    CType::Nil | CType::I64 | CType::OptI64 | CType::Bool | CType::OptBool => {}
+                    CType::OptStr => {}
+                    CType::VecI64
+                    | CType::VecVecI64
+                    | CType::VecStr
+                    | CType::MapKI64
+                    | CType::MapI64VecI64 => unreachable!("guarded above"),
+                }
+                self.lines.push(format!("if ({}) {{", cond_expr));
+                for line in then_lines {
+                    self.lines.push(format!("  {}", line));
+                }
+                self.assign_result_var(&result_name, &c_type, then_value)?;
+                self.lines.push("} else {".to_string());
+                for line in else_lines {
+                    self.lines.push(format!("  {}", line));
+                }
+                self.assign_result_var(&result_name, &c_type, else_value)?;
+                self.lines.push("}".to_string());
+                Ok(CValue {
+                    ctype: c_type,
+                    repr: CRepr::Var(result_name),
+                })
+            }
+            Expr::Let { bindings, body } => {
+                if let Some(result) = self.try_compile_loop_let(bindings, body) {
+                    return result;
+                }
+                let mut saved = Vec::with_capacity(bindings.len());
+                for (name, value_expr) in bindings {
+                    let binding = match value_expr {
+                        Expr::Lambda1 { param, body } => Binding::Lambda1 {
+                            param: param.clone(),
+                            body: body.as_ref().clone(),
+                        },
+                        Expr::Lambda2 {
+                            param1,
+                            param2,
+                            body,
+                        } => Binding::Lambda2 {
+                            param1: param1.clone(),
+                            param2: param2.clone(),
+                            body: body.as_ref().clone(),
+                        },
+                        Expr::Lambda3 {
+                            param1,
+                            param2,
+                            param3,
+                            body,
+                        } => Binding::Lambda3 {
+                            param1: param1.clone(),
+                            param2: param2.clone(),
+                            param3: param3.clone(),
+                            body: body.as_ref().clone(),
+                        },
+                        _ => {
+                            let raw_value = self.compile_expr(value_expr)?;
+                            let value = self.materialize_value("let", raw_value)?;
+                            Binding::Value(value)
+                        }
+                    };
+                    let prev = self.bindings.insert(name.clone(), binding);
+                    saved.push((name.clone(), prev));
+                }
+                let result = self.compile_expr(body);
+                for (name, prev) in saved.into_iter().rev() {
+                    if let Some(prev) = prev {
+                        self.bindings.insert(name, prev);
+                    } else {
+                        self.bindings.remove(&name);
+                    }
+                }
+                result
             }
             Expr::Lambda1 { .. } => Err(BackendError {
                 message: "lambda value is only allowed as builtin argument".to_string(),
@@ -1368,7 +2381,19 @@ impl<'a> Compiler<'a> {
                         message: "__comp-call requires at least one function".to_string(),
                     });
                 }
-                let mut current = self.as_i64_expr(&args[1])?;
+                let Expr::Vector(call_args) = &args[1] else {
+                    return Err(BackendError {
+                        message: "__comp-call expects an argument vector".to_string(),
+                    });
+                };
+                if call_args.len() != 1 {
+                    return Err(BackendError {
+                        message:
+                            "__comp-call currently supports exactly one argument in phase2 C subset"
+                                .to_string(),
+                    });
+                }
+                let mut current = self.as_i64_expr(&call_args[0])?;
                 for (i, name) in funcs.iter().rev().enumerate() {
                     let op = self.lower_map_op(&Expr::Symbol(name.clone()))?;
                     let next = self.next_tmp(&format!("comp_call_{}", i));
@@ -1441,7 +2466,19 @@ impl<'a> Compiler<'a> {
                     });
                 }
                 let funcs = extract_symbol_vector(&args[0])?;
-                let x = self.as_i64_expr(&args[1])?;
+                let Expr::Vector(call_args) = &args[1] else {
+                    return Err(BackendError {
+                        message: "__juxt-call expects an argument vector".to_string(),
+                    });
+                };
+                if call_args.len() != 1 {
+                    return Err(BackendError {
+                        message:
+                            "__juxt-call currently supports exactly one argument in phase2 C subset"
+                                .to_string(),
+                    });
+                }
+                let x = self.as_i64_expr(&call_args[0])?;
                 let out = self.next_tmp("juxt");
                 self.lines.push(format!(
                     "clv_vec_i64 {} = clv_vec_new({});",
@@ -2938,60 +3975,72 @@ impl<'a> Compiler<'a> {
                     repr: CRepr::Var(map),
                 })
             }
-            "print" | "println" | "prn" | "pp" => {
-                if args.len() != 1 {
+            "run!" => {
+                if args.len() != 2 {
                     return Err(BackendError {
-                        message: format!("{} expects 1 arg in phase2 C subset", callee),
+                        message: "run! expects 2 args".to_string(),
                     });
                 }
-                let arg_v = self.compile_expr(&args[0])?;
-                let v = self.materialize_value("print_arg", arg_v)?;
-                let newline = callee == "println" || callee == "prn" || callee == "pp";
-                match (&v.ctype, &v.repr) {
-                    (CType::I64, CRepr::Var(e)) | (CType::I64, CRepr::Expr(e)) => {
-                        self.lines.push(format!(
-                            "printf(\"%lld{}\", (long long)({}));",
-                            if newline { "\\n" } else { "" },
-                            e
-                        ));
+                let (param, body) = self.resolve_unary_callable(&args[0], "run!")?;
+                if let Ok(src) = self.as_vec_input(&args[1]) {
+                    let idx = self.next_tmp("run_i");
+                    let item = self.next_tmp("run_item");
+                    self.lines.push(format!(
+                        "for (size_t {} = 0; {} < {}.len; ++{}) {{",
+                        idx, idx, src.name, idx
+                    ));
+                    self.lines
+                        .push(format!("int64_t {} = {}.data[{}];", item, src.name, idx));
+                    self.with_temp_binding(
+                        &param,
+                        Binding::Value(CValue {
+                            ctype: CType::I64,
+                            repr: CRepr::Var(item.clone()),
+                        }),
+                        |this| {
+                            let _ = this.compile_expr(&body)?;
+                            Ok(())
+                        },
+                    )?;
+                    self.lines.push("}".to_string());
+                    if src.releasable {
+                        self.release_vec_var(&src.name);
                     }
-                    (CType::Bool, CRepr::Var(e)) | (CType::Bool, CRepr::Expr(e)) => {
-                        self.lines.push(format!(
-                            "printf(\"%s{}\", ({}) ? \"true\" : \"false\");",
-                            if newline { "\\n" } else { "" },
-                            e
-                        ));
-                    }
-                    (CType::Str, CRepr::Var(e)) | (CType::Str, CRepr::Expr(e)) => {
-                        if callee == "prn" || callee == "pp" {
-                            let q = self.next_tmp("prn_q");
-                            self.lines
-                                .push(format!("char* {} = clv_pr_str_str({});", q, e));
-                            self.str_vars.push(q.clone());
-                            self.lines.push(format!("printf(\"%s\\n\", {});", q));
-                        } else {
-                            self.lines.push(format!(
-                                "printf(\"%s{}\", {});",
-                                if newline { "\\n" } else { "" },
-                                e
-                            ));
-                        }
-                    }
-                    (CType::MapKI64, CRepr::Var(e)) => {
-                        self.lines.push(format!(
-                            "clv_map_ki64_print(&{}, {});",
-                            e,
-                            if newline { "true" } else { "false" }
-                        ));
-                    }
-                    _ => {
-                        return Err(BackendError {
-                            message: format!("{} currently supports Int/Bool/Str/Map only", callee),
-                        });
-                    }
+                    return Ok(CValue {
+                        ctype: CType::Nil,
+                        repr: CRepr::Expr("NULL".to_string()),
+                    });
                 }
-                Ok(v)
+                let src = self.as_vec_str_input(&args[1])?;
+                let idx = self.next_tmp("run_i");
+                let item = self.next_tmp("run_item");
+                self.lines.push(format!(
+                    "for (size_t {} = 0; {} < {}.len; ++{}) {{",
+                    idx, idx, src.name, idx
+                ));
+                self.lines
+                    .push(format!("char* {} = {}.data[{}];", item, src.name, idx));
+                self.with_temp_binding(
+                    &param,
+                    Binding::Value(CValue {
+                        ctype: CType::Str,
+                        repr: CRepr::Var(item.clone()),
+                    }),
+                    |this| {
+                        let _ = this.compile_expr(&body)?;
+                        Ok(())
+                    },
+                )?;
+                self.lines.push("}".to_string());
+                if src.releasable {
+                    self.release_vec_var(&src.name);
+                }
+                Ok(CValue {
+                    ctype: CType::Nil,
+                    repr: CRepr::Expr("NULL".to_string()),
+                })
             }
+            "print" | "println" | "prn" | "pp" => self.emit_print_call(args, callee),
             "p" => {
                 if args.len() != 1 {
                     return Err(BackendError {
@@ -3188,6 +4237,30 @@ impl<'a> Compiler<'a> {
                 Ok(CValue {
                     ctype: CType::Str,
                     repr: CRepr::Expr(format!("clv_spit_file({}, {})", path, content)),
+                })
+            }
+            "json::write-string" => {
+                if args.len() != 1 {
+                    return Err(BackendError {
+                        message: "json::write-string expects 1 arg".to_string(),
+                    });
+                }
+                let map = self.as_map_input(&args[0])?;
+                Ok(CValue {
+                    ctype: CType::Str,
+                    repr: CRepr::Expr(format!("clv_json_write_ki64(&{})", map.name)),
+                })
+            }
+            "json::read-string" => {
+                if args.len() != 1 {
+                    return Err(BackendError {
+                        message: "json::read-string expects 1 arg".to_string(),
+                    });
+                }
+                let src = self.as_str_expr(&args[0])?;
+                Ok(CValue {
+                    ctype: CType::MapKI64,
+                    repr: CRepr::Expr(format!("clv_json_read_ki64({})", src)),
                 })
             }
             "regex" | "re-pattern" | "re-matcher" => {
@@ -3799,20 +4872,48 @@ impl<'a> Compiler<'a> {
                         message: "flatten expects 1 arg in phase2 C subset".to_string(),
                     });
                 }
-                let src = self.as_vec_input(&args[0])?;
+                let src = self.compile_expr(&args[0])?;
                 let var = self.next_tmp("flatten");
-                self.lines.push(format!(
-                    "clv_vec_i64 {} = clv_take_i64(&{}, {}.len);",
-                    var, src.name, src.name
-                ));
-                if src.releasable {
-                    self.release_vec_var(&src.name);
+                match src {
+                    CValue {
+                        ctype: CType::VecI64,
+                        repr: CRepr::Var(name),
+                    } => {
+                        self.lines.push(format!(
+                            "clv_vec_i64 {} = clv_take_i64(&{}, {}.len);",
+                            var, name, name
+                        ));
+                        if self.is_releasable_var(&name) {
+                            self.release_vec_var(&name);
+                        }
+                        self.track_vec_var(var.clone(), VecKind::I64);
+                        Ok(CValue {
+                            ctype: CType::VecI64,
+                            repr: CRepr::Var(var),
+                        })
+                    }
+                    CValue {
+                        ctype: CType::VecVecI64,
+                        repr: CRepr::Var(name),
+                    } => {
+                        self.lines.push(format!(
+                            "clv_vec_i64 {} = clv_flatten_vec_vec_i64(&{});",
+                            var, name
+                        ));
+                        if self.is_releasable_var(&name) {
+                            self.release_vec_var(&name);
+                        }
+                        self.track_vec_var(var.clone(), VecKind::I64);
+                        Ok(CValue {
+                            ctype: CType::VecI64,
+                            repr: CRepr::Var(var),
+                        })
+                    }
+                    _ => Err(BackendError {
+                        message: "flatten expects Vec<Int> or Vec<Vec<Int>> in phase2 C subset"
+                            .to_string(),
+                    }),
                 }
-                self.track_vec_var(var.clone(), VecKind::I64);
-                Ok(CValue {
-                    ctype: CType::VecI64,
-                    repr: CRepr::Var(var),
-                })
             }
             "dorun" => {
                 if args.len() != 1 {
@@ -4200,7 +5301,7 @@ impl<'a> Compiler<'a> {
                 let b = self.as_vec_input(&args[1])?;
                 let var = self.next_tmp("zip");
                 self.lines.push(format!(
-                    "clv_vec_i64 {} = clv_interleave_i64(&{}, &{});",
+                    "clv_vec_vec_i64 {} = clv_zip_i64(&{}, &{});",
                     var, a.name, b.name
                 ));
                 if a.releasable {
@@ -4209,9 +5310,9 @@ impl<'a> Compiler<'a> {
                 if b.releasable {
                     self.release_vec_var(&b.name);
                 }
-                self.track_vec_var(var.clone(), VecKind::I64);
+                self.track_vec_var(var.clone(), VecKind::VecI64);
                 Ok(CValue {
-                    ctype: CType::VecI64,
+                    ctype: CType::VecVecI64,
                     repr: CRepr::Var(var),
                 })
             }
@@ -4966,9 +6067,89 @@ impl<'a> Compiler<'a> {
                     repr: CRepr::Expr(format!("(({}) % 2LL != 0LL)", v)),
                 })
             }
-            _ => Err(BackendError {
-                message: format!("unsupported call in phase2 C build: {}", callee),
-            }),
+            _ => {
+                if let Some(binding) = self.bindings.get(callee).cloned() {
+                    match binding {
+                        Binding::Lambda1 { param, body } => {
+                            if args.len() != 1 {
+                                return Err(BackendError {
+                                    message: format!("{} expects 1 arg", callee),
+                                });
+                            }
+                            let raw = self.compile_expr(&args[0])?;
+                            let value = self.materialize_value("call_arg", raw)?;
+                            return self.with_temp_binding(&param, Binding::Value(value), |this| {
+                                this.compile_expr(&body)
+                            });
+                        }
+                        Binding::Lambda2 {
+                            param1,
+                            param2,
+                            body,
+                        } => {
+                            if args.len() != 2 {
+                                return Err(BackendError {
+                                    message: format!("{} expects 2 args", callee),
+                                });
+                            }
+                            let raw1 = self.compile_expr(&args[0])?;
+                            let value1 = self.materialize_value("call_arg", raw1)?;
+                            let raw2 = self.compile_expr(&args[1])?;
+                            let value2 = self.materialize_value("call_arg", raw2)?;
+                            return self.with_temp_binding(
+                                &param1,
+                                Binding::Value(value1),
+                                |this| {
+                                    this.with_temp_binding(
+                                        &param2,
+                                        Binding::Value(value2),
+                                        |this| this.compile_expr(&body),
+                                    )
+                                },
+                            );
+                        }
+                        Binding::Lambda3 {
+                            param1,
+                            param2,
+                            param3,
+                            body,
+                        } => {
+                            if args.len() != 3 {
+                                return Err(BackendError {
+                                    message: format!("{} expects 3 args", callee),
+                                });
+                            }
+                            let raw1 = self.compile_expr(&args[0])?;
+                            let value1 = self.materialize_value("call_arg", raw1)?;
+                            let raw2 = self.compile_expr(&args[1])?;
+                            let value2 = self.materialize_value("call_arg", raw2)?;
+                            let raw3 = self.compile_expr(&args[2])?;
+                            let value3 = self.materialize_value("call_arg", raw3)?;
+                            return self.with_temp_binding(
+                                &param1,
+                                Binding::Value(value1),
+                                |this| {
+                                    this.with_temp_binding(
+                                        &param2,
+                                        Binding::Value(value2),
+                                        |this| {
+                                            this.with_temp_binding(
+                                                &param3,
+                                                Binding::Value(value3),
+                                                |this| this.compile_expr(&body),
+                                            )
+                                        },
+                                    )
+                                },
+                            );
+                        }
+                        Binding::Value(_) => {}
+                    }
+                }
+                Err(BackendError {
+                    message: format!("unsupported call in phase2 C build: {}", callee),
+                })
+            }
         }
     }
 
@@ -5038,6 +6219,52 @@ impl<'a> Compiler<'a> {
             });
         };
         lower_lambda_map(param, body)
+    }
+
+    fn resolve_unary_callable(
+        &self,
+        expr: &Expr,
+        builtin_name: &str,
+    ) -> Result<(String, Expr), BackendError> {
+        match expr {
+            Expr::Lambda1 { param, body } => Ok((param.clone(), body.as_ref().clone())),
+            Expr::Symbol(sym) => {
+                if let Some(Binding::Lambda1 { param, body }) = self.bindings.get(sym) {
+                    Ok((param.clone(), body.clone()))
+                } else {
+                    let param = "__run_item".to_string();
+                    Ok((
+                        param.clone(),
+                        Expr::Call {
+                            callee: sym.clone(),
+                            args: vec![Expr::Symbol(param)],
+                        },
+                    ))
+                }
+            }
+            _ => Err(BackendError {
+                message: format!("{} expects unary function", builtin_name),
+            }),
+        }
+    }
+
+    fn with_temp_binding<T, F>(
+        &mut self,
+        name: &str,
+        binding: Binding,
+        f: F,
+    ) -> Result<T, BackendError>
+    where
+        F: FnOnce(&mut Self) -> Result<T, BackendError>,
+    {
+        let previous = self.bindings.insert(name.to_string(), binding);
+        let result = f(self);
+        if let Some(previous) = previous {
+            self.bindings.insert(name.to_string(), previous);
+        } else {
+            self.bindings.remove(name);
+        }
+        result
     }
 
     fn lower_pred_op(&self, expr: &Expr) -> Result<PredOp, BackendError> {
@@ -5210,10 +6437,22 @@ impl<'a> Compiler<'a> {
                 "+" => Ok(ReduceOp { code: 1 }),
                 "max" => Ok(ReduceOp { code: 2 }),
                 "min" => Ok(ReduceOp { code: 3 }),
-                _ => Err(BackendError {
-                    message: format!("reduce unsupported op: {}", sym),
-                }),
+                _ => match self.bindings.get(sym) {
+                    Some(Binding::Lambda2 {
+                        param1,
+                        param2,
+                        body,
+                    }) => lower_lambda_reduce(param1, param2, body),
+                    _ => Err(BackendError {
+                        message: format!("reduce unsupported op: {}", sym),
+                    }),
+                },
             },
+            Expr::Lambda2 {
+                param1,
+                param2,
+                body,
+            } => lower_lambda_reduce(param1, param2, body),
             _ => Err(BackendError {
                 message: "reduce expects symbol op".to_string(),
             }),
@@ -5320,11 +6559,14 @@ fn lower_lambda_map(param: &str, body: &Expr) -> Result<MapOp, BackendError> {
                     message: "map lambda arithmetic must have 2 args".to_string(),
                 });
             }
+            let same_param = is_sym(&args[0], param) && is_sym(&args[1], param);
             match callee.as_str() {
+                "+" if same_param => Ok(MapOp { code: 28, k: 0 }),
                 "+" => parse_param_const(param, &args[0], &args[1]).map(|k| MapOp { code: 3, k }),
                 "-" => {
                     parse_param_const_left(param, &args[0], &args[1]).map(|k| MapOp { code: 4, k })
                 }
+                "*" if same_param => Ok(MapOp { code: 27, k: 0 }),
                 "*" => parse_param_const(param, &args[0], &args[1]).map(|k| MapOp { code: 5, k }),
                 "max" => parse_param_const(param, &args[0], &args[1]).map(|k| MapOp { code: 6, k }),
                 "min" => parse_param_const(param, &args[0], &args[1]).map(|k| MapOp { code: 7, k }),
@@ -5365,7 +6607,7 @@ fn lower_lambda_map(param: &str, body: &Expr) -> Result<MapOp, BackendError> {
                     .map(|k| MapOp { code: 25, k }),
                 _ => Err(BackendError {
                     message:
-                        "map lambda supports +,-,*,max,min,mod,quot,rem,compare/compare-desc,bit-*,rand only"
+                        "map lambda supports +,-,*,max,min,mod,quot,rem,compare/compare-desc,bit-*,rand and x+x/x*x only"
                             .to_string(),
                 }),
             }
@@ -5552,6 +6794,41 @@ fn lower_lambda_pred_indexed(
     Err(BackendError {
         message: "keep-indexed lambda unsupported (use i/x simple predicates)".to_string(),
     })
+}
+
+fn lower_lambda_reduce(
+    param_acc: &str,
+    param_val: &str,
+    body: &Expr,
+) -> Result<ReduceOp, BackendError> {
+    let Expr::Call { callee, args } = body else {
+        return Err(BackendError {
+            message: "reduce lambda must be simple arithmetic".to_string(),
+        });
+    };
+    if args.len() != 2 {
+        return Err(BackendError {
+            message: "reduce lambda must have 2 args".to_string(),
+        });
+    }
+    let lhs_acc = matches!(&args[0], Expr::Symbol(s) if s == param_acc);
+    let rhs_acc = matches!(&args[1], Expr::Symbol(s) if s == param_acc);
+    let lhs_val = matches!(&args[0], Expr::Symbol(s) if s == param_val);
+    let rhs_val = matches!(&args[1], Expr::Symbol(s) if s == param_val);
+    let uses_pair = (lhs_acc && rhs_val) || (lhs_val && rhs_acc);
+    if !uses_pair {
+        return Err(BackendError {
+            message: "reduce lambda must use accumulator and value directly".to_string(),
+        });
+    }
+    match callee.as_str() {
+        "+" => Ok(ReduceOp { code: 1 }),
+        "max" => Ok(ReduceOp { code: 2 }),
+        "min" => Ok(ReduceOp { code: 3 }),
+        _ => Err(BackendError {
+            message: "reduce lambda supports +, max, min only".to_string(),
+        }),
+    }
 }
 
 fn lower_lambda_reduce_kv(
@@ -6234,6 +7511,17 @@ static void clv_vec_i64_fprint(FILE* fp, const clv_vec_i64* v) {
   fprintf(fp, "]");
 }
 
+static void clv_vec_str_fprint(FILE* fp, const clv_vec_str* v) {
+  fprintf(fp, "[");
+  for (size_t i = 0; i < v->len; ++i) {
+    if (i > 0) {
+      fprintf(fp, " ");
+    }
+    fprintf(fp, "%s", v->data[i]);
+  }
+  fprintf(fp, "]");
+}
+
 static void clv_vec_vec_i64_fprint(FILE* fp, const clv_vec_vec_i64* v, bool newline) {
   fprintf(fp, "[");
   for (size_t i = 0; i < v->len; ++i) {
@@ -6250,6 +7538,21 @@ static void clv_vec_vec_i64_fprint(FILE* fp, const clv_vec_vec_i64* v, bool newl
 
 static void clv_vec_vec_i64_println(const clv_vec_vec_i64* v) {
   clv_vec_vec_i64_fprint(stdout, v, true);
+}
+
+static clv_vec_i64 clv_flatten_vec_vec_i64(const clv_vec_vec_i64* src) {
+  size_t total = 0;
+  for (size_t i = 0; i < src->len; ++i) {
+    total += src->data[i].len;
+  }
+  clv_vec_i64 out = clv_vec_new(total > 0 ? total : 1);
+  for (size_t i = 0; i < src->len; ++i) {
+    const clv_vec_i64* inner = &src->data[i];
+    for (size_t j = 0; j < inner->len; ++j) {
+      clv_vec_push(&out, inner->data[j]);
+    }
+  }
+  return out;
 }
 
 static clv_vec_str clv_vec_str_new(size_t cap) {
@@ -6369,6 +7672,168 @@ static void clv_map_ki64_put(clv_map_ki64* m, const char* key, int64_t value) {
   m->data[m->len].key = clv_str_clone(key);
   m->data[m->len].value = value;
   m->len += 1;
+}
+
+static size_t clv_json_escaped_len(const char* s) {
+  size_t n = 0;
+  for (; *s; ++s) {
+    switch (*s) {
+      case '\\':
+      case '"':
+      case '\n':
+      case '\r':
+      case '\t':
+        n += 2;
+        break;
+      default:
+        n += 1;
+        break;
+    }
+  }
+  return n;
+}
+
+static char* clv_json_escape_copy(char* out, const char* s) {
+  for (; *s; ++s) {
+    switch (*s) {
+      case '\\': *out++ = '\\'; *out++ = '\\'; break;
+      case '"': *out++ = '\\'; *out++ = '"'; break;
+      case '\n': *out++ = '\\'; *out++ = 'n'; break;
+      case '\r': *out++ = '\\'; *out++ = 'r'; break;
+      case '\t': *out++ = '\\'; *out++ = 't'; break;
+      default: *out++ = *s; break;
+    }
+  }
+  return out;
+}
+
+static char* clv_json_write_ki64(const clv_map_ki64* m) {
+  size_t total = 3;
+  for (size_t i = 0; i < m->len; ++i) {
+    int digits = snprintf(NULL, 0, "%lld", (long long)m->data[i].value);
+    if (digits < 0) {
+      fprintf(stderr, "phase2 C: snprintf failed\n");
+      abort();
+    }
+    if (i > 0) {
+      total += 1;
+    }
+    total += 3 + clv_json_escaped_len(m->data[i].key) + (size_t)digits;
+  }
+  char* out = (char*)clv_arena_alloc(total);
+  if (!out) {
+    fprintf(stderr, "phase2 C: arena alloc failed\n");
+    abort();
+  }
+  char* p = out;
+  *p++ = '{';
+  for (size_t i = 0; i < m->len; ++i) {
+    if (i > 0) {
+      *p++ = ',';
+    }
+    *p++ = '"';
+    p = clv_json_escape_copy(p, m->data[i].key);
+    *p++ = '"';
+    *p++ = ':';
+    int n = snprintf(p, total - (size_t)(p - out), "%lld", (long long)m->data[i].value);
+    if (n < 0) {
+      fprintf(stderr, "phase2 C: snprintf failed\n");
+      abort();
+    }
+    p += (size_t)n;
+  }
+  *p++ = '}';
+  *p = '\0';
+  return out;
+}
+
+static const char* clv_json_skip_ws(const char* s) {
+  while (*s == ' ' || *s == '\n' || *s == '\r' || *s == '\t') {
+    ++s;
+  }
+  return s;
+}
+
+static char* clv_json_parse_string(const char** sp) {
+  const char* s = *sp;
+  if (*s != '"') {
+    fprintf(stderr, "phase2 C: json key must start with quote\n");
+    abort();
+  }
+  ++s;
+  char* out = (char*)clv_arena_alloc(strlen(s) + 1);
+  if (!out) {
+    fprintf(stderr, "phase2 C: arena alloc failed\n");
+    abort();
+  }
+  size_t w = 0;
+  while (*s && *s != '"') {
+    if (*s == '\\') {
+      ++s;
+      switch (*s) {
+        case '"': out[w++] = '"'; break;
+        case '\\': out[w++] = '\\'; break;
+        case 'n': out[w++] = '\n'; break;
+        case 'r': out[w++] = '\r'; break;
+        case 't': out[w++] = '\t'; break;
+        default:
+          fprintf(stderr, "phase2 C: unsupported json escape\n");
+          abort();
+      }
+      ++s;
+      continue;
+    }
+    out[w++] = *s++;
+  }
+  if (*s != '"') {
+    fprintf(stderr, "phase2 C: unterminated json string\n");
+    abort();
+  }
+  out[w] = '\0';
+  *sp = s + 1;
+  return out;
+}
+
+static clv_map_ki64 clv_json_read_ki64(const char* src) {
+  const char* s = clv_json_skip_ws(src);
+  if (*s != '{') {
+    fprintf(stderr, "phase2 C: json object must start with '{'\n");
+    abort();
+  }
+  ++s;
+  clv_map_ki64 out = clv_map_ki64_new(8);
+  s = clv_json_skip_ws(s);
+  if (*s == '}') {
+    return out;
+  }
+  while (true) {
+    s = clv_json_skip_ws(s);
+    char* key = clv_json_parse_string(&s);
+    s = clv_json_skip_ws(s);
+    if (*s != ':') {
+      fprintf(stderr, "phase2 C: expected ':' in json object\n");
+      abort();
+    }
+    ++s;
+    s = clv_json_skip_ws(s);
+    char* end = NULL;
+    long long value = strtoll(s, &end, 10);
+    if (end == s) {
+      fprintf(stderr, "phase2 C: expected integer json value\n");
+      abort();
+    }
+    clv_map_ki64_put(&out, key, (int64_t)value);
+    s = clv_json_skip_ws(end);
+    if (*s == '}') {
+      break;
+    }
+    if (*s != ',') {
+      fprintf(stderr, "phase2 C: expected ',' in json object\n");
+      abort();
+    }
+    ++s;
+  }
+  return out;
 }
 
 static bool clv_map_ki64_contains(const clv_map_ki64* m, const char* key) {
@@ -6763,6 +8228,8 @@ static inline int64_t clv_apply_map_i64(int op, int64_t k, int64_t x) {
     case 24: return x ^ (1LL << k);
     case 25: return x | (1LL << k);
     case 26: return k;
+    case 27: return x * x;
+    case 28: return x + x;
     default:
       fprintf(stderr, "phase2 C: unknown map op %d\n", op);
       abort();
@@ -7504,6 +8971,18 @@ static clv_vec_i64 clv_interleave_i64(const clv_vec_i64* a, const clv_vec_i64* b
   return out;
 }
 
+static clv_vec_vec_i64 clv_zip_i64(const clv_vec_i64* a, const clv_vec_i64* b) {
+  size_t min_len = a->len < b->len ? a->len : b->len;
+  clv_vec_vec_i64 out = clv_vec_vec_i64_new(min_len > 0 ? min_len : 1);
+  for (size_t i = 0; i < min_len; ++i) {
+    clv_vec_i64 pair = clv_vec_new(2);
+    clv_vec_push(&pair, a->data[i]);
+    clv_vec_push(&pair, b->data[i]);
+    clv_vec_vec_i64_push(&out, pair);
+  }
+  return out;
+}
+
 static inline int64_t clv_apply_zip_i64(int op, int64_t x, int64_t y) {
   switch (op) {
     case 1: return x + y;
@@ -8097,14 +9576,13 @@ static int64_t clv_last_index_of_str(const char* s, const char* needle) {
 
 #[cfg(test)]
 mod tests {
-    use clove_build_front::{Expr, FrontProgram, TopLevel};
     use clove_build_runtime_c::RuntimeConfig;
     use std::fs;
     use std::path::PathBuf;
     use std::process::Command;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use crate::emit_c;
+    use crate::{emit_c, Expr, FrontProgram, TopLevel};
 
     static TEST_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -8199,7 +9677,7 @@ mod tests {
     }
 
     #[test]
-    fn and_or_preserve_short_circuit_side_effects() {
+    fn and_or_preserve_short_circuit_side_effects_and_cleanup_scope() {
         let program = FrontProgram {
             top_levels: vec![
                 TopLevel::Expr(Expr::Call {
@@ -8208,10 +9686,13 @@ mod tests {
                         callee: "and".to_string(),
                         args: vec![
                             Expr::Bool(false),
-                            Expr::Call {
-                                callee: "println".to_string(),
-                                args: vec![Expr::Bool(true)],
-                            },
+                            Expr::Do(vec![
+                                Expr::Call {
+                                    callee: "println".to_string(),
+                                    args: vec![Expr::Bool(true)],
+                                },
+                                Expr::Bool(true),
+                            ]),
                         ],
                     }],
                 }),
@@ -8285,21 +9766,6 @@ mod tests {
     }
 
     #[test]
-    fn rand_is_rejected_until_float_semantics_are_supported() {
-        let program = FrontProgram {
-            top_levels: vec![TopLevel::Expr(Expr::Call {
-                callee: "rand".to_string(),
-                args: vec![Expr::Int(1)],
-            })],
-        };
-        let err = emit_c(&program, &RuntimeConfig::default())
-            .expect_err("integer rand lowering silently changes Float semantics");
-        assert!(err
-            .to_string()
-            .contains("rand is not supported in the phase2 C subset"));
-    }
-
-    #[test]
     fn bench_cleans_temporary_resources_inside_the_loop() {
         let program = FrontProgram {
             top_levels: vec![TopLevel::Expr(Expr::Call {
@@ -8329,6 +9795,21 @@ mod tests {
             })],
         };
         assert_eq!(compile_and_run(&program), "0\n");
+    }
+
+    #[test]
+    fn rand_is_rejected_until_float_semantics_are_supported() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "rand".to_string(),
+                args: vec![Expr::Int(1)],
+            })],
+        };
+        let err = emit_c(&program, &RuntimeConfig::default())
+            .expect_err("integer rand lowering silently changes Float semantics");
+        assert!(err
+            .to_string()
+            .contains("rand is not supported in the phase2 C subset"));
     }
 
     #[test]
@@ -10372,7 +11853,8 @@ mod tests {
         assert!(c.source.contains("clv_i64_to_str"));
         assert!(c.source.contains("clv_pr_str_str"));
         assert!(c.source.contains("printf(\"%s\""));
-        assert!(c.source.contains("printf(\"%s\\n\""));
+        assert!(c.source.contains("printf(\"%s\""));
+        assert!(c.source.contains("printf(\"\\n\")"));
     }
 
     #[test]
@@ -10671,7 +12153,8 @@ mod tests {
         assert!(c.source.contains("clv_str_clone("));
         assert!(c.source.contains("clv_escape_runtime"));
         assert!(c.source.contains("clv_reverse_i64"));
-        assert!(c.source.contains("printf(\"%s\\n\""));
+        assert!(c.source.contains("printf(\"%s\""));
+        assert!(c.source.contains("printf(\"\\n\")"));
     }
 
     #[test]
@@ -10845,7 +12328,7 @@ mod tests {
         assert!(c.source.contains("clv_iterate_i64"));
         assert!(c.source.contains("clv_repeatedly_i64"));
         assert!(c.source.contains("clv_zip_with_i64"));
-        assert!(c.source.contains("clv_interleave_i64"));
+        assert!(c.source.contains("clv_zip_i64"));
         assert!(c.source.contains("clv_dorun_i64"));
         assert!(c.source.contains("clv_gensym"));
         assert!(c.source.contains("clv_apply_map_i64"));
@@ -11048,7 +12531,7 @@ mod tests {
                                 Expr::Symbol("inc".to_string()),
                                 Expr::Symbol("dec".to_string()),
                             ]),
-                            Expr::Int(9),
+                            Expr::Vector(vec![Expr::Int(9)]),
                         ],
                     },
                 },
@@ -11135,7 +12618,7 @@ mod tests {
                                 Expr::Symbol("inc".to_string()),
                                 Expr::Symbol("dec".to_string()),
                             ]),
-                            Expr::Int(10),
+                            Expr::Vector(vec![Expr::Int(10)]),
                         ],
                     },
                 },
@@ -11195,5 +12678,260 @@ mod tests {
         assert!(c.source.contains("clv_group_by_pred_i64"));
         assert!(c.source.contains("clv_map_i64_vec_i64"));
         assert!(c.source.contains("clv_apply_map_i64"));
+    }
+
+    #[test]
+    fn emit_let_expr_c() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::Let {
+                    bindings: vec![
+                        ("x".to_string(), Expr::Int(10)),
+                        ("y".to_string(), Expr::Int(20)),
+                    ],
+                    body: Box::new(Expr::Call {
+                        callee: "+".to_string(),
+                        args: vec![Expr::Symbol("x".to_string()), Expr::Symbol("y".to_string())],
+                    }),
+                }],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("int64_t let_"));
+        assert!(c.source.contains("printf(\"%lld\\n\""));
+    }
+
+    #[test]
+    fn emit_if_expr_c() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::If {
+                    cond: Box::new(Expr::Bool(true)),
+                    then_expr: Box::new(Expr::Int(1)),
+                    else_expr: Box::new(Expr::Int(2)),
+                }],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("if ("));
+        assert!(c.source.contains("int64_t if_result_"));
+        assert!(c.source.contains("printf(\"%lld\\n\""));
+    }
+
+    #[test]
+    fn emit_when_let_rewrite_c() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::Let {
+                    bindings: vec![("__whenlet".to_string(), Expr::Int(2))],
+                    body: Box::new(Expr::If {
+                        cond: Box::new(Expr::Symbol("__whenlet".to_string())),
+                        then_expr: Box::new(Expr::Let {
+                            bindings: vec![(
+                                "x".to_string(),
+                                Expr::Symbol("__whenlet".to_string()),
+                            )],
+                            body: Box::new(Expr::Do(vec![
+                                Expr::Call {
+                                    callee: "println".to_string(),
+                                    args: vec![Expr::Symbol("x".to_string())],
+                                },
+                                Expr::Symbol("x".to_string()),
+                            ])),
+                        }),
+                        else_expr: Box::new(Expr::Nil),
+                    }),
+                }],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("printf(\"%lld\\n\""));
+        assert!(c.source.contains("if ("));
+    }
+
+    #[test]
+    fn emit_optional_if_expr_c() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::If {
+                    cond: Box::new(Expr::Bool(true)),
+                    then_expr: Box::new(Expr::Int(1)),
+                    else_expr: Box::new(Expr::Nil),
+                }],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("clv_opt_i64"));
+        assert!(c.source.contains(".has"));
+    }
+
+    #[test]
+    fn emit_loop_recur_as_while_c() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::Let {
+                    bindings: vec![(
+                        "__loop__1".to_string(),
+                        Expr::Lambda1 {
+                            param: "i".to_string(),
+                            body: Box::new(Expr::If {
+                                cond: Box::new(Expr::Call {
+                                    callee: "<".to_string(),
+                                    args: vec![Expr::Symbol("i".to_string()), Expr::Int(3)],
+                                }),
+                                then_expr: Box::new(Expr::Call {
+                                    callee: "__loop__1".to_string(),
+                                    args: vec![Expr::Call {
+                                        callee: "+".to_string(),
+                                        args: vec![Expr::Symbol("i".to_string()), Expr::Int(1)],
+                                    }],
+                                }),
+                                else_expr: Box::new(Expr::Symbol("i".to_string())),
+                            }),
+                        },
+                    )],
+                    body: Box::new(Expr::Call {
+                        callee: "__loop__1".to_string(),
+                        args: vec![Expr::Int(0)],
+                    }),
+                }],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("while (true)"));
+        assert!(c.source.contains("continue;"));
+        assert!(c.source.contains("break;"));
+    }
+
+    #[test]
+    fn emit_variadic_println_with_vector() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![
+                    Expr::Str("xs".to_string()),
+                    Expr::Vector(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]),
+                ],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("printf(\" \")"));
+        assert!(c.source.contains("clv_vec_i64_fprint"));
+    }
+
+    #[test]
+    fn emit_map_lambda_square_and_double_c() {
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Def {
+                    name: "sq".to_string(),
+                    value: Expr::Call {
+                        callee: "map".to_string(),
+                        args: vec![
+                            Expr::Lambda1 {
+                                param: "x".to_string(),
+                                body: Box::new(Expr::Call {
+                                    callee: "*".to_string(),
+                                    args: vec![
+                                        Expr::Symbol("x".to_string()),
+                                        Expr::Symbol("x".to_string()),
+                                    ],
+                                }),
+                            },
+                            Expr::Vector(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]),
+                        ],
+                    },
+                },
+                TopLevel::Def {
+                    name: "dbl".to_string(),
+                    value: Expr::Call {
+                        callee: "map".to_string(),
+                        args: vec![
+                            Expr::Lambda1 {
+                                param: "x".to_string(),
+                                body: Box::new(Expr::Call {
+                                    callee: "+".to_string(),
+                                    args: vec![
+                                        Expr::Symbol("x".to_string()),
+                                        Expr::Symbol("x".to_string()),
+                                    ],
+                                }),
+                            },
+                            Expr::Symbol("sq".to_string()),
+                        ],
+                    },
+                },
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Symbol("dbl".to_string())],
+                }),
+            ],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains(", 27, 0LL);"));
+        assert!(c.source.contains(", 28, 0LL);"));
+        assert!(c.source.contains("clv_vec_i64_fprint"));
+    }
+
+    #[test]
+    fn emit_flatten_vecvec_c() {
+        let program = FrontProgram {
+            top_levels: vec![
+                TopLevel::Def {
+                    name: "parts".to_string(),
+                    value: Expr::Call {
+                        callee: "partition".to_string(),
+                        args: vec![
+                            Expr::Int(2),
+                            Expr::Vector(vec![
+                                Expr::Int(1),
+                                Expr::Int(2),
+                                Expr::Int(3),
+                                Expr::Int(4),
+                            ]),
+                        ],
+                    },
+                },
+                TopLevel::Expr(Expr::Call {
+                    callee: "println".to_string(),
+                    args: vec![Expr::Call {
+                        callee: "flatten".to_string(),
+                        args: vec![Expr::Symbol("parts".to_string())],
+                    }],
+                }),
+            ],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("clv_partition_i64"));
+        assert!(c.source.contains("clv_flatten_vec_vec_i64"));
+        assert!(c.source.contains("clv_vec_i64_fprint"));
+    }
+
+    #[test]
+    fn emit_json_roundtrip_c() {
+        let program = FrontProgram {
+            top_levels: vec![TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![Expr::Call {
+                    callee: "json::read-string".to_string(),
+                    args: vec![Expr::Call {
+                        callee: "json::write-string".to_string(),
+                        args: vec![Expr::Map(vec![
+                            (Expr::Str("a".to_string()), Expr::Int(1)),
+                            (Expr::Str("b".to_string()), Expr::Int(2)),
+                        ])],
+                    }],
+                }],
+            })],
+        };
+        let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
+        assert!(c.source.contains("clv_json_write_ki64"));
+        assert!(c.source.contains("clv_json_read_ki64"));
+        assert!(c.source.contains("clv_map_ki64_println"));
     }
 }

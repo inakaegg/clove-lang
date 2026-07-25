@@ -11,6 +11,7 @@ pub mod reader;
 pub mod syntax;
 pub mod type_check;
 pub mod type_infer;
+pub mod typed_ir;
 pub mod types;
 pub mod use_directive;
 pub mod value;

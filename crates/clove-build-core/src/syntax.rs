@@ -13,6 +13,7 @@ pub enum AstExpr {
     Vector(Vec<AstExpr>),
     Set(Vec<AstExpr>),
     Map(Vec<(AstExpr, AstExpr)>),
+    Do(Vec<AstExpr>),
     Quote(Box<Expr>),
     ForeignBlock {
         tag: String,
@@ -414,7 +415,9 @@ fn parse_list_expr(items: &[Expr]) -> Result<AstExpr, Clove2Error> {
                 }
                 return Ok(AstExpr::Quote(Box::new(items[1].clone())));
             }
+            "do" => return parse_do(items),
             "if" => return parse_if(items),
+            "when" => return lower_expr(&rewrite_when(items)?),
             "if-not" => return lower_expr(&rewrite_if_not(items)?),
             "let" => return parse_let(items),
             "loop" => return lower_expr(&rewrite_loop(items)?),
@@ -442,6 +445,9 @@ fn parse_list_expr(items: &[Expr]) -> Result<AstExpr, Clove2Error> {
             _ => {}
         }
     }
+    if let Some(rewritten) = rewrite_direct_callable(items) {
+        return lower_expr(&rewritten);
+    }
     let callee = lower_expr(head)?;
     let args = items[1..]
         .iter()
@@ -451,6 +457,56 @@ fn parse_list_expr(items: &[Expr]) -> Result<AstExpr, Clove2Error> {
         callee: Box::new(callee),
         args,
     })
+}
+
+fn rewrite_direct_callable(items: &[Expr]) -> Option<Expr> {
+    let ExprKind::List(inner) = &items.first()?.kind else {
+        return None;
+    };
+    let head = inner.first()?;
+    let ExprKind::Symbol(sym) = &head.kind else {
+        return None;
+    };
+    let canonical = aliases::resolve_alias(sym);
+    let helper = match canonical {
+        "comp" => "__comp-call",
+        "juxt" => "__juxt-call",
+        _ => return None,
+    };
+    Some(Expr::list(vec![
+        Expr::symbol(helper),
+        Expr::vector(inner.iter().skip(1).cloned().collect()),
+        Expr::vector(items.iter().skip(1).cloned().collect()),
+    ]))
+}
+
+fn parse_do(items: &[Expr]) -> Result<AstExpr, Clove2Error> {
+    Ok(AstExpr::Do(
+        items[1..]
+            .iter()
+            .map(lower_expr)
+            .collect::<Result<Vec<_>, _>>()?,
+    ))
+}
+
+fn rewrite_when(items: &[Expr]) -> Result<Expr, Clove2Error> {
+    if items.len() < 2 {
+        return Err(Clove2Error::new("when expects condition and body"));
+    }
+    let then_expr = if items.len() == 3 {
+        items[2].clone()
+    } else {
+        let mut body = Vec::with_capacity(items.len() - 1);
+        body.push(Expr::symbol("do"));
+        body.extend(items.iter().skip(2).cloned());
+        Expr::list(body)
+    };
+    Ok(Expr::list(vec![
+        Expr::symbol("if"),
+        items[1].clone(),
+        then_expr,
+        Expr::literal(Literal::Nil),
+    ]))
 }
 
 fn rewrite_if_not(items: &[Expr]) -> Result<Expr, Clove2Error> {
@@ -1040,6 +1096,12 @@ fn rewrite_doseq(items: &[Expr]) -> Result<Expr, Clove2Error> {
     let ExprKind::Vector(_) = &bindings_expr.kind else {
         return Err(Clove2Error::new("doseq expects bindings vector"));
     };
+    let ExprKind::Vector(bindings) = &bindings_expr.kind else {
+        unreachable!("checked above");
+    };
+    if bindings.is_empty() || bindings.len() % 2 != 0 {
+        return Err(Clove2Error::new("doseq requires binding pairs"));
+    }
     let body = if items.len() == 3 {
         items[2].clone()
     } else {
@@ -1048,13 +1110,33 @@ fn rewrite_doseq(items: &[Expr]) -> Result<Expr, Clove2Error> {
         out.extend_from_slice(&items[2..]);
         Expr::list(out)
     };
-    let iter_body = Expr::list(vec![Expr::symbol("do"), body, Expr::literal(Literal::Nil)]);
-    let loop_expr = Expr::list(vec![Expr::symbol("for"), bindings_expr.clone(), iter_body]);
-    Ok(Expr::list(vec![
-        Expr::symbol("do"),
-        loop_expr,
-        Expr::literal(Literal::Nil),
-    ]))
+    fn build_doseq_steps(bindings: &[Expr], body: Expr) -> Result<Expr, Clove2Error> {
+        let (name_expr, rest) = bindings
+            .split_first()
+            .ok_or_else(|| Clove2Error::new("doseq binding missing name"))?;
+        let (coll_expr, rest) = rest
+            .split_first()
+            .ok_or_else(|| Clove2Error::new("doseq binding missing collection"))?;
+        let ExprKind::Symbol(_) = &name_expr.kind else {
+            return Err(Clove2Error::new("doseq binding name must be a symbol"));
+        };
+        let inner = if rest.is_empty() {
+            body
+        } else {
+            build_doseq_steps(rest, body)?
+        };
+        Ok(Expr::list(vec![
+            Expr::symbol("run!"),
+            Expr::list(vec![
+                Expr::symbol("fn"),
+                Expr::vector(vec![name_expr.clone()]),
+                inner,
+            ]),
+            coll_expr.clone(),
+        ]))
+    }
+
+    build_doseq_steps(bindings, body)
 }
 
 fn rewrite_dotimes(items: &[Expr]) -> Result<Expr, Clove2Error> {
@@ -1079,7 +1161,11 @@ fn rewrite_dotimes(items: &[Expr]) -> Result<Expr, Clove2Error> {
     let count_expr = bindings
         .get(1)
         .ok_or_else(|| Clove2Error::new("dotimes expects count"))?;
-    let range_expr = Expr::list(vec![Expr::symbol("range"), count_expr.clone()]);
+    let range_expr = Expr::list(vec![
+        Expr::symbol("range"),
+        Expr::literal(Literal::Int(0)),
+        count_expr.clone(),
+    ]);
     let doseq_bindings = Expr::vector(vec![name_expr.clone(), range_expr]);
     let mut doseq_items = Vec::with_capacity(items.len());
     doseq_items.push(Expr::symbol("doseq"));
@@ -1131,8 +1217,25 @@ fn rewrite_each(items: &[Expr]) -> Result<Expr, Clove2Error> {
             (Expr::vector(vec![name, coll.clone()]), body, coll)
         }
     };
-    let doseq_expr = Expr::list(vec![Expr::symbol("doseq"), bindings, body_expr]);
-    Ok(Expr::list(vec![Expr::symbol("do"), doseq_expr, coll_expr]))
+    let tmp_name = format!("__each__{}", head_span_start(items));
+    let tmp_sym = Expr::symbol(&tmp_name);
+    let run_expr = match &bindings.kind {
+        ExprKind::Vector(items_vec) if items_vec.len() == 2 => Expr::list(vec![
+            Expr::symbol("run!"),
+            Expr::list(vec![
+                Expr::symbol("fn"),
+                Expr::vector(vec![items_vec[0].clone()]),
+                body_expr,
+            ]),
+            tmp_sym.clone(),
+        ]),
+        _ => Expr::list(vec![Expr::symbol("run!"), body_expr, tmp_sym.clone()]),
+    };
+    Ok(Expr::list(vec![
+        Expr::symbol("let"),
+        Expr::vector(vec![Expr::symbol(tmp_name), coll_expr]),
+        Expr::list(vec![Expr::symbol("do"), run_expr, tmp_sym]),
+    ]))
 }
 
 fn rewrite_doto(items: &[Expr]) -> Result<Expr, Clove2Error> {

@@ -3,8 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use clove_build_backend_c::emit_c;
-use clove_build_front::{parse_source, SourceFile};
+use clove_build_backend_c::emit_c_ir;
+use clove_build_front::{parse_typed_ir_source, SourceFile};
 use clove_build_runtime_c::RuntimeConfig;
 
 #[derive(Debug)]
@@ -17,9 +17,9 @@ struct BuildOptions {
 pub fn run_build(args: Vec<String>) -> Result<(), String> {
     let opts = parse_args(args)?;
     let src = read_source(&opts.input)?;
-    let parsed = parse_source(&src).map_err(|err| err.to_string())?;
+    let parsed = parse_typed_ir_source(&src).map_err(|err| err.to_string())?;
     let config = RuntimeConfig::default();
-    let artifact = emit_c(&parsed, &config).map_err(|err| err.to_string())?;
+    let artifact = emit_c_ir(&parsed, &config).map_err(|err| err.to_string())?;
 
     let out_bin = opts.output.clone();
     let out_c = out_bin.with_extension("c");

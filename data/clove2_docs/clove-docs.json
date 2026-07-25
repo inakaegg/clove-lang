@@ -644,6 +644,15 @@
     ]
   },
   {
+    "name": "run!",
+    "signature": "run! f coll",
+    "doc": "Call f for every item in coll for side effects, returning nil.",
+    "origin": "core",
+    "examples": [
+      "(run! (fn [x] x) [1 2]) ; => nil"
+    ]
+  },
+  {
     "name": "doseq",
     "signature": "doseq [bindings] body",
     "doc": "Iterate for side effects across sequences of bindings; returns nil.",

@@ -271,7 +271,7 @@ dependencies = [
 name = "clove-build-backend-c"
 version = "0.1.0"
 dependencies = [
- "clove-build-front",
+ "clove-build-core",
  "clove-build-runtime-c",
 ]
 
@@ -279,6 +279,9 @@ dependencies = [
 name = "clove-build-core"
 version = "0.1.0"
 dependencies = [
+ "clove-build-backend-c",
+ "clove-build-front",
+ "clove-build-runtime-c",
  "rand",
  "regex",
  "serde",

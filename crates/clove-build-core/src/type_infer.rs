@@ -44,6 +44,7 @@ pub enum ExprTraceKind {
     ForeignBlock,
     Fn,
     If,
+    Do,
     Let,
     SetVar,
     Call,
@@ -483,6 +484,7 @@ fn infer_expr_inner(
             };
             (ExprTraceKind::If, merge_types(then_ty, else_ty))
         }
+        AstExpr::Do(items) => (ExprTraceKind::Do, infer_body(items, env, diags, level)),
         AstExpr::Let { bindings, body } => {
             env.push();
             let mut binding_use_counts: HashMap<String, usize> = HashMap::new();
@@ -1338,6 +1340,9 @@ fn infer_known_call(
     }
     if name == "dorun" {
         return Some(infer_dorun_call(args, env, diags, level));
+    }
+    if name == "run!" {
+        return Some(infer_run_call(args, env, diags, level));
     }
     if name == "gensym" {
         return Some(infer_gensym_call(args, env, diags, level));
@@ -7774,6 +7779,62 @@ fn infer_dorun_call(
     Type::Nil
 }
 
+fn infer_run_call(
+    args: &[AstExpr],
+    env: &mut TypeEnv,
+    diags: &mut Vec<Diagnostic>,
+    level: NativeLevel,
+) -> Type {
+    if args.len() != 2 {
+        diags.push(error_diag("run! expects 2 arguments".to_string()));
+        for arg in args {
+            let _ = infer_expr(arg, env, diags, level);
+        }
+        return Type::Nil;
+    }
+
+    let coll_ty = infer_expr(&args[1], env, diags, level);
+    let Some(elem_ty) = expect_vec_like_elem(coll_ty, level, diags, "run!") else {
+        let _ = infer_expr(&args[0], env, diags, level);
+        return Type::Nil;
+    };
+
+    if matches!(&args[0], AstExpr::Fn { .. }) {
+        let _ = infer_inline_fn_with_expected_params(
+            &args[0],
+            std::slice::from_ref(&elem_ty),
+            env,
+            diags,
+            level,
+            "run!",
+        );
+        return Type::Nil;
+    }
+
+    let registered_fn_ty = match &args[0] {
+        AstExpr::Symbol(sym) => env.get(sym),
+        _ => None,
+    };
+    let inferred_fn_ty = infer_expr(&args[0], env, diags, level);
+    let fn_ty = registered_fn_ty.unwrap_or(inferred_fn_ty);
+    let Some((param_ty, _)) =
+        extract_unary_callable_types(&args[0], fn_ty, env, diags, "run! expects a unary function")
+    else {
+        return Type::Nil;
+    };
+    if !is_assignable_with_env(&elem_ty, &param_ty, env) {
+        if is_optional_assignable(&elem_ty, &param_ty, env) {
+            report_optional_usage(&elem_ty, level, diags, "run!");
+        } else {
+            diags.push(error_diag(format!(
+                "run! expects {}, got {}",
+                param_ty, elem_ty
+            )));
+        }
+    }
+    Type::Nil
+}
+
 fn infer_gensym_call(
     args: &[AstExpr],
     env: &mut TypeEnv,
@@ -8102,6 +8163,10 @@ fn count_symbol_uses_in_expr(expr: &AstExpr, target: &str, shadowed: bool) -> us
         AstExpr::Literal(_) | AstExpr::Keyword(_) | AstExpr::ForeignBlock { .. } => 0,
         AstExpr::Quote(_) => 0,
         AstExpr::Vector(items) | AstExpr::Set(items) => items
+            .iter()
+            .map(|item| count_symbol_uses_in_expr(item, target, shadowed))
+            .sum(),
+        AstExpr::Do(items) => items
             .iter()
             .map(|item| count_symbol_uses_in_expr(item, target, shadowed))
             .sum(),
@@ -11372,6 +11437,18 @@ fn builtin_type(name: &str) -> Option<Type> {
         "dorun" => Some(Type::Function {
             params: vec![any.clone()],
             rest: Some(Box::new(Type::Vec(Box::new(any.clone())))),
+            ret: Box::new(Type::Nil),
+        }),
+        "run!" => Some(Type::Function {
+            params: vec![
+                Type::Function {
+                    params: vec![any.clone()],
+                    rest: None,
+                    ret: Box::new(any.clone()),
+                },
+                Type::Vec(Box::new(any.clone())),
+            ],
+            rest: None,
             ret: Box::new(Type::Nil),
         }),
         "reverse" => Some(Type::Function {

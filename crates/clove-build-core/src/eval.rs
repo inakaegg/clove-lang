@@ -556,6 +556,13 @@ impl Evaluator {
                     Ok(Value::Nil)
                 }
             }
+            AstExpr::Do(items) => {
+                let mut last = Value::Nil;
+                for expr in items {
+                    last = self.eval_expr(expr, env.clone())?;
+                }
+                Ok(last)
+            }
             AstExpr::Let { bindings, body } => {
                 let child = Env::child(env);
                 for Binding { name, value, .. } in bindings {
@@ -967,6 +974,7 @@ impl Evaluator {
             "filter" => self.eval_filter(args, env),
             "remove" => self.eval_remove(args, env),
             "dorun" => self.eval_dorun(args, env),
+            "run!" => self.eval_run(args, env),
             "keep" => self.eval_keep(args, env),
             "keep-indexed" => self.eval_keep_indexed(args, env),
             "every?" => self.eval_every(args, env),
@@ -2702,6 +2710,15 @@ impl Evaluator {
             values.push(self.eval_expr(arg, env.clone())?);
         }
         self.eval_dorun_values(values)
+    }
+
+    fn eval_run(&mut self, args: &[AstExpr], env: EnvRef) -> Result<Value, Clove2Error> {
+        if args.len() != 2 {
+            return Err(Clove2Error::new("run! expects 2 arguments"));
+        }
+        let func = self.eval_expr(&args[0], env.clone())?;
+        let coll = self.eval_expr(&args[1], env)?;
+        self.eval_run_values(vec![func, coll])
     }
 
     fn eval_keep(&mut self, args: &[AstExpr], env: EnvRef) -> Result<Value, Clove2Error> {
@@ -4970,6 +4987,7 @@ impl Evaluator {
             "flatten" => self.eval_flatten_values(args),
             "remove" => self.eval_remove_values(args),
             "dorun" => self.eval_dorun_values(args),
+            "run!" => self.eval_run_values(args),
             "format" => self.eval_format_values(args),
             "abs" => self.eval_abs_value(args),
             "min" => self.eval_minmax_values("min", args),
@@ -6206,6 +6224,18 @@ impl Evaluator {
             for _ in items.into_iter().take(limit) {}
         } else {
             for _ in items {}
+        }
+        Ok(Value::Nil)
+    }
+
+    fn eval_run_values(&mut self, args: Vec<Value>) -> Result<Value, Clove2Error> {
+        if args.len() != 2 {
+            return Err(Clove2Error::new("run! expects 2 arguments"));
+        }
+        let func = &args[0];
+        let items = values_to_vec_items(&args[1], "run!")?;
+        for item in items {
+            self.call_value(func, vec![item])?;
         }
         Ok(Value::Nil)
     }
