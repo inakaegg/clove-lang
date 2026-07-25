@@ -7,6 +7,11 @@
 | --- | --- |
 | `ns_alignment_audit.py` | 標準関数の名前空間が Clojure 由来の配置と揃っているかを監査する |
 | `bench/run_micro.sh` | コレクション操作のマイクロベンチマークを実行する |
+| `phase2/vm_coverage.py` | ネイティブビルド経路の builtin が VM の高速パスに乗っているかを集計する |
+| `phase2/vm_build_matrix.py` | 同じ builtin について、native codegen と VM 高速パスの対応状況を突き合わせる |
+
+レポートを生成するスクリプトはいずれも `tmp/`（Git管理外）へ書き出します。
+現在のツリーのスナップショットであり、バージョン管理する意味がないためです。
 
 ## ns_alignment_audit.py
 
@@ -35,3 +40,18 @@ BENCH_FEATURES=... tools/bench/run_micro.sh          # cargo feature を有効�
 ```
 
 公開ベンチマーク（他言語との比較）は別物で、`docs/phase2/bench/` にある。
+
+## phase2/vm_coverage.py, phase2/vm_build_matrix.py
+
+`crates/clove-build-core/` の `builtins.rs` / `vm/mod.rs` / `codegen.rs` を読み、
+ネイティブビルド経路の builtin がどの実行経路でカバーされているかを集計する。
+
+```bash
+python3 tools/phase2/vm_coverage.py      # => tmp/phase2_vm_coverage.md
+python3 tools/phase2/vm_build_matrix.py  # => tmp/phase2_vm_build_matrix.md
+```
+
+`vm_coverage.py` は VM の高速パスと `Value` ベースの fallback を分けて数える。
+`vm_build_matrix.py` はそこへ native codegen の対応状況を加えて突き合わせる。
+[Phase2 の決定事項](../docs/phase2/DECISIONS.ja.md) が定める
+「ビルドの hot path では `Value` を使用しない」の進捗を見るための道具。

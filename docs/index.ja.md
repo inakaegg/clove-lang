@@ -68,6 +68,13 @@ Clove が「なぜこうなっているのか」。仕様を選んだ理由と�
 - [`mut` と `imut`](design-notes/mutability.ja.md)
 - [他言語から借りた記法](design-notes/borrowed-syntax.ja.md)
 
+## ネイティブビルド経路（Phase2）
+
+- [Phase2 の設計と現状](phase2/README.ja.md)
+- [Phase2 の決定事項](phase2/DECISIONS.ja.md)
+- [既知の制限と不具合](tooling/build.ja.md#4-既知の制限と不具合)
+- [ベンチのソースと測定方法](phase2/bench/README.ja.md)
+
 ## 応用トピック
 
 - [名前空間設計ノート](advanced/namespaces_design.ja.md)

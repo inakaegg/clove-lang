@@ -48,6 +48,9 @@ Phase2 はコレクション更新を二つのモードに分けます。
 - 現在の C バックエンドでは、`upper-case`、`lower-case`、`capitalize` は ASCII 文字列だけに対応します。非 ASCII 入力は不正な UTF-8 を生成せず、ネイティブ実行ファイルが明示的な実行時エラーを報告します。
 - C バックエンドは実験段階です。インタプリタで動くすべての例をビルドできる状態ではありません。
 
+何がビルドでき、何ができないか、および現時点で判明している不具合の実測一覧は
+[既知の制限と不具合](../tooling/build.ja.md#4-既知の制限と不具合) にあります。
+
 ## ビルド例
 
 clone 済みのリポジトリから CLI をインストールします。
@@ -91,6 +94,7 @@ clove build examples/build/high_value_report.clv \
 
 ## 関連文書
 
+- [Phase2 の決定事項](DECISIONS.ja.md)
 - [build コマンド](../tooling/build.ja.md)
 - [ベンチのソースと測定方法](bench/README.ja.md)
 - [リポジトリ概要](../../README.ja.md)

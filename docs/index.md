@@ -69,6 +69,13 @@ alternatives that were dropped.
 - [`mut` and `imut`](design-notes/mutability.md)
 - [Borrowed notation](design-notes/borrowed-syntax.md)
 
+## Native Build Path (Phase2)
+
+- [Phase2 design and current status](phase2/README.md)
+- [Phase2 decisions](phase2/DECISIONS.md)
+- [Known limitations and defects](tooling/build.md#4-known-limitations-and-defects)
+- [Benchmark sources and methodology](phase2/bench/README.md)
+
 ## Advanced Topics
 
 - [Namespace design notes](advanced/namespaces_design.md)
