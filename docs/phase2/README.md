@@ -45,6 +45,7 @@ This distinction is part of the Phase2 compiler design and is implemented in `cl
 - `--out` / `--output` selects the executable path; `--emit-c` keeps and prints the generated C path.
 - REPL and ordinary script execution continue to use the existing runtime.
 - `clove-lsp` provides editor-facing language support independently of the native build path.
+- In the current C backend, `upper-case`, `lower-case`, and `capitalize` accept ASCII strings only. A native executable reports an explicit runtime error for non-ASCII input instead of producing invalid UTF-8.
 - The C backend is experimental. Not every example accepted by the interpreter is buildable yet.
 
 ## Build example

@@ -1209,7 +1209,8 @@ impl<'a> Compiler<'a> {
         match value.ctype {
             CType::Nil => "false".to_string(),
             CType::Bool => repr,
-            CType::OptBool | CType::OptI64 | CType::OptStr => format!("({}).has", repr),
+            CType::OptBool => format!("(({}).has && ({}).value)", repr, repr),
+            CType::OptI64 | CType::OptStr => format!("({}).has", repr),
             CType::I64
             | CType::Str
             | CType::VecI64
@@ -1798,11 +1799,21 @@ impl<'a> Compiler<'a> {
                         repr: CRepr::Expr("true".to_string()),
                     });
                 }
+                let mut values = Vec::with_capacity(args.len());
+                for arg in args {
+                    let expr = self.as_i64_expr(arg)?;
+                    let var = self.next_tmp("ordered_arg");
+                    self.lines.push(format!("int64_t {} = {};", var, expr));
+                    values.push(var);
+                }
                 let mut parts = Vec::with_capacity(args.len() - 1);
                 for i in 0..(args.len() - 1) {
-                    let lhs = self.as_i64_expr(&args[i])?;
-                    let rhs = self.as_i64_expr(&args[i + 1])?;
-                    parts.push(format!("(({}) {} ({}))", lhs, callee, rhs));
+                    parts.push(format!(
+                        "(({}) {} ({}))",
+                        values[i],
+                        callee,
+                        values[i + 1]
+                    ));
                 }
                 Ok(CValue {
                     ctype: CType::Bool,
@@ -1818,7 +1829,8 @@ impl<'a> Compiler<'a> {
                 }
                 let mut vals = Vec::with_capacity(args.len());
                 for arg in args {
-                    vals.push(self.compile_expr(arg)?);
+                    let raw = self.compile_expr(arg)?;
+                    vals.push(self.materialize_value("equal_arg", raw)?);
                 }
                 let all_i64 = vals.iter().all(|v| matches!(v.ctype, CType::I64));
                 let all_bool = vals.iter().all(|v| matches!(v.ctype, CType::Bool));
@@ -1948,33 +1960,71 @@ impl<'a> Compiler<'a> {
                     });
                 }
                 let v = self.compile_expr(&args[0])?;
-                let pred = match v.ctype {
-                    CType::Bool => match v.repr {
-                        CRepr::Expr(e) | CRepr::Var(e) => format!("(!({}))", e),
-                    },
-                    _ => "false".to_string(),
-                };
+                let pred = format!("!({})", self.truthy_expr_from_value(&v));
                 Ok(CValue {
                     ctype: CType::Bool,
                     repr: CRepr::Expr(pred),
                 })
             }
-            "bool" | "boolean" => {
+            "bool" => {
                 if args.len() != 1 {
                     return Err(BackendError {
                         message: "bool expects 1 arg".to_string(),
                     });
                 }
                 let v = self.compile_expr(&args[0])?;
-                let pred = match v.ctype {
-                    CType::Bool => match v.repr {
-                        CRepr::Expr(e) | CRepr::Var(e) => format!("({})", e),
-                    },
-                    _ => "true".to_string(),
-                };
+                match v.ctype {
+                    CType::Bool => Ok(v),
+                    CType::Str => {
+                        let value = match v.repr {
+                            CRepr::Expr(e) | CRepr::Var(e) => e,
+                        };
+                        Ok(CValue {
+                            ctype: CType::Bool,
+                            repr: CRepr::Expr(format!("clv_parse_bool_str({})", value)),
+                        })
+                    }
+                    _ => Err(BackendError {
+                        message: "bool expects Bool or Str in phase2 C subset".to_string(),
+                    }),
+                }
+            }
+            "boolean" => {
+                if args.len() != 1 {
+                    return Err(BackendError {
+                        message: "boolean expects 1 arg".to_string(),
+                    });
+                }
+                let v = self.compile_expr(&args[0])?;
                 Ok(CValue {
                     ctype: CType::Bool,
-                    repr: CRepr::Expr(pred),
+                    repr: CRepr::Expr(self.truthy_expr_from_value(&v)),
+                })
+            }
+            "bit-shift-left" => {
+                if args.len() != 2 {
+                    return Err(BackendError {
+                        message: "bit-shift-left expects 2 args".to_string(),
+                    });
+                }
+                let lhs = self.as_i64_expr(&args[0])?;
+                let rhs = self.as_i64_expr(&args[1])?;
+                Ok(CValue {
+                    ctype: CType::I64,
+                    repr: CRepr::Expr(format!("clv_wrapping_shl_i64({}, {})", lhs, rhs)),
+                })
+            }
+            "bit-shift-right" => {
+                if args.len() != 2 {
+                    return Err(BackendError {
+                        message: "bit-shift-right expects 2 args".to_string(),
+                    });
+                }
+                let lhs = self.as_i64_expr(&args[0])?;
+                let rhs = self.as_i64_expr(&args[1])?;
+                Ok(CValue {
+                    ctype: CType::I64,
+                    repr: CRepr::Expr(format!("clv_wrapping_shr_i64({}, {})", lhs, rhs)),
                 })
             }
             "int" | "long" => {
@@ -2012,51 +2062,36 @@ impl<'a> Compiler<'a> {
                 let tag = extract_type_tag(&args[0])?;
                 let value = self.compile_expr(&args[1])?;
                 let normalized = tag.to_ascii_lowercase();
-                match normalized.as_str() {
-                    "int" | "integer" | "long" | "number" => match value.ctype {
-                        CType::I64 => Ok(value),
-                        CType::Bool => {
-                            let e = match value.repr {
-                                CRepr::Expr(e) | CRepr::Var(e) => e,
-                            };
-                            Ok(CValue {
-                                ctype: CType::I64,
-                                repr: CRepr::Expr(format!("(({}) ? 1LL : 0LL)", e)),
-                            })
-                        }
-                        _ => Err(BackendError {
-                            message: format!("as {} expects Int/Bool in phase2 C subset", tag),
-                        }),
-                    },
-                    "bool" | "boolean" => match value.ctype {
-                        CType::Bool => Ok(value),
-                        _ => Ok(CValue {
-                            ctype: CType::Bool,
-                            repr: CRepr::Expr("true".to_string()),
-                        }),
-                    },
-                    "str" | "string" => {
-                        let s = self.stringify_value_expr(value, false)?;
-                        Ok(CValue {
-                            ctype: CType::Str,
-                            repr: CRepr::Expr(s),
-                        })
-                    }
-                    "vec" | "vector" => match value.ctype {
-                        CType::VecI64 | CType::VecVecI64 | CType::VecStr => Ok(value),
-                        _ => Err(BackendError {
-                            message: format!("as {} expects vector in phase2 C subset", tag),
-                        }),
-                    },
-                    "map" => match value.ctype {
-                        CType::MapKI64 | CType::MapI64VecI64 => Ok(value),
-                        _ => Err(BackendError {
-                            message: "as Map expects map in phase2 C subset".to_string(),
-                        }),
-                    },
-                    _ => Err(BackendError {
+                let optional_match = matches!(
+                    (normalized.as_str(), &value.ctype),
+                    ("int" | "integer" | "long" | "number", CType::OptI64)
+                        | ("bool" | "boolean", CType::OptBool)
+                        | ("str" | "string", CType::OptStr)
+                );
+                if type_matches_tag(&tag, &value.ctype) || optional_match {
+                    Ok(value)
+                } else if matches!(
+                    normalized.as_str(),
+                    "int"
+                        | "integer"
+                        | "long"
+                        | "number"
+                        | "bool"
+                        | "boolean"
+                        | "str"
+                        | "string"
+                        | "vec"
+                        | "vector"
+                        | "map"
+                ) {
+                    Ok(CValue {
+                        ctype: CType::Nil,
+                        repr: CRepr::Expr("NULL".to_string()),
+                    })
+                } else {
+                    Err(BackendError {
                         message: format!("as unsupported type tag in phase2 C subset: {}", tag),
-                    }),
+                    })
                 }
             }
             "expect" => {
@@ -2085,32 +2120,6 @@ impl<'a> Compiler<'a> {
                 Ok(CValue {
                     ctype: CType::I64,
                     repr: CRepr::Expr(format!("(~({}))", v)),
-                })
-            }
-            "bit-shift-left" => {
-                if args.len() != 2 {
-                    return Err(BackendError {
-                        message: "bit-shift-left expects 2 args".to_string(),
-                    });
-                }
-                let lhs = self.as_i64_expr(&args[0])?;
-                let rhs = self.as_i64_expr(&args[1])?;
-                Ok(CValue {
-                    ctype: CType::I64,
-                    repr: CRepr::Expr(format!("(({}) << ({}))", lhs, rhs)),
-                })
-            }
-            "bit-shift-right" => {
-                if args.len() != 2 {
-                    return Err(BackendError {
-                        message: "bit-shift-right expects 2 args".to_string(),
-                    });
-                }
-                let lhs = self.as_i64_expr(&args[0])?;
-                let rhs = self.as_i64_expr(&args[1])?;
-                Ok(CValue {
-                    ctype: CType::I64,
-                    repr: CRepr::Expr(format!("(({}) >> ({}))", lhs, rhs)),
                 })
             }
             "bit-and" => {
@@ -2184,7 +2193,7 @@ impl<'a> Compiler<'a> {
                 let n = self.as_i64_expr(&args[1])?;
                 Ok(CValue {
                     ctype: CType::I64,
-                    repr: CRepr::Expr(format!("(({}) & ~(1LL << ({})))", x, n)),
+                    repr: CRepr::Expr(format!("clv_bit_clear_i64({}, {})", x, n)),
                 })
             }
             "bit-flip" => {
@@ -2197,7 +2206,7 @@ impl<'a> Compiler<'a> {
                 let n = self.as_i64_expr(&args[1])?;
                 Ok(CValue {
                     ctype: CType::I64,
-                    repr: CRepr::Expr(format!("(({}) ^ (1LL << ({})))", x, n)),
+                    repr: CRepr::Expr(format!("clv_bit_flip_i64({}, {})", x, n)),
                 })
             }
             "bit-set" => {
@@ -2210,7 +2219,7 @@ impl<'a> Compiler<'a> {
                 let n = self.as_i64_expr(&args[1])?;
                 Ok(CValue {
                     ctype: CType::I64,
-                    repr: CRepr::Expr(format!("(({}) | (1LL << ({})))", x, n)),
+                    repr: CRepr::Expr(format!("clv_bit_set_i64({}, {})", x, n)),
                 })
             }
             "bit-test" => {
@@ -2223,26 +2232,33 @@ impl<'a> Compiler<'a> {
                 let n = self.as_i64_expr(&args[1])?;
                 Ok(CValue {
                     ctype: CType::Bool,
-                    repr: CRepr::Expr(format!("((({}) & (1LL << ({}))) != 0LL)", x, n)),
+                    repr: CRepr::Expr(format!("clv_bit_test_i64({}, {})", x, n)),
                 })
             }
-            "mod" | "rem" => {
+            "mod" => {
                 if args.len() != 2 {
                     return Err(BackendError {
-                        message: format!("{} expects 2 args", callee),
+                        message: "mod expects 2 args".to_string(),
                     });
                 }
                 let lhs = self.as_i64_expr(&args[0])?;
                 let rhs = self.as_i64_expr(&args[1])?;
-                let rhs_var = self.next_tmp("rem_den");
-                self.lines.push(format!("int64_t {} = {};", rhs_var, rhs));
-                self.lines.push(format!(
-                    "if ({} == 0LL) {{ fprintf(stderr, \"phase2 C: {} by zero\\n\"); abort(); }}",
-                    rhs_var, callee
-                ));
                 Ok(CValue {
                     ctype: CType::I64,
-                    repr: CRepr::Expr(format!("(({}) % ({}))", lhs, rhs_var)),
+                    repr: CRepr::Expr(format!("clv_mod_i64({}, {})", lhs, rhs)),
+                })
+            }
+            "rem" => {
+                if args.len() != 2 {
+                    return Err(BackendError {
+                        message: "rem expects 2 args".to_string(),
+                    });
+                }
+                let lhs = self.as_i64_expr(&args[0])?;
+                let rhs = self.as_i64_expr(&args[1])?;
+                Ok(CValue {
+                    ctype: CType::I64,
+                    repr: CRepr::Expr(format!("clv_rem_i64({}, {})", lhs, rhs)),
                 })
             }
             "rand-int" => {
@@ -2277,11 +2293,15 @@ impl<'a> Compiler<'a> {
                 };
                 let lhs = self.as_i64_expr(lhs_expr)?;
                 let rhs = self.as_i64_expr(rhs_expr)?;
+                let lhs_var = self.next_tmp("compare_lhs");
+                let rhs_var = self.next_tmp("compare_rhs");
+                self.lines.push(format!("int64_t {} = {};", lhs_var, lhs));
+                self.lines.push(format!("int64_t {} = {};", rhs_var, rhs));
                 Ok(CValue {
                     ctype: CType::I64,
                     repr: CRepr::Expr(format!(
                         "((({}) < ({})) ? -1LL : ((({}) > ({})) ? 1LL : 0LL))",
-                        lhs, rhs, lhs, rhs
+                        lhs_var, rhs_var, lhs_var, rhs_var
                     )),
                 })
             }
@@ -2296,15 +2316,18 @@ impl<'a> Compiler<'a> {
                 self.lines.push(format!("int64_t {} = {};", acc_var, first));
                 for arg in &args[1..] {
                     let v = self.as_i64_expr(arg)?;
+                    let value_var = self.next_tmp(callee);
+                    self.lines
+                        .push(format!("int64_t {} = {};", value_var, v));
                     if callee == "max" {
                         self.lines.push(format!(
                             "if (({}) > ({})) {} = ({});",
-                            v, acc_var, acc_var, v
+                            value_var, acc_var, acc_var, value_var
                         ));
                     } else {
                         self.lines.push(format!(
                             "if (({}) < ({})) {} = ({});",
-                            v, acc_var, acc_var, v
+                            value_var, acc_var, acc_var, value_var
                         ));
                     }
                 }
@@ -2437,7 +2460,9 @@ impl<'a> Compiler<'a> {
                         message: "juxt expects (...fns x) in phase2 C subset".to_string(),
                     });
                 }
-                let x = self.as_i64_expr(args.last().expect("juxt has at least 2 args"))?;
+                let x_expr = self.as_i64_expr(args.last().expect("juxt has at least 2 args"))?;
+                let x = self.next_tmp("juxt_input");
+                self.lines.push(format!("int64_t {} = {};", x, x_expr));
                 let funcs = &args[..args.len() - 1];
                 let out = self.next_tmp("juxt");
                 self.lines.push(format!(
@@ -2478,7 +2503,9 @@ impl<'a> Compiler<'a> {
                                 .to_string(),
                     });
                 }
-                let x = self.as_i64_expr(&call_args[0])?;
+                let x_expr = self.as_i64_expr(&call_args[0])?;
+                let x = self.next_tmp("juxt_input");
+                self.lines.push(format!("int64_t {} = {};", x, x_expr));
                 let out = self.next_tmp("juxt");
                 self.lines.push(format!(
                     "clv_vec_i64 {} = clv_vec_new({});",
@@ -2532,7 +2559,8 @@ impl<'a> Compiler<'a> {
                     "+" => format!("(({}) + ({}))", x, k),
                     "-" => format!("(({}) - ({}))", x, k),
                     "*" => format!("(({}) * ({}))", x, k),
-                    "mod" | "rem" => format!("(({}) % ({}))", x, k),
+                    "mod" => format!("clv_mod_i64({}, {})", x, k),
+                    "rem" => format!("clv_rem_i64({}, {})", x, k),
                     "quot" => format!("(({}) / ({}))", x, k),
                     _ => {
                         return Err(BackendError {
@@ -2609,7 +2637,9 @@ impl<'a> Compiler<'a> {
                         message: "partition expects 2 or 3 args (n [step] coll)".to_string(),
                     });
                 }
-                let n = self.as_i64_expr(&args[0])?;
+                let n_expr = self.as_i64_expr(&args[0])?;
+                let n = self.next_tmp("partition_n");
+                self.lines.push(format!("int64_t {} = {};", n, n_expr));
                 let (step, coll_arg) = if args.len() == 3 {
                     (self.as_i64_expr(&args[1])?, &args[2])
                 } else {
@@ -2636,7 +2666,9 @@ impl<'a> Compiler<'a> {
                         message: "partition-all expects 2 or 3 args (n [step] coll)".to_string(),
                     });
                 }
-                let n = self.as_i64_expr(&args[0])?;
+                let n_expr = self.as_i64_expr(&args[0])?;
+                let n = self.next_tmp("partition_all_n");
+                self.lines.push(format!("int64_t {} = {};", n, n_expr));
                 let (step, coll_arg) = if args.len() == 3 {
                     (self.as_i64_expr(&args[1])?, &args[2])
                 } else {
@@ -5886,11 +5918,17 @@ impl<'a> Compiler<'a> {
                         repr: CRepr::Expr("false".to_string()),
                     });
                 }
-                let first = self.as_i64_expr(&args[0])?;
+                let mut values = Vec::with_capacity(args.len());
+                for arg in args {
+                    let expr = self.as_i64_expr(arg)?;
+                    let var = self.next_tmp("not_equal_arg");
+                    self.lines.push(format!("int64_t {} = {};", var, expr));
+                    values.push(var);
+                }
+                let first = &values[0];
                 let mut parts = Vec::with_capacity(args.len() - 1);
-                for arg in &args[1..] {
-                    let v = self.as_i64_expr(arg)?;
-                    parts.push(format!("(({}) != ({}))", first, v));
+                for value in &values[1..] {
+                    parts.push(format!("(({}) != ({}))", first, value));
                 }
                 Ok(CValue {
                     ctype: CType::Bool,
@@ -5903,7 +5941,9 @@ impl<'a> Compiler<'a> {
                         message: "abs expects 1 arg".to_string(),
                     });
                 }
-                let v = self.as_i64_expr(&args[0])?;
+                let expr = self.as_i64_expr(&args[0])?;
+                let v = self.next_tmp("abs_arg");
+                self.lines.push(format!("int64_t {} = {};", v, expr));
                 Ok(CValue {
                     ctype: CType::I64,
                     repr: CRepr::Expr(format!("(({}) < 0LL ? -({}) : ({}))", v, v, v)),
@@ -5959,7 +5999,8 @@ impl<'a> Compiler<'a> {
                 }
 
                 let arg_expr = &args[0];
-                let v = self.compile_expr(arg_expr)?;
+                let raw = self.compile_expr(arg_expr)?;
+                let v = self.materialize_value("predicate_arg", raw)?;
                 let ctype = v.ctype.clone();
                 let repr = match v.repr {
                     CRepr::Expr(e) => e,
@@ -5968,18 +6009,22 @@ impl<'a> Compiler<'a> {
                 let pred = match callee {
                     "true?" => match ctype {
                         CType::Bool => format!("({})", repr),
+                        CType::OptBool => format!("(({}).has && ({}).value)", repr, repr),
                         _ => "false".to_string(),
                     },
                     "false?" => match ctype {
                         CType::Bool => format!("(!({}))", repr),
+                        CType::OptBool => format!("(({}).has && !({}).value)", repr, repr),
                         _ => "false".to_string(),
                     },
                     "number?" | "int?" | "integer?" => match ctype {
                         CType::I64 => "true".to_string(),
+                        CType::OptI64 => format!("({}).has", repr),
                         _ => "false".to_string(),
                     },
                     "string?" | "str?" => match ctype {
                         CType::Str => "true".to_string(),
+                        CType::OptStr => format!("({}).has", repr),
                         _ => "false".to_string(),
                     },
                     "vector?" | "vec?" | "coll?" | "sequential?" => match ctype {
@@ -5990,10 +6035,24 @@ impl<'a> Compiler<'a> {
                         CType::MapKI64 | CType::MapI64VecI64 => "true".to_string(),
                         _ => "false".to_string(),
                     },
-                    "keyword?" | "symbol?" | "nil?" => "false".to_string(),
-                    "some?" => "true".to_string(),
+                    "keyword?" | "symbol?" => "false".to_string(),
+                    "nil?" => match ctype {
+                        CType::Nil => "true".to_string(),
+                        CType::OptI64 | CType::OptBool | CType::OptStr => {
+                            format!("(!({}).has)", repr)
+                        }
+                        _ => "false".to_string(),
+                    },
+                    "some?" => match ctype {
+                        CType::Nil => "false".to_string(),
+                        CType::OptI64 | CType::OptBool | CType::OptStr => {
+                            format!("({}).has", repr)
+                        }
+                        _ => "true".to_string(),
+                    },
                     "boolean?" | "bool?" => match ctype {
                         CType::Bool => "true".to_string(),
+                        CType::OptBool => format!("({}).has", repr),
                         _ => "false".to_string(),
                     },
                     _ => {
@@ -7136,6 +7195,84 @@ static void clv_arena_dispose(void) {
   CLV_STR_ARENA.tail = NULL;
 }
 
+static uint64_t clv_i64_bits(int64_t value) {
+  uint64_t bits;
+  memcpy(&bits, &value, sizeof(bits));
+  return bits;
+}
+
+static int64_t clv_i64_from_bits(uint64_t bits) {
+  int64_t value;
+  memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+static int64_t clv_wrapping_shl_i64(int64_t value, int64_t shift) {
+  uint32_t count = (uint32_t)((uint64_t)shift & 63ULL);
+  return clv_i64_from_bits(clv_i64_bits(value) << count);
+}
+
+static int64_t clv_wrapping_shr_i64(int64_t value, int64_t shift) {
+  uint32_t count = (uint32_t)((uint64_t)shift & 63ULL);
+  if (count == 0) {
+    return value;
+  }
+  uint64_t bits = clv_i64_bits(value);
+  uint64_t shifted = bits >> count;
+  if ((bits & (1ULL << 63)) != 0) {
+    shifted |= UINT64_MAX << (64U - count);
+  }
+  return clv_i64_from_bits(shifted);
+}
+
+static uint64_t clv_bit_mask_i64(int64_t index) {
+  uint32_t count = (uint32_t)((uint64_t)index & 63ULL);
+  return 1ULL << count;
+}
+
+static bool clv_bit_test_i64(int64_t value, int64_t index) {
+  return (clv_i64_bits(value) & clv_bit_mask_i64(index)) != 0;
+}
+
+static int64_t clv_bit_set_i64(int64_t value, int64_t index) {
+  return clv_i64_from_bits(clv_i64_bits(value) | clv_bit_mask_i64(index));
+}
+
+static int64_t clv_bit_clear_i64(int64_t value, int64_t index) {
+  return clv_i64_from_bits(clv_i64_bits(value) & ~clv_bit_mask_i64(index));
+}
+
+static int64_t clv_bit_flip_i64(int64_t value, int64_t index) {
+  return clv_i64_from_bits(clv_i64_bits(value) ^ clv_bit_mask_i64(index));
+}
+
+static int64_t clv_rem_i64(int64_t value, int64_t divisor) {
+  if (divisor == 0) {
+    fprintf(stderr, "phase2 C: rem by zero\n");
+    abort();
+  }
+  if (value == INT64_MIN && divisor == -1) {
+    return 0;
+  }
+  return value % divisor;
+}
+
+static int64_t clv_mod_i64(int64_t value, int64_t divisor) {
+  if (divisor == 0) {
+    fprintf(stderr, "phase2 C: mod by zero\n");
+    abort();
+  }
+  int64_t remainder = clv_rem_i64(value, divisor);
+  if (remainder >= 0) {
+    return remainder;
+  }
+  uint64_t magnitude = divisor < 0
+    ? (uint64_t)(-(divisor + 1)) + 1ULL
+    : (uint64_t)divisor;
+  uint64_t remainder_magnitude = (uint64_t)(-(remainder + 1)) + 1ULL;
+  return (int64_t)(magnitude - remainder_magnitude);
+}
+
 static char* clv_str_clone_n(const char* s, size_t n) {
   char* out = (char*)clv_arena_alloc(n + 1);
   if (!out) {
@@ -8186,11 +8323,7 @@ static inline int64_t clv_apply_map_i64(int op, int64_t k, int64_t x) {
     case 6: return x > k ? x : k;
     case 7: return x < k ? x : k;
     case 8:
-      if (k == 0) {
-        fprintf(stderr, "phase2 C: mod by zero\n");
-        abort();
-      }
-      return x % k;
+      return clv_mod_i64(x, k);
     case 9: return x < 0 ? -x : x;
     case 10:
       if (k == 0) {
@@ -8199,17 +8332,13 @@ static inline int64_t clv_apply_map_i64(int op, int64_t k, int64_t x) {
       }
       return x / k;
     case 11:
-      if (k == 0) {
-        fprintf(stderr, "phase2 C: rem by zero\n");
-        abort();
-      }
-      return x % k;
+      return clv_rem_i64(x, k);
     case 12: return x < k ? -1LL : (x > k ? 1LL : 0LL);
     case 13: return x & k;
     case 14: return x | k;
     case 15: return x ^ k;
-    case 16: return x << k;
-    case 17: return x >> k;
+    case 16: return clv_wrapping_shl_i64(x, k);
+    case 17: return clv_wrapping_shr_i64(x, k);
     case 18: return ~x;
     case 19:
       if (k <= 0) {
@@ -8224,9 +8353,9 @@ static inline int64_t clv_apply_map_i64(int op, int64_t k, int64_t x) {
       return (int64_t)(clv_rng_next() % (uint64_t)k);
     case 21: return x < k ? 1LL : (x > k ? -1LL : 0LL);
     case 22: return x & (~k);
-    case 23: return x & (~(1LL << k));
-    case 24: return x ^ (1LL << k);
-    case 25: return x | (1LL << k);
+    case 23: return clv_bit_clear_i64(x, k);
+    case 24: return clv_bit_flip_i64(x, k);
+    case 25: return clv_bit_set_i64(x, k);
     case 26: return k;
     case 27: return x * x;
     case 28: return x + x;
@@ -8328,7 +8457,7 @@ static inline bool clv_apply_pred_i64(int op, int64_t k, int64_t x) {
     case 11: return x != k;
     case 12: return true;
     case 13: return false;
-    case 14: return ((x & (1LL << k)) != 0LL);
+    case 14: return clv_bit_test_i64(x, k);
     default:
       fprintf(stderr, "phase2 C: unknown pred op %d\n", op);
       abort();
@@ -9425,25 +9554,142 @@ static void clv_str_free(char* _s) {
   (void)_s;
 }
 
-static char* clv_subs_str(const char* s, int64_t start, bool has_end, int64_t end) {
-  size_t len = strlen(s);
-  if (start < 0 || (size_t)start > len) {
-    fprintf(stderr, "phase2 C: subs start out of bounds: %lld (len=%zu)\n", (long long)start, len);
+static uint32_t clv_utf8_next(const char** cursor) {
+  const unsigned char* p = (const unsigned char*)*cursor;
+  uint32_t codepoint;
+  size_t width;
+  if (p[0] < 0x80) {
+    codepoint = p[0];
+    width = 1;
+  } else if ((p[0] & 0xE0) == 0xC0 && p[1] != '\0' && (p[1] & 0xC0) == 0x80) {
+    codepoint = ((uint32_t)(p[0] & 0x1F) << 6) | (uint32_t)(p[1] & 0x3F);
+    width = 2;
+    if (codepoint < 0x80) {
+      goto invalid_utf8;
+    }
+  } else if ((p[0] & 0xF0) == 0xE0
+      && p[1] != '\0'
+      && p[2] != '\0'
+      && (p[1] & 0xC0) == 0x80
+      && (p[2] & 0xC0) == 0x80) {
+    codepoint = ((uint32_t)(p[0] & 0x0F) << 12)
+      | ((uint32_t)(p[1] & 0x3F) << 6)
+      | (uint32_t)(p[2] & 0x3F);
+    width = 3;
+    if (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+      goto invalid_utf8;
+    }
+  } else if ((p[0] & 0xF8) == 0xF0
+      && p[1] != '\0'
+      && p[2] != '\0'
+      && p[3] != '\0'
+      && (p[1] & 0xC0) == 0x80
+      && (p[2] & 0xC0) == 0x80
+      && (p[3] & 0xC0) == 0x80) {
+    codepoint = ((uint32_t)(p[0] & 0x07) << 18)
+      | ((uint32_t)(p[1] & 0x3F) << 12)
+      | ((uint32_t)(p[2] & 0x3F) << 6)
+      | (uint32_t)(p[3] & 0x3F);
+    width = 4;
+    if (codepoint < 0x10000 || codepoint > 0x10FFFF) {
+      goto invalid_utf8;
+    }
+  } else {
+    goto invalid_utf8;
+  }
+  *cursor += width;
+  return codepoint;
+
+invalid_utf8:
+  fprintf(stderr, "phase2 C: invalid UTF-8 string\n");
+  abort();
+}
+
+static bool clv_unicode_whitespace(uint32_t codepoint) {
+  return (codepoint >= 0x0009 && codepoint <= 0x000D)
+    || codepoint == 0x0020
+    || codepoint == 0x0085
+    || codepoint == 0x00A0
+    || codepoint == 0x1680
+    || (codepoint >= 0x2000 && codepoint <= 0x200A)
+    || codepoint == 0x2028
+    || codepoint == 0x2029
+    || codepoint == 0x202F
+    || codepoint == 0x205F
+    || codepoint == 0x3000;
+}
+
+static bool clv_parse_bool_str(const char* value) {
+  const char* start = value;
+  while (*start != '\0') {
+    const char* next = start;
+    uint32_t codepoint = clv_utf8_next(&next);
+    if (!clv_unicode_whitespace(codepoint)) {
+      break;
+    }
+    start = next;
+  }
+  const char* cursor = start;
+  const char* content_end = start;
+  while (*cursor != '\0') {
+    const char* next = cursor;
+    uint32_t codepoint = clv_utf8_next(&next);
+    if (!clv_unicode_whitespace(codepoint)) {
+      content_end = next;
+    }
+    cursor = next;
+  }
+  size_t len = (size_t)(content_end - start);
+  if (len == 4 && memcmp(start, "true", 4) == 0) {
+    return true;
+  }
+  if (len == 5 && memcmp(start, "false", 5) == 0) {
+    return false;
+  }
+  fprintf(stderr, "phase2 C: bool expects \"true\" or \"false\"\n");
+  abort();
+}
+
+static size_t clv_utf8_byte_offset(const char* s, int64_t index, const char* label) {
+  if (index < 0) {
+    fprintf(stderr, "phase2 C: %s out of bounds: %lld\n", label, (long long)index);
     abort();
   }
-  size_t st = (size_t)start;
-  size_t ed = len;
-  if (has_end) {
-    if (end < start || (size_t)end > len) {
-      fprintf(stderr, "phase2 C: subs end out of bounds: %lld (start=%lld, len=%zu)\n", (long long)end, (long long)start, len);
+  const char* cursor = s;
+  for (int64_t i = 0; i < index; ++i) {
+    if (*cursor == '\0') {
+      fprintf(stderr, "phase2 C: %s out of bounds: %lld\n", label, (long long)index);
       abort();
     }
-    ed = (size_t)end;
+    clv_utf8_next(&cursor);
+  }
+  return (size_t)(cursor - s);
+}
+
+static void clv_require_ascii(const char* s, const char* operation) {
+  for (const unsigned char* p = (const unsigned char*)s; *p; ++p) {
+    if (*p >= 0x80) {
+      fprintf(stderr, "phase2 C: %s currently supports ASCII strings only\n", operation);
+      abort();
+    }
+  }
+}
+
+static char* clv_subs_str(const char* s, int64_t start, bool has_end, int64_t end) {
+  size_t st = clv_utf8_byte_offset(s, start, "subs start");
+  size_t ed = strlen(s);
+  if (has_end) {
+    if (end < start) {
+      fprintf(stderr, "phase2 C: subs end out of bounds: %lld (start=%lld)\n", (long long)end, (long long)start);
+      abort();
+    }
+    ed = clv_utf8_byte_offset(s, end, "subs end");
   }
   return clv_str_clone_n(s + st, ed - st);
 }
 
 static char* clv_upper_case_str(const char* s) {
+  clv_require_ascii(s, "upper-case");
   size_t len = strlen(s);
   char* out = clv_str_clone_n(s, len);
   for (size_t i = 0; i < len; ++i) {
@@ -9453,6 +9699,7 @@ static char* clv_upper_case_str(const char* s) {
 }
 
 static char* clv_lower_case_str(const char* s) {
+  clv_require_ascii(s, "lower-case");
   size_t len = strlen(s);
   char* out = clv_str_clone_n(s, len);
   for (size_t i = 0; i < len; ++i) {
@@ -9462,6 +9709,7 @@ static char* clv_lower_case_str(const char* s) {
 }
 
 static char* clv_capitalize_str(const char* s) {
+  clv_require_ascii(s, "capitalize");
   size_t len = strlen(s);
   if (len == 0) {
     return clv_str_clone("");
@@ -9475,32 +9723,53 @@ static char* clv_capitalize_str(const char* s) {
 }
 
 static char* clv_triml_str(const char* s) {
-  size_t len = strlen(s);
-  size_t i = 0;
-  while (i < len && isspace((unsigned char)s[i])) {
-    ++i;
+  const char* cursor = s;
+  while (*cursor != '\0') {
+    const char* next = cursor;
+    uint32_t codepoint = clv_utf8_next(&next);
+    if (!clv_unicode_whitespace(codepoint)) {
+      break;
+    }
+    cursor = next;
   }
-  return clv_str_clone_n(s + i, len - i);
+  return clv_str_clone(cursor);
 }
 
 static char* clv_trimr_str(const char* s) {
-  size_t len = strlen(s);
-  while (len > 0 && isspace((unsigned char)s[len - 1])) {
-    --len;
+  const char* cursor = s;
+  const char* keep_end = s;
+  while (*cursor != '\0') {
+    const char* next = cursor;
+    uint32_t codepoint = clv_utf8_next(&next);
+    if (!clv_unicode_whitespace(codepoint)) {
+      keep_end = next;
+    }
+    cursor = next;
   }
-  return clv_str_clone_n(s, len);
+  return clv_str_clone_n(s, (size_t)(keep_end - s));
 }
 
 static char* clv_trim_str(const char* s) {
-  size_t len = strlen(s);
-  size_t st = 0;
-  while (st < len && isspace((unsigned char)s[st])) {
-    ++st;
+  const char* start = s;
+  while (*start != '\0') {
+    const char* next = start;
+    uint32_t codepoint = clv_utf8_next(&next);
+    if (!clv_unicode_whitespace(codepoint)) {
+      break;
+    }
+    start = next;
   }
-  while (len > st && isspace((unsigned char)s[len - 1])) {
-    --len;
+  const char* cursor = start;
+  const char* keep_end = start;
+  while (*cursor != '\0') {
+    const char* next = cursor;
+    uint32_t codepoint = clv_utf8_next(&next);
+    if (!clv_unicode_whitespace(codepoint)) {
+      keep_end = next;
+    }
+    cursor = next;
   }
-  return clv_str_clone_n(s + st, len - st);
+  return clv_str_clone_n(start, (size_t)(keep_end - start));
 }
 
 static char* clv_trim_newline_str(const char* s) {
@@ -9512,8 +9781,9 @@ static char* clv_trim_newline_str(const char* s) {
 }
 
 static bool clv_blank_str(const char* s) {
-  for (const unsigned char* p = (const unsigned char*)s; *p; ++p) {
-    if (!isspace(*p)) {
+  const char* cursor = s;
+  while (*cursor != '\0') {
+    if (!clv_unicode_whitespace(clv_utf8_next(&cursor))) {
       return false;
     }
   }
@@ -11549,7 +11819,7 @@ mod tests {
             })],
         };
         let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
-        assert!(c.source.contains("!= (1LL)"));
+        assert!(c.source.contains("not_equal_arg"));
         assert!(c.source.contains("printf(\"%s\\n\""));
     }
 
@@ -12149,7 +12419,7 @@ mod tests {
         };
         let c = emit_c(&program, &RuntimeConfig::default()).expect("emit should succeed");
         assert!(c.source.contains("& ~("));
-        assert!(c.source.contains("1LL <<"));
+        assert!(c.source.contains("clv_bit_mask_i64"));
         assert!(c.source.contains("clv_str_clone("));
         assert!(c.source.contains("clv_escape_runtime"));
         assert!(c.source.contains("clv_reverse_i64"));
@@ -12539,7 +12809,7 @@ mod tests {
                     name: "casted".to_string(),
                     value: Expr::Call {
                         callee: "as".to_string(),
-                        args: vec![Expr::Symbol("Int".to_string()), Expr::Bool(true)],
+                        args: vec![Expr::Symbol("Int".to_string()), Expr::Int(1)],
                     },
                 },
                 TopLevel::Def {
