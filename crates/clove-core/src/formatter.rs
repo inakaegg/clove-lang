@@ -881,7 +881,7 @@ fn format_source_once(source: &str, options: &FormatOptions) -> Result<String, S
     );
     Ok(format_forms_with_comments(
         formatted_forms,
-        &options,
+        options,
         &mut table,
         &blank_lines,
     ))

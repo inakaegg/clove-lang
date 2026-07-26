@@ -1089,7 +1089,7 @@ impl Compiler {
             let try_span = body.first().map(|f| f.span).unwrap_or(span);
             let mut items = Vec::with_capacity(1 + tail_forms.body.len());
             items.push(Form::new(FormKind::Symbol("try".into()), try_span));
-            items.extend(tail_forms.body.into_iter());
+            items.extend(tail_forms.body);
             if let Some(err_form) = tail_forms.err {
                 items.push(err_form);
             }

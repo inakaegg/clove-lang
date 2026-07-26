@@ -222,7 +222,7 @@ fn new_core_like_helpers() {
         other => panic!("expected map, got {:?}", other),
     }
     // spit / slurp roundtrip
-    let mut path = PathBuf::from(std::env::temp_dir());
+    let mut path = std::env::temp_dir();
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

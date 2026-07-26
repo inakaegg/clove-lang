@@ -1619,7 +1619,7 @@ fn type_field_completion_items(
             item.detail = Some(field.schema.clone());
         }
         item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-            range: replace_range.clone(),
+            range: *replace_range,
             new_text: field.name.clone(),
         }));
         items.push(item);
@@ -1650,7 +1650,7 @@ fn indexer_completion_items(
             item.detail = Some("map".to_string());
         }
         item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-            range: context.range.clone(),
+            range: context.range,
             new_text: field.name.clone(),
         }));
         items.push(item);
@@ -1754,7 +1754,7 @@ fn build_type_completion_item(
     item.kind = Some(kind);
     item.detail = detail;
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: label.to_string(),
     }));
     if let Some(symbol) = canonical {
@@ -2405,7 +2405,7 @@ fn fnmeta_completion_items(
         item.kind = Some(CompletionItemKind::FUNCTION);
         item.detail = fnmeta_signature_label(&label, &meta);
         item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-            range: replace_range.clone(),
+            range: *replace_range,
             new_text: label,
         }));
         items.push(item);
@@ -2443,7 +2443,7 @@ fn build_completion_item(entry: &DocEntry, replace_range: &Range) -> CompletionI
     item.detail = completion_detail(entry);
     item.documentation = documentation_for_entry(entry);
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: entry.name.clone(),
     }));
     item.data = Some(json!({ "symbol": entry.canonical.clone() }));
@@ -2461,7 +2461,7 @@ fn build_alias_completion_item(
     item.detail = completion_detail(entry);
     item.documentation = documentation_for_entry(entry);
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: alias.to_string(),
     }));
     item.data = Some(json!({ "symbol": entry.canonical.clone() }));
@@ -6931,7 +6931,7 @@ fn enum_variant_completion_items(
                 item.label = label.clone();
                 item.kind = Some(CompletionItemKind::ENUM_MEMBER);
                 item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-                    range: replace_range.clone(),
+                    range: *replace_range,
                     new_text: label,
                 }));
                 items.push(item);

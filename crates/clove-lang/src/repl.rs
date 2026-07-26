@@ -444,7 +444,7 @@ impl ReplCompleter {
             push_entry(name, value, source);
         }
 
-        for name in SPECIAL_FORMS.iter().copied() {
+        for name in SPECIAL_FORMS {
             push_entry(name.to_string(), None, SymbolSource::SpecialForm);
         }
         if include_docs {
@@ -452,7 +452,7 @@ impl ReplCompleter {
                 push_entry(name, None, SymbolSource::Docs);
             }
         }
-        for lit in LITERAL_CANDIDATES.iter().copied() {
+        for lit in LITERAL_CANDIDATES {
             push_entry(lit.to_string(), None, SymbolSource::Literal);
         }
         entries

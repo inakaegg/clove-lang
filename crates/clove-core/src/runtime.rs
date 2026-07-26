@@ -1133,7 +1133,7 @@ impl RuntimeCtx {
         });
         let mut items = Vec::with_capacity(1 + tail.body.len());
         items.push(Form::new(FormKind::Symbol("try".into()), try_span));
-        items.extend(tail.body.into_iter());
+        items.extend(tail.body);
         if let Some(err_form) = tail.err {
             items.push(err_form);
         }

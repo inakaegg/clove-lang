@@ -1096,9 +1096,7 @@ mod tests {
     #[test]
     fn take_last_handles_seq_and_shorter_length() {
         let env = default_env();
-        let seq = Value::Seq(SeqHandle::from_iter(
-            vec![Value::Int(5), Value::Int(6)].into_iter(),
-        ));
+        let seq = Value::Seq(SeqHandle::from_iter(vec![Value::Int(5), Value::Int(6)]));
         let res = call(&env, "take-last", vec![Value::Int(5), seq]);
         assert_eq!(
             res,

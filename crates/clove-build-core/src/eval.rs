@@ -4555,7 +4555,7 @@ impl Evaluator {
         };
         let mut out: BTreeMap<Key, Value> = BTreeMap::new();
         for key in keys.as_ref().iter() {
-            let key = value_to_key(&key)?;
+            let key = value_to_key(key)?;
             if let Some(value) = map.get(&key) {
                 out.insert(key, value.clone());
             }

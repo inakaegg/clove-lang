@@ -408,10 +408,10 @@ pub(crate) fn seq_handle_from_value(v: Value) -> Result<Option<SeqHandle>, Clove
     let handle = match v {
         Value::Nil => return Ok(None),
         Value::Seq(handle) => handle,
-        Value::List(items) => SeqHandle::from_iter(items.into_iter()),
-        Value::Vector(items) => SeqHandle::from_iter(items.into_iter()),
-        Value::Set(items) => SeqHandle::from_iter(items.into_iter()),
-        Value::SortedSet(items) => SeqHandle::from_iter(items.entries.into_iter()),
+        Value::List(items) => SeqHandle::from_iter(items),
+        Value::Vector(items) => SeqHandle::from_iter(items),
+        Value::Set(items) => SeqHandle::from_iter(items),
+        Value::SortedSet(items) => SeqHandle::from_iter(items.entries),
         Value::MutVector(handle) => {
             let items: Vec<Value> = handle
                 .lock()

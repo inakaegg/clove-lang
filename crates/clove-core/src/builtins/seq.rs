@@ -1362,7 +1362,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                     .unwrap_or(Value::Nil);
                 let mut call_args = Vec::with_capacity(1 + extra.len());
                 call_args.push(current);
-                call_args.extend_from_slice(&extra);
+                call_args.extend_from_slice(extra);
                 let new_val = call_callable(f.clone(), call_args)?;
                 new_map.insert(to_key_value_checked(key)?, to_imut_deep(&new_val)?);
                 Ok(Value::Map(new_map))
@@ -1373,7 +1373,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                 let current = sorted_map_get(&base, &lookup_key)?.unwrap_or(Value::Nil);
                 let mut call_args = Vec::with_capacity(1 + extra.len());
                 call_args.push(current);
-                call_args.extend_from_slice(&extra);
+                call_args.extend_from_slice(extra);
                 let new_val = call_callable(f.clone(), call_args)?;
                 let mut new_map = base;
                 sorted_map_insert_mut(&mut new_map, lookup_key, to_imut_deep(&new_val)?)?;
@@ -1389,7 +1389,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                             .unwrap_or(Value::Nil);
                         let mut call_args = Vec::with_capacity(1 + extra.len());
                         call_args.push(current);
-                        call_args.extend_from_slice(&extra);
+                        call_args.extend_from_slice(extra);
                         let new_val = call_callable(f.clone(), call_args)?;
                         let mut new_map = map;
                         new_map.insert(to_key_value_checked(key)?, to_imut_deep(&new_val)?);
@@ -1402,7 +1402,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                 let mut new_map = HashMap::new();
                 let mut call_args = Vec::with_capacity(1 + extra.len());
                 call_args.push(Value::Nil);
-                call_args.extend_from_slice(&extra);
+                call_args.extend_from_slice(extra);
                 let new_val = call_callable(f.clone(), call_args)?;
                 new_map.insert(to_key_value_checked(key)?, to_imut_deep(&new_val)?);
                 Ok(Value::Map(new_map))
@@ -3970,9 +3970,10 @@ mod tests {
     #[test]
     fn subvec_defaults_end_and_works_on_seq() {
         let env = default_env();
-        let seq = Value::Seq(SeqHandle::from_iter(
-            vec![Value::String("a".into()), Value::String("b".into())].into_iter(),
-        ));
+        let seq = Value::Seq(SeqHandle::from_iter(vec![
+            Value::String("a".into()),
+            Value::String("b".into()),
+        ]));
         let res = call(&env, "subvec", vec![seq, Value::Int(1)]);
         assert_eq!(
             res,

@@ -512,8 +512,8 @@ impl DocumentStore {
                 kind: lsp_symbol_kind(&info.kind),
                 tags: None,
                 deprecated: None,
-                range: info.range.clone(),
-                selection_range: info.range.clone(),
+                range: info.range,
+                selection_range: info.range,
                 children: None,
             });
         }
@@ -568,7 +568,7 @@ impl DocumentStore {
                 };
                 return Some(Location {
                     uri: uri.clone(),
-                    range: field.range.clone(),
+                    range: field.range,
                 });
             }
         }
@@ -760,7 +760,7 @@ impl DocumentStore {
         let range = self
             .docs
             .get(uri)
-            .and_then(|d| d.namespace_span.clone())
+            .and_then(|d| d.namespace_span)
             .unwrap_or(Range {
                 start: Position {
                     line: 0,
@@ -1785,7 +1785,7 @@ fn build_user_completion_item(info: &SymbolInfo, replace_range: &Range) -> Compl
     item.detail = symbol_signature_label(info);
     item.documentation = user_documentation(info);
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: info.name.clone(),
     }));
     item.data = Some(json!({ "symbol": info.canonical.clone(), "source": "user" }));

@@ -45,7 +45,7 @@ impl<T> From<VecDeque<T>> for Vector<T> {
 
 impl<T: Clone> From<ImVector<T>> for Vector<T> {
     fn from(items: ImVector<T>) -> Self {
-        Self(Arc::new(VecDeque::from_iter(items.into_iter())))
+        Self(Arc::new(VecDeque::from_iter(items)))
     }
 }
 
@@ -215,7 +215,7 @@ where
     pub fn into_std(self) -> StdHashMap<K, V> {
         match self.0 {
             MapRepr::Small(entries) => StdHashMap::from_iter(entries),
-            MapRepr::Large(map) => StdHashMap::from_iter(map.into_iter()),
+            MapRepr::Large(map) => StdHashMap::from_iter(map),
         }
     }
 }

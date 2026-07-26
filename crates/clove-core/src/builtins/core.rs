@@ -784,7 +784,7 @@ pub(crate) fn install(env: &mut Env) {
                     let mut new_map = HashMap::new();
                     for (k, v) in map_coll {
                         let new_key = mapping
-                            .get(&k)
+                            .get(k)
                             .map(|repl| to_key_value_checked(repl))
                             .transpose()?
                             .unwrap_or_else(|| k.clone());
@@ -827,7 +827,7 @@ pub(crate) fn install(env: &mut Env) {
                 Value::Map(map_coll) => {
                     let mut new_map = HashMap::new();
                     for (k, v) in map_coll {
-                        let new_key = if let Some(repl) = sorted_map_get(mapping, &k)? {
+                        let new_key = if let Some(repl) = sorted_map_get(mapping, k)? {
                             to_key_value_checked(&repl)?
                         } else {
                             k.clone()

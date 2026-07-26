@@ -81,7 +81,7 @@ pub fn infer_program_with_expr_spans(
         if spans.len() == trace.len() {
             summary.expr_types = spans
                 .into_iter()
-                .zip(trace.into_iter())
+                .zip(trace)
                 .map(|(span, entry)| ExprTypeEntry {
                     span,
                     kind: entry.kind,
@@ -10538,7 +10538,7 @@ fn infer_try_call(
         && body_refs.len() >= 2
         && is_try_handler_expr(body_refs.last().unwrap())
     {
-        if is_try_handler_expr(&body_refs[body_refs.len() - 2]) {
+        if is_try_handler_expr(body_refs[body_refs.len() - 2]) {
             on_finally = body_refs.pop();
             on_error = body_refs.pop();
         } else {

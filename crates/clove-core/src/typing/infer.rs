@@ -420,7 +420,7 @@ fn infer_vector_with_tuple_hint(
     }
     for (item, (actual, expected)) in items.iter().zip(inferred.iter().zip(expected.iter())) {
         let expected_applied = st.subst.apply(expected);
-        st.try_unify(&actual, &expected_applied, item.span, true)?;
+        st.try_unify(actual, &expected_applied, item.span, true)?;
     }
     let applied = expected.iter().map(|t| st.subst.apply(t)).collect();
     Ok(Type::Tuple(applied))
@@ -4639,13 +4639,13 @@ fn infer_contains(items: &[Form], st: &mut InferState) -> Result<Type, TypeError
     let key_ty = infer_form(&items[2], st)?;
     match coll_ty.clone() {
         Type::Map(k, _) => {
-            st.try_unify(&*k, &key_ty, items[2].span, true)?;
+            st.try_unify(&k, &key_ty, items[2].span, true)?;
         }
         Type::Vector(inner) => {
-            st.try_unify(&*inner, &key_ty, items[2].span, true)?;
+            st.try_unify(&inner, &key_ty, items[2].span, true)?;
         }
         Type::Set(inner) => {
-            st.try_unify(&*inner, &key_ty, items[2].span, true)?;
+            st.try_unify(&inner, &key_ty, items[2].span, true)?;
         }
         _ => {}
     }
