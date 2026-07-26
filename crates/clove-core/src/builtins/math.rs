@@ -88,6 +88,9 @@ pub(crate) fn install(env: &mut Env) {
                 if *n < 0 {
                     return err("* expects non-negative repeat count");
                 }
+                // One allocation sized from a number: nothing iterates here for
+                // `guard::tick` to run in, so check the size before asking for it.
+                crate::guard::reserve((s.len() as u64).saturating_mul(*n as u64), None)?;
                 return Ok(Value::String(s.repeat(*n as usize)));
             }
         }

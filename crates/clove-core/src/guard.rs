@@ -29,12 +29,17 @@ impl GuardConfig {
 }
 
 pub fn default_config() -> GuardConfig {
-    let mut hard = 4_u64 * 1024 * 1024 * 1024;
+    const GB: u64 = 1024 * 1024 * 1024;
+    // 4GB is the ceiling on a large machine. Below that, scale with installed memory:
+    // taking 4GB on an 8GB laptop that also runs an editor and a browser means swapping,
+    // which is exactly the freeze the guard exists to prevent. The floor keeps small
+    // machines and containers usable.
+    let mut hard = 4 * GB;
     if let Some(total) = total_memory_bytes() {
-        let scaled = (total / 10).saturating_mul(6);
+        let scaled = ((total / 10).saturating_mul(4)).max(512 * 1024 * 1024);
         hard = hard.min(scaled);
     }
-    let soft = (3_u64 * 1024 * 1024 * 1024).min(hard.saturating_mul(3) / 4);
+    let soft = (3 * GB).min(hard.saturating_mul(3) / 4);
     GuardConfig {
         enabled: true,
         soft_bytes: soft,
@@ -138,6 +143,46 @@ mod guard_impl {
             );
         }
         Ok(())
+    }
+
+    /// Refuse an allocation that cannot fit under the hard cap.
+    ///
+    /// [`tick_inner`] only samples RSS between iterations, so a builtin that sizes one
+    /// allocation from a number (`(* "x" 1000000000)`) would be past the cap before the
+    /// next sample. Small requests skip the RSS read so hot paths stay cheap.
+    pub(super) fn reserve_inner(bytes: u64, span: Option<Span>) -> Result<(), CloveError> {
+        const MIN_CHECKED_BYTES: u64 = 1024 * 1024;
+        if bytes < MIN_CHECKED_BYTES || !ENABLED.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        let hard = HARD_BYTES.load(Ordering::Relaxed);
+        if hard == 0 {
+            return Ok(());
+        }
+        let Some(current) = current_rss_bytes() else {
+            return Ok(());
+        };
+        if current.saturating_add(bytes) > hard {
+            return Err(reserve_error(current, bytes, hard, span));
+        }
+        Ok(())
+    }
+
+    fn reserve_error(rss: u64, bytes: u64, hard: u64, span: Option<Span>) -> CloveError {
+        let mut msg = format!(
+            "Memory limit exceeded (this operation needs {}, rss={}, hard={})",
+            human_bytes(bytes),
+            human_bytes(rss),
+            human_bytes(hard)
+        );
+        msg.push_str(
+            "\nHints:\n  - the size comes from a count, so check it before building the collection\n  - build it lazily and (take N ...) what you need",
+        );
+        let mut err = CloveError::guard(msg);
+        if let Some(span) = span {
+            err = err.with_span(span);
+        }
+        err
     }
 
     fn memory_error(rss: u64, soft: u64, hard: u64, span: Option<Span>) -> CloveError {
@@ -284,6 +329,23 @@ pub fn tick(span: Option<Span>) -> Result<(), CloveError> {
 pub fn tick(_span: Option<Span>) -> Result<(), CloveError> {
     interrupt::check_for_interrupt()
 }
+
+/// Fail before allocating `bytes` if that would cross the hard cap.
+///
+/// For builtins that size a single allocation from a number, where there is no iteration
+/// for [`tick`] to run in.
+#[cfg(feature = "repl_guard")]
+pub fn reserve(bytes: u64, span: Option<Span>) -> Result<(), CloveError> {
+    guard_impl::reserve_inner(bytes, span)
+}
+
+#[cfg(not(feature = "repl_guard"))]
+pub fn reserve(_bytes: u64, _span: Option<Span>) -> Result<(), CloveError> {
+    Ok(())
+}
+
+/// Bytes an element of a collection costs, for [`reserve`] estimates.
+pub const VALUE_SIZE_ESTIMATE: u64 = std::mem::size_of::<crate::ast::Value>() as u64;
 
 #[cfg(feature = "repl_guard")]
 fn total_memory_bytes() -> Option<u64> {
