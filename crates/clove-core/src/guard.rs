@@ -64,6 +64,10 @@ mod guard_impl {
     static WARN_EVERY_MS: AtomicU64 = AtomicU64::new(1000);
     static ITER_MASK: AtomicU64 = AtomicU64::new(0x3fff);
 
+    /// How often the time-based trigger may read the clock, as a bitmask on the tick
+    /// counter.
+    const TIME_CHECK_MASK: u64 = 0x3f;
+
     struct GuardState {
         iters: u64,
         last_check: Instant,
@@ -111,7 +115,15 @@ mod guard_impl {
         STATE.with(|cell| {
             let mut state = cell.borrow_mut();
             state.iters = state.iters.wrapping_add(1);
-            if (state.iters & iter_mask) == 0 || state.last_check.elapsed() >= check_every {
+            // Reading the clock on every tick cost a `clock_gettime` per evaluated form
+            // (~2% of a tight loop). The iteration mask is the cheap trigger; the
+            // time-based trigger, which matters when ticks are infrequent, only consults
+            // the clock every TIME_CHECK_MASK+1 ticks.
+            let mask_hit = (state.iters & iter_mask) == 0;
+            let time_hit = !mask_hit
+                && (state.iters & TIME_CHECK_MASK) == 0
+                && state.last_check.elapsed() >= check_every;
+            if mask_hit || time_hit {
                 state.last_check = Instant::now();
                 if let Some(current) = current_rss_bytes() {
                     rss = Some(current);

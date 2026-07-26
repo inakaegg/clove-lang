@@ -16,6 +16,11 @@ thread_local! {
 }
 
 pub fn is_dynamic_var(name: &str) -> bool {
+    // Every dynamic var is *earmuffed*, and this is asked on every symbol resolution, so
+    // ordinary symbols skip the type-hint strip and the scan.
+    if !name.starts_with('*') {
+        return false;
+    }
     let canonical = canonical_symbol_name(name);
     DYNAMIC_VARS.iter().any(|n| canonical.as_ref() == *n)
 }

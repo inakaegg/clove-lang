@@ -9340,6 +9340,12 @@ impl Evaluator {
     }
 
     fn decorate_error(&self, err: CloveError, span: Span, env: EnvRef) -> CloveError {
+        // `recur` is carried by an error variant that holds no context, so every loop
+        // iteration came through here and paid for a file-name clone and a captured
+        // stack that were then dropped.
+        if !err.carries_context() {
+            return err;
+        }
         let with_span = err.with_span(span);
         let with_file = with_span.with_file(current_file_name());
         let with_env = with_file.with_env(env);

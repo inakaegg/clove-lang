@@ -240,6 +240,14 @@ impl CloveError {
             .unwrap_or(&[])
     }
 
+    /// Whether this error can hold span / file / stack information.
+    ///
+    /// `RecurSignal` cannot: it is control flow, not a diagnostic, and it travels the
+    /// error path on every loop iteration.
+    pub fn carries_context(&self) -> bool {
+        self.context_ref().is_some()
+    }
+
     fn context_ref(&self) -> Option<&ErrorContext> {
         match self {
             CloveError::UnboundSymbol(data)
