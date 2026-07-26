@@ -95,11 +95,19 @@ pub fn clove_fn(args: TokenStream, input: TokenStream) -> TokenStream {
     let expanded = quote! {
         #item_fn
 
-        fn #register_name(
+        /// # Safety
+        ///
+        /// `env` must be the live `EnvHandle` the host passed to `clove_plugin_init_v1`.
+        unsafe fn #register_name(
             host: &::clove_plugin_sdk::HostApiV1,
             env: ::clove_plugin_sdk::EnvHandle,
         ) -> bool {
-            ::clove_plugin_sdk::register_fn(host, env, #name, #arity_min, #arity_max, #fn_name)
+            // 生成先はプラグイン側のcrate。unsafe fn 本体が暗黙の unsafe ブロックになる
+            // 挙動（edition 2021）にも、rustc がマクロ展開内で
+            // unsafe_op_in_unsafe_fn を報告しない現在の挙動にも依存しないよう明示する。
+            unsafe {
+                ::clove_plugin_sdk::register_fn(host, env, #name, #arity_min, #arity_max, #fn_name)
+            }
         }
 
         ::clove_plugin_sdk::inventory::submit! {
