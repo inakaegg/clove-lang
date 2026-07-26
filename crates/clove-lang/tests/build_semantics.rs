@@ -243,7 +243,8 @@ mod recorded_defects {
     fn self_recursion_reports_an_error_instead_of_crashing_the_build() {
         // The backend inlines a function body at each call site, so a recursive call
         // expanded forever and took the build process down with a stack overflow.
-        let message = build_message("(defn f [n] (if (< n 2) 1 (* n (f (dec n)))))\n(println (f 5))");
+        let message =
+            build_message("(defn f [n] (if (< n 2) 1 (* n (f (dec n)))))\n(println (f 5))");
         assert!(
             message.contains("recursive"),
             "expected a recursion error, got:\n{message}"
@@ -268,6 +269,70 @@ mod recorded_defects {
         assert!(
             !message.contains("overflowed its stack"),
             "the build must not crash:\n{message}"
+        );
+    }
+}
+
+/// `-main` in native builds: opt-in with `--main`, mirroring the interpreter's flag.
+mod main_entry {
+    use super::*;
+
+    fn build_with(
+        source: &str,
+        extra_args: &[&str],
+    ) -> (Output, std::path::PathBuf, tempfile::TempDir) {
+        let root = tempdir().expect("create temporary build directory");
+        let input = root.path().join("input.clv");
+        let binary = root.path().join("output");
+        fs::write(&input, source).expect("write Clove source");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_clove"));
+        command.arg("build").arg(&input).arg("--out").arg(&binary);
+        command.args(extra_args);
+        let output = command.output().expect("run clove build");
+        (output, binary, root)
+    }
+
+    #[test]
+    fn main_is_called_only_with_the_flag() {
+        let source = "(defn -main [] (println \"from main\"))\n(println \"top level\")\n";
+
+        let (build, binary, _root) = build_with(source, &["--main"]);
+        assert!(
+            build.status.success(),
+            "build --main failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "top level\nfrom main\n");
+
+        let (build, binary, _root) = build_with(source, &[]);
+        assert!(build.status.success(), "build without --main failed");
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "top level\n");
+    }
+
+    #[test]
+    fn defining_main_without_the_flag_warns() {
+        let (build, _binary, _root) =
+            build_with("(defn -main [] (println \"x\"))\n(println \"y\")\n", &[]);
+        let stderr = String::from_utf8_lossy(&build.stderr).to_string();
+        assert!(
+            stderr.contains("-main"),
+            "expected a warning about -main, got:\n{stderr}"
+        );
+    }
+
+    #[test]
+    fn asking_for_main_without_defining_it_is_an_error() {
+        let (build, _binary, _root) = build_with("(println \"y\")\n", &["--main"]);
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&build.stdout),
+            String::from_utf8_lossy(&build.stderr)
+        );
+        assert!(
+            !build.status.success() && message.contains("-main"),
+            "expected an error about the missing -main, got:\n{message}"
         );
     }
 }

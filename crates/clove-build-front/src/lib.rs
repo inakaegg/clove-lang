@@ -1,12 +1,59 @@
 use std::path::PathBuf;
 
 use clove_build_core::ast::Literal;
+use clove_build_core::ast::Span as IrSpan;
 use clove_build_core::reader::read_all;
 use clove_build_core::syntax::parse_forms;
 use clove_build_core::typed_ir::{
-    lower_program, Expr as IrExpr, ExprKind as IrExprKind, Program as IrProgram,
-    TopLevel as IrTopLevel,
+    lower_program, Effect as IrEffect, Expr as IrExpr, ExprKind as IrExprKind,
+    LoweringMode as IrLoweringMode, Mutability as IrMutability, Ownership as IrOwnership,
+    Program as IrProgram, TopLevel as IrTopLevel,
 };
+
+/// Entry-point function name, matching the interpreter's `clove --main`.
+pub const MAIN_FN: &str = "-main";
+
+/// Whether the program defines the entry-point function.
+pub fn defines_main(program: &IrProgram) -> bool {
+    program.top_levels.iter().any(|top| match top {
+        IrTopLevel::Def { name, .. } | IrTopLevel::FnDef { name, .. } => name == MAIN_FN,
+        _ => false,
+    })
+}
+
+/// Append a call to the entry-point function as the last top-level form.
+///
+/// Native builds otherwise only run top-level forms, so a program written around `-main`
+/// built successfully and printed nothing.
+pub fn append_main_call(program: &mut IrProgram) {
+    let expr = ir_expr(
+        IrExprKind::Call {
+            callee: Box::new(ir_expr(
+                IrExprKind::Var(MAIN_FN.to_string()),
+                IrSpan::new(0, 0),
+            )),
+            args: Vec::new(),
+        },
+        IrSpan::new(0, 0),
+    );
+    program.top_levels.push(IrTopLevel::Expr {
+        expr,
+        span: IrSpan::new(0, 0),
+    });
+}
+
+/// A synthesized typed-IR node. `-main` is called for its output, so the effect is IO.
+fn ir_expr(kind: IrExprKind, span: IrSpan) -> IrExpr {
+    IrExpr {
+        kind,
+        ty: None,
+        span,
+        effect: IrEffect::IO,
+        ownership: IrOwnership::Owned,
+        mutability: IrMutability::Imut,
+        lowering: IrLoweringMode::NativePreferred,
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
