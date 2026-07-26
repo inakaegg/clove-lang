@@ -4,7 +4,7 @@
 //! - Substitution (`Subst`) and unification
 //! - Generalization / instantiation
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::Span;
 
@@ -88,7 +88,7 @@ impl TypeEnv {
     }
 
     pub fn generalize(&self, ty: &Type) -> Scheme {
-        let free_env = free_type_vars_scheme_map(&self.vars);
+        let free_env = free_env_vars(&self.vars, None);
         let free_ty = free_type_vars(ty);
         let vars: Vec<TypeVar> = free_ty
             .into_iter()
@@ -102,7 +102,7 @@ impl TypeEnv {
 
     pub fn generalize_with_subst(&self, ty: &Type, subst: &Subst) -> Scheme {
         let applied = subst.apply(ty);
-        let free_env = free_type_vars_scheme_map_with_subst(&self.vars, subst);
+        let free_env = free_env_vars(&self.vars, Some(subst));
         let free_ty = free_type_vars(&applied);
         let vars: Vec<TypeVar> = free_ty
             .into_iter()
@@ -580,21 +580,29 @@ fn format_pretty_type_var(id: usize) -> String {
     }
 }
 
-fn free_type_vars_scheme_map(map: &HashMap<String, Scheme>) -> Vec<TypeVar> {
-    let mut out = Vec::new();
+/// Type variables that are free in the environment, optionally seen through `subst`.
+///
+/// Called once per generalization, i.e. once per `defn`. The earlier version cloned the
+/// whole substitution and rebuilt every scheme's type for each entry in the environment,
+/// which made loading the LSP's builtin stubs quadratic (measured: ~5s of a 5s
+/// `initialize`, 45% of it in `HashMap::clone`). Expanding each scheme's own free
+/// variables through the substitution gives the same set: the free variables of
+/// `apply(subst, ty)` are the union of the free variables of `subst(v)` for every free `v`
+/// in `ty`, and `Subst::apply` substitutes a variable only once.
+fn free_env_vars(map: &HashMap<String, Scheme>, subst: Option<&Subst>) -> HashSet<TypeVar> {
+    let mut out = HashSet::new();
     for scheme in map.values() {
-        out.extend(free_type_vars_scheme(scheme));
-    }
-    out
-}
-
-fn free_type_vars_scheme_map_with_subst(
-    map: &HashMap<String, Scheme>,
-    subst: &Subst,
-) -> Vec<TypeVar> {
-    let mut out = Vec::new();
-    for scheme in map.values() {
-        out.extend(free_type_vars_scheme_with_subst(scheme, subst));
+        for var in free_type_vars(&scheme.ty) {
+            if scheme.vars.contains(&var) {
+                continue;
+            }
+            match subst.and_then(|subst| subst.map.get(&var)) {
+                Some(ty) => out.extend(free_type_vars(ty)),
+                None => {
+                    out.insert(var);
+                }
+            }
+        }
     }
     out
 }
