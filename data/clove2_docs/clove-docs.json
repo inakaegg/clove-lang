@@ -1120,7 +1120,7 @@
     "doc": "Insert sep between every pair of items in coll, returning a vector.",
     "origin": "core",
     "examples": [
-      "(interpose :/ [:a :b :c]) ; => [:a :/ :b :/ :c]",
+      "(interpose :sep [:a :b :c]) ; => [:a :sep :b :sep :c]",
       "(interpose 0 [1 2]) ; => [1 0 2]"
     ]
   },
@@ -1323,8 +1323,8 @@
     "doc": "Alias of nav; unified search across namespaces, vars, and docs.",
     "origin": "special form",
     "examples": [
-      "(lookup \"disj\") ; => {:kind :nav ...}",
-      "(lookup /take|drop/ :var :doc) ; => {:kind :nav ...}"
+      "(:kind (lookup \"disj\")) ; => :nav",
+      "(:kind (lookup /take|drop/ :var :doc)) ; => :nav"
     ]
   },
   {
@@ -1465,9 +1465,9 @@
     "doc": "Unified search across namespaces, vars, and docs with a single API.",
     "origin": "special form",
     "examples": [
-      "(nav 'disj) ; => {:kind :nav ...}",
-      "(nav 'disj :var) ; => {:kind :nav ...}",
-      "(nav /take|drop/ :var :doc) ; => {:kind :nav ...}"
+      "(:query (nav 'disj)) ; => \"disj\"",
+      "(:kind (nav 'disj :var)) ; => :nav",
+      "(:kind (nav /take|drop/ :var :doc)) ; => :nav"
     ]
   },
   {
@@ -1701,7 +1701,7 @@
     "doc": "Return the pr-str representation of the given values as a single string.",
     "origin": "core",
     "examples": [
-      "(pr-str [1 2 3]) ; => \"\\\"[1 2 3]\\\"\" ; Return a string"
+      "(pr-str [1 2 3]) ; => \"[1 2 3]\" ; Return a string"
     ]
   },
   {

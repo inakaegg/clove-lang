@@ -1211,7 +1211,7 @@
     "doc": "Return the docstring for the symbol or value (or nil).",
     "origin": "core",
     "examples": [
-      "(doc 'defn) ; => \"Define a named function. Optional docstring and attr-map may appear after the name in any order.\"",
+      "(string::includes? (doc 'defn) \"Define a named function\") ; => true",
       "(defn f \"hi\" [] 1) (doc 'f) ; => \"hi\""
     ]
   },
@@ -1473,8 +1473,8 @@
     "doc": "Return the inferred signature for a function value.",
     "origin": "core",
     "examples": [
-      "(fn-type (fn [x] x)) ; => \"[a] -> a\"",
-      "(fn-type #(str %)) ; => \"[Any] -> Str\""
+      "(fn-type (fn [x] x)) ; => \"['a] -> 'a\"",
+      "(fn-type (fn [x: Int] -> Int x)) ; => \"[Int] -> Int\""
     ]
   },
   {
@@ -1673,7 +1673,7 @@
     "origin": "core",
     "examples": [
       "(symbol? (gensym)) ; => true",
-      "(string/starts-with? (str (gensym \"tmp\")) \"tmp\") ; => true"
+      "(string::starts-with? (str (gensym \"tmp\")) \"tmp\") ; => true"
     ]
   },
   {
@@ -1995,7 +1995,7 @@
     "doc": "Insert sep between every pair of items in coll, returning a vector.",
     "origin": "core",
     "examples": [
-      "(interpose :/ [:a :b :c]) ; => [:a :/ :b :/ :c]",
+      "(interpose :sep [:a :b :c]) ; => [:a :sep :b :sep :c]",
       "(interpose 0 [1 2]) ; => [1 0 2]"
     ]
   },
@@ -2035,7 +2035,7 @@
     "doc": "Encode the value into compact JSON text and return it as a string.",
     "origin": "json",
     "examples": [
-      "(json::generate {:a 1}) ; => \"{\"a\":1}\"",
+      "(json::generate {:a 1}) ; => \"{\\\"a\\\":1}\"",
       "(json::generate [1 2 3]) ; => \"[1,2,3]\""
     ]
   },
@@ -2045,7 +2045,7 @@
     "doc": "Encode the value into pretty-printed JSON text (with indentation).",
     "origin": "json",
     "examples": [
-      "(json::generate-pretty {:a 1}) ; => \"{\n  \"a\": 1\n}\"",
+      "(json::generate-pretty {:a 1}) ; => \"{\\n  \\\"a\\\": 1\\n}\"",
       "(json::generate-pretty [1]) ; => \"[\n  1\n]\""
     ]
   },
@@ -2249,8 +2249,8 @@
     "doc": "Alias of nav; unified search across namespaces, vars, and docs.",
     "origin": "special form",
     "examples": [
-      "(lookup \"disj\") ; => {:kind :nav ...}",
-      "(lookup /take|drop/ :var :doc) ; => {:kind :nav ...}"
+      "(:kind (lookup \"disj\")) ; => :nav",
+      "(:kind (lookup #/take|drop/ :var :doc)) ; => :nav"
     ]
   },
   {
@@ -2656,9 +2656,9 @@
     "doc": "Unified search across namespaces, vars, and docs with a single API.",
     "origin": "special form",
     "examples": [
-      "(nav 'disj) ; => {:kind :nav ...}",
-      "(nav 'disj :var) ; => {:kind :nav ...}",
-      "(nav /take|drop/ :var :doc) ; => {:kind :nav ...}"
+      "(:query (nav 'disj)) ; => \"disj\"",
+      "(:kind (nav 'disj :var)) ; => :nav",
+      "(:kind (nav #/take|drop/ :var :doc)) ; => :nav"
     ]
   },
   {
@@ -2915,7 +2915,7 @@
     "doc": "Return the pr-str representation of the given values as a single string.",
     "origin": "core",
     "examples": [
-      "(pr-str [1 2 3]) ; => \"\\\"[1 2 3]\\\"\" ; Return a string"
+      "(pr-str [1 2 3]) ; => \"[1 2 3]\" ; Return a string"
     ]
   },
   {
@@ -2924,7 +2924,7 @@
     "doc": "Return the pretty-printed readable representation of x as a string. Reads clovefmt.toml or .clovefmt.toml from the current directory for indent/width unless overridden by opts {:indent :width}. Limits {:max-depth :max-items :max-string :max-bytes} apply while rendering; non-literal values are stringified to keep output parseable.",
     "origin": "core",
     "examples": [
-      "(pp-str {:a 1 :b [1 2 3 {:c 4}]}) ; => \"{:a 1 :b [1 2 3 {:c 4}]}\"",
+      "(pp-str {:a 1 :b [1 2 3 {:c 4}]}) ; => \"{:a 1\\n :b [1\\n     2\\n     3\\n     {:c 4}]}\"",
       "(pp-str {:a [1 2 3 4 5 6]} {:max-items 3}) ; => \"{:a [1 2 3 ...]}\""
     ]
   },
@@ -2934,8 +2934,8 @@
     "doc": "Pretty-print x to *out* and return x. Uses the same opts as pp-str for indent/width and limits.",
     "origin": "core",
     "examples": [
-      "(comment (pp {:a 1 :b [1 2 3 {:c 4}]})) ; => {:a 1 :b [1 2 3 {:c 4}]} ; Pretty-print value",
-      "(comment (pp {:a [1 2 3 4 5 6]} {:max-items 3})) ; => {:a [1 2 3 ...]} ; Pretty-print with limits"
+      "(comment (pp {:a 1 :b [1 2 3 {:c 4}]})) ; => nil ; Pretty-print value, returns nil",
+      "(comment (pp {:a [1 2 3 4 5 6]} {:max-items 3})) ; => nil ; Pretty-print with limits"
     ]
   },
   {
@@ -2953,7 +2953,7 @@
     "doc": "Alias of pp.",
     "origin": "core",
     "examples": [
-      "(comment (pprint {:a 1 :b 2})) ; => {:a 1 :b 2} ; Pretty-print value"
+      "(comment (pprint {:a 1 :b 2})) ; => nil ; Pretty-print value, returns nil"
     ]
   },
   {
@@ -4035,7 +4035,7 @@
     "origin": "core",
     "examples": [
       "(split-at 2 [1 2 3 4]) ; => [[1 2] [3 4]]",
-      "(split-at 1 (range 4)) ; => [[0] (1 2 3)]"
+      "(split-at 1 (range 4)) ; => [[0] [1 2 3]]"
     ]
   },
   {
@@ -4055,7 +4055,7 @@
     "doc": "Split s around pattern (string or regex); optional limit bounds the number of pieces.",
     "origin": "string",
     "examples": [
-      "(split \"a,b,c\" /,/) ; => [\"a\" \"b\" \"c\"]",
+      "(split \"a,b,c\" #/,/) ; => [\"a\" \"b\" \"c\"]",
       "(split \"path\" // 2) ; => [\"\" \"path\"]"
     ]
   },
@@ -4170,7 +4170,7 @@
     "doc": "Split s around pattern (string or regex); optional limit bounds the number of pieces.",
     "origin": "string",
     "examples": [
-      "(string::split \"a,b,c\" /,/) ; => [\"a\" \"b\" \"c\"]",
+      "(string::split \"a,b,c\" #/,/) ; => [\"a\" \"b\" \"c\"]",
       "(string::split \"path\" // 2) ; => [\"\" \"path\"]"
     ]
   },

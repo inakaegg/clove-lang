@@ -48,40 +48,26 @@ with-redefs-fn
 ns
 #
 #
-# [D'] 分類Dのうち、ハーネスを値比較へ直しても残ったもの
-#  json::generate / json::generate-pretty:
-#    docの期待値 `"{"a":1}"` は Clove の文字列として読めない（内側の " が未エスケープ）。
-#    docを `"{\"a\":1}"` へ直す作業。分類Eと同じ扱い
-json::generate
-json::generate-pretty
-#  pr-str / pp-str: docの期待値が実際の出力と違う（pp-str は複数行に整形する）。分類Eと同じ扱い
-pr-str
-pp-str
-#  set::index: 出力のマップキーに Rust の Debug 表記 `{Keyword("a"): 1}` が混ざる。実装側の不具合
+# [F] 実装側の不具合・精度不足（docの期待値のほうが正しい）
+#  set::index: 出力のマップキーに Rust の Debug 表記 `{Keyword("a"): 1}` が混ざる
 set::index
-#  mut: (mut? (get world :player)) が false。入れ子のマップが mut にならないのが仕様か不具合か未確定
+#  keyword: (keyword "ns" "name") が :ns/name を作る。`/` 区切りは言語から削除済みで、
+#  リーダーが読み戻せない
+keyword
+#  source: 出力に内部形式が漏れる（(defn f [x] (__apply + x 1))）
+source
+#  partial: 表示が #<lambda> になり、部分適用の情報が出ない
+partial
+#  infer-type: 型注釈付きリテラル ([1 2]: [Int Int]) で Any を返す
+infer-type
+#  mut: (mut? (get world :player)) が false。入れ子のマップが mut にならないのが
+#  仕様か不具合か未確定
 mut
 #
-# [E] docの期待値が実装より古い（一部は仕様確認が必要）
-regex
-re-pattern
-re-matcher
-fn-type
-doc
-pp
-pprint
-split-at
-gensym
-interpose
+# [F'] 仕様判断が必要
+#  defenum: enumキーワードに型名を含めるか。実装は :user::Color::Red、docは :user::Red。
+#  例#3 の他enum取り込み (defenum Animals *Pets Salmon) は unknown enum 'Pets' で落ちる
 defenum
-source
-infer-type
-lookup
-nav
-split
-string::split
-keyword
-partial
 #
 # [G] OOP例の自動生成が成立しない組み合わせ
 #  以下は本体テストでは通るが、生成器が主語にならない引数（キーワードなど）を
