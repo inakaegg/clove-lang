@@ -73,6 +73,26 @@ fn deep_recursion_reports_a_clove_error_instead_of_crashing() {
 }
 
 #[test]
+fn stack_option_is_recognized_after_other_options() {
+    // `--stack` is taken out of the leading options before the runtime thread starts, and
+    // that scan has to skip the values of options like `--mem-hard` — otherwise the flag
+    // is left behind and reported as unknown.
+    let output = run_source(
+        "(defn f [n] (if (= n 0) 0 (+ 1 (f (- n 1)))))\n(println (f 1000))\n",
+        &["--mem-hard", "4G", "--stack", "1M"],
+    );
+    let text = combined(&output);
+    assert!(
+        !text.contains("unknown option"),
+        "--stack must be accepted after another option:\n{text}"
+    );
+    assert!(
+        text.contains("Recursion too deep"),
+        "the 1M budget must still apply:\n{text}"
+    );
+}
+
+#[test]
 fn stack_budget_is_configurable() {
     // A tiny budget must trip well before the default one does.
     let output = run_source(

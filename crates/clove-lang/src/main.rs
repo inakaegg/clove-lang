@@ -138,6 +138,11 @@ fn main() {
     }
 }
 
+/// Options whose value is the next argument, and so must be stepped over when scanning
+/// for `--stack`. Missing one leaves `--stack` behind, and it is then reported as an
+/// unknown option.
+const VALUE_TAKING_OPTIONS: &[&str] = &["-e", "--mem-soft", "--mem-hard", "--plugin-dir"];
+
 /// Take `--stack SIZE` / `--stack=SIZE` out of the leading options.
 ///
 /// Only leading options are scanned so that a script can still receive its own
@@ -147,8 +152,8 @@ fn take_stack_arg(args: &mut Vec<String>) -> Result<usize, String> {
     let mut idx = 0;
     while idx < args.len() {
         let arg = args[idx].clone();
-        if arg == "-e" {
-            // `-e CODE`: the code is not an option even when it starts with '-'.
+        if VALUE_TAKING_OPTIONS.contains(&arg.as_str()) {
+            // The value is not an option even when it starts with '-'.
             idx += 2;
             continue;
         }

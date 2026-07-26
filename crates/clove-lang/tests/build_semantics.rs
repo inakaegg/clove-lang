@@ -323,6 +323,39 @@ mod main_entry {
     }
 
     #[test]
+    fn variadic_main_is_called_with_no_arguments() {
+        // `(defn -main [& args] ...)` is the common shape. Native builds do not pass
+        // command-line arguments, so the rest parameter is bound to an empty vector.
+        let source = "(defn -main [& args] (println \"from main\"))\n";
+        let (build, binary, _root) = build_with(source, &["--main"]);
+        assert!(
+            build.status.success(),
+            "build --main with a variadic -main failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "from main\n");
+    }
+
+    #[test]
+    fn main_with_positional_parameters_is_reported() {
+        let (build, _binary, _root) = build_with("(defn -main [x] (println x))\n", &["--main"]);
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&build.stdout),
+            String::from_utf8_lossy(&build.stderr)
+        );
+        assert!(
+            !build.status.success() && message.contains("-main"),
+            "expected a clear error for a -main that needs arguments, got:\n{message}"
+        );
+        assert!(
+            !message.contains("expects 1 arg(s), got 0"),
+            "the message must explain the limitation, not leak the inliner's arity check:\n{message}"
+        );
+    }
+
+    #[test]
     fn asking_for_main_without_defining_it_is_an_error() {
         let (build, _binary, _root) = build_with("(println \"y\")\n", &["--main"]);
         let message = format!(

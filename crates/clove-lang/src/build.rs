@@ -25,7 +25,7 @@ pub fn run_build(args: Vec<String>) -> Result<(), String> {
     // Calling `-main` is opt-in so the same source behaves the same way under
     // `clove --main app.clv`; building it without the flag used to print nothing.
     match (opts.call_main, defines_main(&parsed)) {
-        (true, true) => append_main_call(&mut parsed),
+        (true, true) => append_main_call(&mut parsed).map_err(|err| format!("--main: {}", err))?,
         (true, false) => return Err(format!("--main was given but '{}' is not defined", MAIN_FN)),
         (false, true) => eprintln!(
             "{} '{}' is defined but native builds only run top-level forms; pass --main to call it",

@@ -7,7 +7,7 @@ use clove_build_core::syntax::parse_forms;
 use clove_build_core::typed_ir::{
     lower_program, Effect as IrEffect, Expr as IrExpr, ExprKind as IrExprKind,
     LoweringMode as IrLoweringMode, Mutability as IrMutability, Ownership as IrOwnership,
-    Program as IrProgram, TopLevel as IrTopLevel,
+    Param as IrParam, Program as IrProgram, TopLevel as IrTopLevel,
 };
 
 /// Entry-point function name, matching the interpreter's `clove --main`.
@@ -15,9 +15,19 @@ pub const MAIN_FN: &str = "-main";
 
 /// Whether the program defines the entry-point function.
 pub fn defines_main(program: &IrProgram) -> bool {
-    program.top_levels.iter().any(|top| match top {
-        IrTopLevel::Def { name, .. } | IrTopLevel::FnDef { name, .. } => name == MAIN_FN,
-        _ => false,
+    main_params(program).is_some()
+}
+
+/// Parameters of the entry-point function, whether it was written as `defn` or as a
+/// lambda bound with `def`.
+fn main_params(program: &IrProgram) -> Option<&[IrParam]> {
+    program.top_levels.iter().find_map(|top| match top {
+        IrTopLevel::FnDef { name, params, .. } if name == MAIN_FN => Some(params.as_slice()),
+        IrTopLevel::Def { name, value, .. } if name == MAIN_FN => match &value.kind {
+            IrExprKind::Lambda { params, .. } => Some(params.as_slice()),
+            _ => Some(&[]),
+        },
+        _ => None,
     })
 }
 
@@ -25,21 +35,41 @@ pub fn defines_main(program: &IrProgram) -> bool {
 ///
 /// Native builds otherwise only run top-level forms, so a program written around `-main`
 /// built successfully and printed nothing.
-pub fn append_main_call(program: &mut IrProgram) {
+///
+/// A native binary has no command-line arguments wired into the runtime, so `-main` may
+/// take none, or a single rest parameter which is bound to an empty vector — the shape
+/// `(defn -main [& args] ...)` that Clojure-style programs use.
+pub fn append_main_call(program: &mut IrProgram) -> Result<(), FrontError> {
+    let span = || IrSpan::new(0, 0);
+    let args = match main_params(program) {
+        None => {
+            return Err(FrontError {
+                message: format!("'{}' is not defined", MAIN_FN),
+            })
+        }
+        Some([]) => Vec::new(),
+        Some([only]) if only.rest => vec![ir_expr(IrExprKind::VectorLit(Vec::new()), span())],
+        Some(params) => {
+            return Err(FrontError {
+                message: format!(
+                    "'{}' takes {} parameter(s); native builds pass no command-line arguments, so it must take none or a single rest parameter (`[& args]`)",
+                    MAIN_FN,
+                    params.len()
+                ),
+            })
+        }
+    };
     let expr = ir_expr(
         IrExprKind::Call {
-            callee: Box::new(ir_expr(
-                IrExprKind::Var(MAIN_FN.to_string()),
-                IrSpan::new(0, 0),
-            )),
-            args: Vec::new(),
+            callee: Box::new(ir_expr(IrExprKind::Var(MAIN_FN.to_string()), span())),
+            args,
         },
-        IrSpan::new(0, 0),
+        span(),
     );
-    program.top_levels.push(IrTopLevel::Expr {
-        expr,
-        span: IrSpan::new(0, 0),
-    });
+    program
+        .top_levels
+        .push(IrTopLevel::Expr { expr, span: span() });
+    Ok(())
 }
 
 /// A synthesized typed-IR node. `-main` is called for its output, so the effect is IO.
