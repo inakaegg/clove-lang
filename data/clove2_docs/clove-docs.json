@@ -1048,7 +1048,7 @@
   {
     "name": "index-of",
     "signature": "index-of s substr [start]",
-    "doc": "Return the index of the first occurrence of substr in s (or nil). Optional start skips that many characters.",
+    "doc": "Return the index of the first occurrence of substr in s (or nil). Optional start skips that many characters. Indexes are counted in characters, like subs.",
     "origin": "string",
     "examples": [
       "(index-of \"banana\" \"na\") ; => 2",
@@ -1263,7 +1263,7 @@
   {
     "name": "last-index-of",
     "signature": "last-index-of s substr [end]",
-    "doc": "Return the index of the last occurrence of substr in s (or nil). Optional end limits the search to the first end characters.",
+    "doc": "Return the index of the last occurrence of substr in s (or nil). Optional end limits the search to the first end characters. Indexes are counted in characters, like subs.",
     "origin": "string",
     "examples": [
       "(last-index-of \"banana\" \"na\") ; => 4",

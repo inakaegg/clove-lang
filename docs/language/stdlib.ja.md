@@ -61,6 +61,7 @@ Clove には、コア言語とは別に「電池込み」な標準ライブラ�
 - 既存: `split` / `replace` / `replace-first` / `re-find` / `re-matches` / `split-lines` / `blank?` / `includes?` / `starts-with?` / `ends-with?` / `trim*` / `upper-case` / `lower-case`
 - 追加: `reverse` / `capitalize` / `trim-newline` / `escape` (置換マップ) / `index-of` / `last-index-of`
 - 正規表現ユーティリティ: `re-pattern`（string→regex）、`re-seq`（全マッチをベクタで返す）、`re-matcher`（簡易マッチャ; regexを返す）
+- 文字列の添字はバイトではなく **文字単位** で数える。`subs` / `index-of` / `last-index-of` はいずれも文字位置を受け取り、文字位置を返すので、多バイト文字を含む文字列でも `(subs s (index-of s x))` が成立する。
 
 ## `contains?` と `includes?`
 

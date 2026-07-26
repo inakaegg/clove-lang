@@ -63,6 +63,7 @@ Example:
 - Existing: `split` / `replace` / `replace-first` / `re-find` / `re-matches` / `split-lines` / `blank?` / `includes?` / `starts-with?` / `ends-with?` / `trim*` / `upper-case` / `lower-case`
 - Added: `reverse` / `capitalize` / `trim-newline` / `escape` (replace map) / `index-of` / `last-index-of`
 - Regex utilities: `re-pattern` (string -> regex), `re-seq` (return all matches as vector), `re-matcher` (simple matcher; returns regex)
+- String indexes are counted in **characters**, not bytes. `subs` / `index-of` / `last-index-of` all take and return character positions, so `(subs s (index-of s x))` works for multibyte text.
 
 ## `contains?` vs `includes?`
 
