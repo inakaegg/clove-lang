@@ -24,7 +24,12 @@ const SKIP_SYMBOLS: &[&str] = &[
     "async::scope-loop",
     "select",
     "select-blocking",
+    // Observing an agent right after a send is a race: the worker thread may not have
+    // applied the function yet. Under load this produced
+    // `expected #<agent state=1 pending=0> got #<agent state=0 pending=1>`.
     "agent-await",
+    "agent-send!",
+    "agent-send-io!",
     "http::request",
     "http::get",
     "http::post",
