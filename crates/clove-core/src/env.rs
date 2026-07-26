@@ -8,6 +8,15 @@ use crate::symbols::canonical_symbol_name;
 pub type EnvRef = Arc<RwLock<Env>>;
 
 static LIVE_ENV_COUNT: AtomicUsize = AtomicUsize::new(0);
+static TOTAL_ENV_CREATIONS: AtomicUsize = AtomicUsize::new(0);
+
+/// Called on every environment creation. Relaxed is enough for counters, and this runs
+/// once per Clove call frame.
+#[inline]
+fn count_created() {
+    LIVE_ENV_COUNT.fetch_add(1, Ordering::Relaxed);
+    TOTAL_ENV_CREATIONS.fetch_add(1, Ordering::Relaxed);
+}
 
 #[derive(Debug)]
 pub struct Env {
@@ -18,7 +27,7 @@ pub struct Env {
 
 impl Default for Env {
     fn default() -> Self {
-        LIVE_ENV_COUNT.fetch_add(1, Ordering::SeqCst);
+        count_created();
         Self {
             data: HashMap::new(),
             outer: None,
@@ -29,7 +38,7 @@ impl Default for Env {
 
 impl Clone for Env {
     fn clone(&self) -> Self {
-        LIVE_ENV_COUNT.fetch_add(1, Ordering::SeqCst);
+        count_created();
         Self {
             data: self
                 .data
@@ -44,13 +53,13 @@ impl Clone for Env {
 
 impl Drop for Env {
     fn drop(&mut self) {
-        LIVE_ENV_COUNT.fetch_sub(1, Ordering::SeqCst);
+        LIVE_ENV_COUNT.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
 impl Env {
     pub fn new_child(outer: EnvRef) -> Self {
-        LIVE_ENV_COUNT.fetch_add(1, Ordering::SeqCst);
+        count_created();
         Self {
             data: HashMap::new(),
             outer: Some(outer),
@@ -141,5 +150,14 @@ pub fn new_ref(env: Env) -> EnvRef {
 
 #[doc(hidden)]
 pub fn live_env_count() -> usize {
-    LIVE_ENV_COUNT.load(Ordering::SeqCst)
+    LIVE_ENV_COUNT.load(Ordering::Relaxed)
+}
+
+/// Environments created since the process started, including ones already dropped.
+///
+/// Used by the startup-cost tests: work that builds an environment and throws it away is
+/// invisible to [`live_env_count`].
+#[doc(hidden)]
+pub fn total_env_creations() -> usize {
+    TOTAL_ENV_CREATIONS.load(Ordering::Relaxed)
 }
