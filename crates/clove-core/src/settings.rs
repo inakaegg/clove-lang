@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 pub const REPL_ON_ERROR_VAR: &str = "*repl-on-error*";
@@ -21,7 +22,24 @@ pub enum SyntaxFeatureId {
     MapRefs,
 }
 
+pub const SYNTAX_FEATURE_COUNT: usize = 6;
+
 impl SyntaxFeatureId {
+    /// Index into [`PackageFlags::syntax`]. Keeping the flags in a fixed array instead of
+    /// a `HashMap<String, bool>` matters: these toggles are consulted while evaluating
+    /// each form, and the map version rebuilt itself (allocating six strings) on every
+    /// lookup.
+    fn index(self) -> usize {
+        match self {
+            SyntaxFeatureId::DotChain => 0,
+            SyntaxFeatureId::DotIndexer => 1,
+            SyntaxFeatureId::Indexer => 2,
+            SyntaxFeatureId::ForeignBlocks => 3,
+            SyntaxFeatureId::OopSyntax => 4,
+            SyntaxFeatureId::MapRefs => 5,
+        }
+    }
+
     pub fn key(self) -> &'static str {
         match self {
             SyntaxFeatureId::DotChain => DOT_CHAIN_FEATURE,
@@ -107,41 +125,36 @@ impl NamespaceOrigin {
 
 type PackageId = String;
 
-const DEFAULT_SYNTAX_FEATURES: &[&str] = &[
-    DOT_CHAIN_FEATURE,
-    DOT_INDEXER_FEATURE,
-    INDEXER_FEATURE,
-    FOREIGN_BLOCK_FEATURE,
-    OOP_SYNTAX_FEATURE,
-    MAP_REFS_FEATURE,
-];
-
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct PackageFlags {
-    syntax: HashMap<String, bool>,
+    syntax: [bool; SYNTAX_FEATURE_COUNT],
     repl_on_error: bool,
 }
 
 impl PackageFlags {
-    fn with_defaults() -> Self {
-        let mut syntax = HashMap::new();
-        for feature in DEFAULT_SYNTAX_FEATURES {
-            syntax.insert((*feature).to_string(), true);
-        }
-        Self {
-            syntax,
-            repl_on_error: false,
-        }
+    fn syntax_enabled(&self, id: SyntaxFeatureId) -> bool {
+        self.syntax[id.index()]
     }
 
-    fn syntax_enabled(&self, feature: &str) -> bool {
-        self.syntax.get(feature).copied().unwrap_or(false)
+    fn set_syntax(&mut self, id: SyntaxFeatureId, enabled: bool) {
+        self.syntax[id.index()] = enabled;
+    }
+
+    fn value(&self, feature: FeatureToggle) -> bool {
+        match feature {
+            FeatureToggle::Syntax(id) => self.syntax_enabled(id),
+            FeatureToggle::Runtime(RuntimeFeatureId::ReplOnError) => self.repl_on_error,
+        }
     }
 }
 
 impl Default for PackageFlags {
+    /// Every syntax feature is on unless a package turns it off.
     fn default() -> Self {
-        Self::with_defaults()
+        Self {
+            syntax: [true; SYNTAX_FEATURE_COUNT],
+            repl_on_error: false,
+        }
     }
 }
 
@@ -156,6 +169,9 @@ struct SettingsData {
 #[derive(Clone, Default)]
 pub struct RuntimeSettings {
     inner: Arc<RwLock<SettingsData>>,
+    /// Whether any package has overridden a feature toggle. Mirrors
+    /// `SettingsData::pkg_flags` being non-empty so the hot path can skip the lock.
+    has_pkg_flags: Arc<AtomicBool>,
 }
 
 impl PartialEq for RuntimeSettings {
@@ -181,6 +197,7 @@ impl RuntimeSettings {
                 ns_packages: HashMap::new(),
                 loaded_pkg_config: HashSet::new(),
             })),
+            has_pkg_flags: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -227,23 +244,34 @@ impl RuntimeSettings {
             .entry(pkg_id.to_string())
             .or_insert_with(PackageFlags::default);
         match feature {
-            FeatureToggle::Syntax(id) => {
-                entry.syntax.insert(id.key().to_string(), enabled);
-            }
+            FeatureToggle::Syntax(id) => entry.set_syntax(id, enabled),
             FeatureToggle::Runtime(RuntimeFeatureId::ReplOnError) => {
                 entry.repl_on_error = enabled;
             }
         }
+        self.has_pkg_flags.store(true, Ordering::Relaxed);
+    }
+
+    /// Answer without knowing the package when no package has overridden anything.
+    ///
+    /// The caller would otherwise have to resolve the current namespace to a package id,
+    /// which allocates a `String` — per feature check, per form. Scripts and most
+    /// packages never override a toggle, so this is the common path.
+    pub fn feature_toggle_default(&self, feature: FeatureToggle) -> Option<bool> {
+        if self.has_pkg_flags.load(Ordering::Relaxed) {
+            return None;
+        }
+        Some(PackageFlags::default().value(feature))
     }
 
     pub fn feature_toggle_enabled(&self, feature: FeatureToggle, pkg_id: &str) -> bool {
         let guard = self.inner.read().unwrap();
-        let default_flags = PackageFlags::default();
-        let flags = guard.pkg_flags.get(pkg_id).unwrap_or(&default_flags);
-        match feature {
-            FeatureToggle::Syntax(id) => flags.syntax_enabled(id.key()),
-            FeatureToggle::Runtime(RuntimeFeatureId::ReplOnError) => flags.repl_on_error,
-        }
+        guard
+            .pkg_flags
+            .get(pkg_id)
+            .copied()
+            .unwrap_or_default()
+            .value(feature)
     }
 
     pub fn repl_on_error_enabled_any(&self) -> bool {

@@ -4111,6 +4111,12 @@ impl Evaluator {
     }
 
     fn enum_variant_lookup(&self, name: &str, env: &EnvRef) -> Option<EnumVariantLookup> {
+        // Only `Enum::Variant` shaped symbols can match, and resolving the current
+        // namespace walks the environment chain and allocates a String. Every symbol
+        // resolution came through here, so check the cheap condition first.
+        if !name.contains("::") {
+            return None;
+        }
         let current_ns =
             current_namespace_name(env).or_else(|| self.default_namespace.read().unwrap().clone());
         enum_variant_lookup_with_ns(name, current_ns.as_deref())
@@ -6894,41 +6900,38 @@ impl Evaluator {
     }
 
     fn dot_chain_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::DotChain), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::DotChain, env)
     }
 
     fn oop_syntax_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::OopSyntax), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::OopSyntax, env)
     }
 
     fn dot_indexer_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::DotIndexer), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::DotIndexer, env)
     }
 
     fn indexer_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::Indexer), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::Indexer, env)
     }
 
     fn map_refs_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::MapRefs), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::MapRefs, env)
     }
 
     fn foreign_blocks_enabled(&self, env: &EnvRef) -> bool {
+        self.syntax_feature_enabled(SyntaxFeatureId::ForeignBlocks, env)
+    }
+
+    /// Resolving the package id allocates a `String`, so ask the settings first whether
+    /// any package overrides toggles at all. Nothing does in the common case.
+    fn syntax_feature_enabled(&self, id: SyntaxFeatureId, env: &EnvRef) -> bool {
+        let feature = FeatureToggle::Syntax(id);
+        if let Some(enabled) = self.settings.feature_toggle_default(feature) {
+            return enabled;
+        }
         let pkg_id = self.package_id_for_env(env);
-        self.settings.feature_toggle_enabled(
-            FeatureToggle::Syntax(SyntaxFeatureId::ForeignBlocks),
-            &pkg_id,
-        )
+        self.settings.feature_toggle_enabled(feature, &pkg_id)
     }
 
     fn ensure_foreign_allowed(&self, env: &EnvRef, span: Option<Span>) -> Result<(), CloveError> {
