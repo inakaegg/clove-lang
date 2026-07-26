@@ -20,8 +20,12 @@ pub fn defines_main(program: &IrProgram) -> bool {
 
 /// Parameters of the entry-point function, whether it was written as `defn` or as a
 /// lambda bound with `def`.
+///
+/// Searches from the end: the backend registers every top-level definition in order, so
+/// the last `-main` is the one it will inline. Taking the first would emit a call whose
+/// arity does not match the definition that gets used.
 fn main_params(program: &IrProgram) -> Option<&[IrParam]> {
-    program.top_levels.iter().find_map(|top| match top {
+    program.top_levels.iter().rev().find_map(|top| match top {
         IrTopLevel::FnDef { name, params, .. } if name == MAIN_FN => Some(params.as_slice()),
         IrTopLevel::Def { name, value, .. } if name == MAIN_FN => match &value.kind {
             IrExprKind::Lambda { params, .. } => Some(params.as_slice()),

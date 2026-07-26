@@ -338,6 +338,37 @@ mod main_entry {
     }
 
     #[test]
+    fn the_last_main_definition_is_the_one_called() {
+        // The backend registers definitions in order, so a redefined `-main` resolves to
+        // the last one; the call it synthesizes has to match that definition's arity.
+        let source = "(defn -main [& args] (println \"first\"))\n\
+                      (defn -main [] (println \"last\"))\n";
+        let (build, binary, _root) = build_with(source, &["--main"]);
+        assert!(
+            build.status.success(),
+            "build --main with a redefined -main failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "last\n");
+    }
+
+    #[test]
+    fn variadic_main_can_read_its_rest_parameter() {
+        let (build, binary, _root) = build_with(
+            "(defn -main [& args] (println (count args)))\n",
+            &["--main"],
+        );
+        assert!(
+            build.status.success(),
+            "build --main reading args failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "0\n");
+    }
+
+    #[test]
     fn main_with_positional_parameters_is_reported() {
         let (build, _binary, _root) = build_with("(defn -main [x] (println x))\n", &["--main"]);
         let message = format!(
