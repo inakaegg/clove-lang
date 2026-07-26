@@ -1565,7 +1565,7 @@ impl RuntimeCtx {
         if !self.debug_stash_enabled() {
             return;
         }
-        let subject = args.get(0).cloned().unwrap_or(Value::Nil);
+        let subject = args.first().cloned().unwrap_or(Value::Nil);
         let mut stash = self.debug_stash.lock().unwrap();
         *stash = Some(DebugStash {
             subject,
@@ -2622,11 +2622,11 @@ fn install_lang_builtins(env: EnvRef) {
     let mut env = env.write().unwrap();
     env.set(
         "__apply",
-        Value::native_fn(FnArity::at_least(0), |args| apply_builtin(args)),
+        Value::native_fn(FnArity::at_least(0), apply_builtin),
     );
     env.set(
         "__range_literal",
-        Value::native_fn(FnArity::at_least(0), |args| range_literal_builtin(args)),
+        Value::native_fn(FnArity::at_least(0), range_literal_builtin),
     );
     mirror_core_namespace(&mut env);
 }
@@ -2940,7 +2940,7 @@ fn apply_map_index(
     let key_val = to_key_value_checked(key)?;
     match map.get(&key_val) {
         Some(val) => Ok(val.clone()),
-        None => Ok(rest.get(0).cloned().unwrap_or(Value::Nil)),
+        None => Ok(rest.first().cloned().unwrap_or(Value::Nil)),
     }
 }
 
@@ -4610,7 +4610,7 @@ mod tests {
                 .expect("std map should work");
             crate::fn_meta::get("std::map").expect("metadata for std::map")
         });
-        let arg_sig = meta.arglist.get(0).cloned().unwrap_or_default();
+        let arg_sig = meta.arglist.first().cloned().unwrap_or_default();
         assert!(
             arg_sig.contains("f") && arg_sig.contains("coll"),
             "unexpected arglist: {}",

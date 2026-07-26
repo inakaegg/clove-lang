@@ -3653,7 +3653,7 @@ impl Evaluator {
             for kind in &context_kinds {
                 let rule = context_rule_for(*kind);
                 let mut score = 0;
-                if rule.exact.iter().any(|target| *target == name) {
+                if rule.exact.contains(&name) {
                     score = score.max(80);
                 }
                 if rule.prefixes.iter().any(|prefix| name.starts_with(prefix)) {
@@ -3662,7 +3662,7 @@ impl Evaluator {
                 if rule.suffixes.iter().any(|suffix| name.ends_with(suffix)) {
                     score = score.max(40);
                 }
-                if rule.namespaces.iter().any(|target| *target == ns) {
+                if rule.namespaces.contains(&ns) {
                     score += 20;
                 }
                 best = best.max(score);
@@ -6063,7 +6063,7 @@ impl Evaluator {
         env: EnvRef,
         form_span: Span,
     ) -> Result<Value, CloveError> {
-        if args.len() < 1 {
+        if args.is_empty() {
             return Err(span_runtime_error(
                 form_span,
                 "with-dyn expects bindings vector and body",
@@ -6341,7 +6341,7 @@ impl Evaluator {
         form_span: Span,
     ) -> Result<Value, CloveError> {
         let raw = args
-            .get(0)
+            .first()
             .ok_or_else(|| span_runtime_error(form_span, "create-ns expects namespace symbol"))?;
         let name_val = self.eval(raw, self.global_env())?;
         let name = match name_val {
@@ -6484,7 +6484,7 @@ impl Evaluator {
         form_span: Span,
     ) -> Result<Value, CloveError> {
         let path_form = args
-            .get(0)
+            .first()
             .ok_or_else(|| span_runtime_error(form_span, "load-file expects path"))?;
         let path_val = self.eval(path_form, env)?;
         let path = match path_val {
@@ -6521,7 +6521,7 @@ impl Evaluator {
         form_span: Span,
     ) -> Result<Value, CloveError> {
         let src_form = args
-            .get(0)
+            .first()
             .ok_or_else(|| span_runtime_error(form_span, "load-string expects source"))?;
         let src_val = self.eval(src_form, env)?;
         let source = match src_val {
@@ -11468,8 +11468,7 @@ fn collect_enum_members(
                 ));
             }
         };
-        if sym.starts_with('*') {
-            let target_raw = &sym[1..];
+        if let Some(target_raw) = sym.strip_prefix('*') {
             if target_raw.is_empty() {
                 return Err(span_runtime_error(
                     form.span,
@@ -11911,7 +11910,7 @@ pub(crate) fn form_to_value(form: &Form) -> Result<Value, CloveError> {
         FormKind::Set(items) => Ok(Value::Set(
             items
                 .iter()
-                .map(|it| form_to_value(it))
+                .map(form_to_value)
                 .collect::<Result<HashSet<_>, _>>()?,
         )),
         FormKind::ForeignBlock { tag, code } => Ok(Value::Foreign(Arc::new(ForeignValue {
@@ -14327,7 +14326,7 @@ fn check_recur_list(form: &Form, items: &[Form], tail: RecurTailContext) -> Resu
 
 fn err_fin_clause_body(form: &Form) -> Option<&[Form]> {
     match &form.kind {
-        FormKind::List(items) if items.len() >= 1 => Some(&items[1..]),
+        FormKind::List(items) if !items.is_empty() => Some(&items[1..]),
         _ => None,
     }
 }
@@ -14521,19 +14520,19 @@ fn value_to_form(v: &Value) -> Result<Form, CloveError> {
         Value::List(items) => FormKind::List(
             items
                 .iter()
-                .map(|i| value_to_form(i))
+                .map(value_to_form)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Value::Vector(items) => FormKind::Vector(
             items
                 .iter()
-                .map(|i| value_to_form(i))
+                .map(value_to_form)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Value::Set(items) => FormKind::Set(
             items
                 .iter()
-                .map(|i| value_to_form(i))
+                .map(value_to_form)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Value::Map(map) => {
@@ -15449,7 +15448,7 @@ mod tests {
             Some(Value::Vector(items)) => items,
             other => panic!("expected :var vector, got {:?}", other),
         };
-        let Some(Value::Map(entry)) = vars.get(0) else {
+        let Some(Value::Map(entry)) = vars.front() else {
             panic!("expected var entry");
         };
         assert!(entry.contains_key(&Key::Keyword("sym".into())));
@@ -16358,7 +16357,7 @@ mod tests {
                 match &items[2].kind {
                     FormKind::List(body_items) => match &body_items[1].kind {
                         FormKind::Vector(bindings) => {
-                            let name = match bindings.get(0).map(|f| &f.kind) {
+                            let name = match bindings.first().map(|f| &f.kind) {
                                 Some(FormKind::Symbol(s)) => s,
                                 other => panic!("expected binding symbol, got {:?}", other),
                             };

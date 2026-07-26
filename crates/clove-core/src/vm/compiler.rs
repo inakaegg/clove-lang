@@ -518,7 +518,7 @@ impl Compiler {
                 }
                 let all_int =
                     !arg_types.is_empty() && arg_types.iter().all(|ty| *ty == LocalType::Int);
-                let any_float = arg_types.iter().any(|ty| *ty == LocalType::Float);
+                let any_float = arg_types.contains(&LocalType::Float);
                 match builtin_id {
                     BuiltinId::Add
                     | BuiltinId::Sub
@@ -1789,7 +1789,7 @@ impl Compiler {
             return Ok(false);
         }
         let arg_types: Vec<LocalType> = args.iter().map(|arg| self.infer_expr_type(arg)).collect();
-        if arg_types.iter().any(|ty| *ty == LocalType::Unknown) {
+        if arg_types.contains(&LocalType::Unknown) {
             return Ok(false);
         }
         let all_int = arg_types.iter().all(|ty| *ty == LocalType::Int);
@@ -1797,7 +1797,7 @@ impl Compiler {
         let all_numeric = arg_types
             .iter()
             .all(|ty| matches!(ty, LocalType::Int | LocalType::Float));
-        let any_float = arg_types.iter().any(|ty| *ty == LocalType::Float);
+        let any_float = arg_types.contains(&LocalType::Float);
         for arg in args {
             self.compile_form_with_context(arg, TailContext::Value)?;
         }
@@ -2038,7 +2038,7 @@ impl Compiler {
             meta_value = Some(map);
         }
         if is_method {
-            let mut map = meta_value.unwrap_or_else(CowHashMap::new);
+            let mut map = meta_value.unwrap_or_default();
             map.insert(Key::Keyword("is-method".into()), Value::Bool(true));
             meta_value = Some(map);
         }

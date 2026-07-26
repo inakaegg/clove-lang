@@ -539,7 +539,7 @@ enum MetaResult {
 }
 
 fn normalize_command(line: &str) -> Option<String> {
-    let mut parts = line.trim().split_whitespace();
+    let mut parts = line.split_whitespace();
     let cmd = parts.next()?;
     if parts.next().is_some() {
         return None;

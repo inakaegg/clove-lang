@@ -138,10 +138,7 @@ pub fn run_source_with_lang_features(
     let before_names = ctx.namespace_names();
     let eval_value = ctx.eval_source(src)?;
     let after_names = ctx.namespace_names();
-    let file_path = ctx
-        .source_name()
-        .as_deref()
-        .and_then(|name| resolve_source_path(name));
+    let file_path = ctx.source_name().as_deref().and_then(resolve_source_path);
     let mut default_ns = file_path
         .as_deref()
         .and_then(|path| ctx.namespace_for_path(path));

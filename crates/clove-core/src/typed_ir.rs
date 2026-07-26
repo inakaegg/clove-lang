@@ -108,11 +108,7 @@ pub fn lower_typed_exprs_to_funcs(exprs: &[TypedExpr]) -> Vec<CodegenFunction> {
                             .collect(),
                         _ => Vec::new(),
                     };
-                    let body_ops = args
-                        .iter()
-                        .skip(2)
-                        .flat_map(|b| lower_expr_to_ops(b))
-                        .collect();
+                    let body_ops = args.iter().skip(2).flat_map(lower_expr_to_ops).collect();
                     out.push(CodegenFunction {
                         name,
                         params,

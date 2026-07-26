@@ -3395,8 +3395,7 @@ fn parse_duration_literal(token: &str) -> Result<Option<DurationValue>, CloveErr
         ("y", DurationUnit::Year),
     ];
     for (suffix, unit) in UNITS {
-        if token.ends_with(suffix) {
-            let number_part = &token[..token.len() - suffix.len()];
+        if let Some(number_part) = token.strip_suffix(suffix) {
             if number_part.is_empty() {
                 continue;
             }

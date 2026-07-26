@@ -7477,7 +7477,7 @@ fn emit_native_block(
         out.push_str("?;\n");
     }
     out.push_str("    Ok::<Value, Clove2Error>(last)\n");
-    out.push_str("}");
+    out.push('}');
     Ok(out)
 }
 
@@ -8530,7 +8530,7 @@ fn emit_native_try(
     }
     let mut idx = 0;
     let mut bindings = Vec::new();
-    if let Some(AstExpr::Vector(items)) = args.get(0) {
+    if let Some(AstExpr::Vector(items)) = args.first() {
         bindings = parse_try_bindings(items)?;
         idx = 1;
     }
@@ -8599,7 +8599,7 @@ fn emit_native_try(
         let catch_code = emit_native_block(codegen, ctx, &catch.body)?;
         ctx.pop_scope();
         out.push_str(&indent(&catch_code, 12));
-        out.push_str("\n");
+        out.push('\n');
     } else if let Some(handler) = on_error {
         if let AstExpr::Fn { params, body, .. } = handler {
             if params.len() != 1 {
@@ -8614,7 +8614,7 @@ fn emit_native_try(
             let handler_code = emit_native_block(codegen, ctx, &body)?;
             ctx.pop_scope();
             out.push_str(&indent(&handler_code, 12));
-            out.push_str("\n");
+            out.push('\n');
         } else {
             let handler_code = emit_native_expr(codegen, ctx, &handler)?;
             out.push_str("            let handler = ");
@@ -8650,7 +8650,7 @@ fn emit_native_try(
         }
     }
     out.push_str("    result\n");
-    out.push_str("}");
+    out.push('}');
     ctx.pop_scope();
     Ok(out)
 }

@@ -29,12 +29,12 @@ pub(crate) fn install_primitives(env: &mut Env) {
     // --- Sequence Ops (Primitives) ---
     def_builtin!(env, "first", FnArity::exact(1), |args| {
         match args {
-            [Value::List(vs)] => Ok(vs.get(0).cloned().unwrap_or(Value::Nil)),
-            [Value::Vector(vs)] => Ok(vs.get(0).cloned().unwrap_or(Value::Nil)),
+            [Value::List(vs)] => Ok(vs.front().cloned().unwrap_or(Value::Nil)),
+            [Value::Vector(vs)] => Ok(vs.front().cloned().unwrap_or(Value::Nil)),
             [Value::MutVector(handle)] => Ok(handle
                 .lock()
                 .map_err(|_| CloveError::runtime("mutable vector lock poisoned"))?
-                .get(0)
+                .front()
                 .cloned()
                 .unwrap_or(Value::Nil)),
             [Value::Seq(handle)] => Ok(handle.peek()?.unwrap_or(Value::Nil)),
@@ -1894,8 +1894,7 @@ fn flatten_into_vector(
         if matches!(value, Value::Nil) {
             continue;
         }
-        let can_flatten =
-            is_sequential_value(&value) && entry.depth.map_or(true, |depth| depth > 0);
+        let can_flatten = is_sequential_value(&value) && entry.depth.is_none_or(|depth| depth > 0);
         if can_flatten {
             let next_depth = entry.depth.map(|depth| depth.saturating_sub(1));
             push_sequential_items(&mut stack, value, next_depth)?;

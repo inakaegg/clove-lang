@@ -1736,7 +1736,7 @@ impl Evaluator {
         }
         let mut idx = 0;
         let mut local_env = env.clone();
-        if let Some(AstExpr::Vector(items)) = args.get(0) {
+        if let Some(AstExpr::Vector(items)) = args.first() {
             let bindings = parse_try_bindings(items)?;
             let child = Env::child(env.clone());
             for (name, value_expr) in bindings {

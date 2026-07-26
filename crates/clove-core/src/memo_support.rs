@@ -283,7 +283,7 @@ fn serialize_value(value: &Value) -> Result<SerializableValue, SerializationErro
                 .iter()
                 .map(serialize_value)
                 .collect::<Result<Vec<_>, _>>()?;
-            items.sort_by(|a, b| canonical_json(a).cmp(&canonical_json(b)));
+            items.sort_by_key(canonical_json);
             Ok(SerializableValue::Set(items))
         }
         Value::Set(set) => {
@@ -291,7 +291,7 @@ fn serialize_value(value: &Value) -> Result<SerializableValue, SerializationErro
                 .iter()
                 .map(serialize_value)
                 .collect::<Result<Vec<_>, _>>()?;
-            items.sort_by(|a, b| canonical_json(a).cmp(&canonical_json(b)));
+            items.sort_by_key(canonical_json);
             Ok(SerializableValue::Set(items))
         }
         Value::Symbol(s) => Ok(SerializableValue::Symbol(s.clone())),
@@ -429,7 +429,7 @@ fn base64_encode(bytes: &[u8]) -> String {
     if bytes.is_empty() {
         return String::new();
     }
-    let mut out = String::with_capacity(((bytes.len() + 2) / 3) * 4);
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     let mut i = 0;
     while i < bytes.len() {
         let b0 = bytes[i];

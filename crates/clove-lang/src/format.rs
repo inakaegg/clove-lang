@@ -436,7 +436,7 @@ fn run_ruby_formatter(cmd: &RubyFormatterCmd, code: &str) -> Option<String> {
 fn extract_rubocop_output(output: &str) -> Option<String> {
     if let Some(idx) = output.rfind("====================") {
         let tail = &output[idx + "====================".len()..];
-        let trimmed = tail.trim_start_matches(|c| c == '\n' || c == '\r' || c == ' ');
+        let trimmed = tail.trim_start_matches(['\n', '\r', ' ']);
         if !trimmed.is_empty() {
             return Some(trimmed.to_string());
         }
@@ -468,7 +468,7 @@ fn strip_frozen_comment(s: &str) -> String {
 }
 
 fn trim_trailing_newlines(s: &str) -> String {
-    s.trim_end_matches(|c| c == '\n' || c == '\r').to_string()
+    s.trim_end_matches(['\n', '\r']).to_string()
 }
 
 #[cfg(feature = "ruby")]

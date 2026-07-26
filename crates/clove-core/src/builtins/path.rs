@@ -364,7 +364,7 @@ fn sanitize_filename_str(input: &str, opts: &SanitizeOpts) -> String {
 
 fn sanitize_path_str(input: &str, opts: &SanitizeOpts) -> String {
     let mut parts = Vec::new();
-    for raw in input.split(|ch| ch == '/' || ch == '\\') {
+    for raw in input.split(['/', '\\']) {
         if raw.is_empty() || raw == "." {
             continue;
         }
@@ -431,7 +431,7 @@ fn is_forbidden_filename_char(ch: char, windows: bool) -> bool {
 }
 
 fn is_windows_reserved_name(name: &str) -> bool {
-    let trimmed = name.trim_end_matches(|ch| ch == ' ' || ch == '.');
+    let trimmed = name.trim_end_matches([' ', '.']);
     if trimmed.is_empty() {
         return false;
     }
@@ -462,8 +462,7 @@ fn trim_end_dots(mut text: String) -> String {
 }
 
 fn trim_end_dots_spaces(text: String) -> String {
-    text.trim_end_matches(|ch| ch == '.' || ch == ' ')
-        .to_string()
+    text.trim_end_matches(['.', ' ']).to_string()
 }
 
 fn trim_separator(mut text: String, sep: &str) -> String {

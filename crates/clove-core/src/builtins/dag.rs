@@ -645,7 +645,7 @@ pub(crate) fn pmap_execute(func: Value, coll: Value, opts: DagOpts) -> Result<Va
         return Err(err);
     }
     let out = if let Some(results) = ordered_results {
-        results.into_iter().filter_map(|v| v).collect::<Vector<_>>()
+        results.into_iter().flatten().collect::<Vector<_>>()
     } else {
         unordered_results.into_iter().collect::<Vector<_>>()
     };
@@ -793,7 +793,7 @@ pub(crate) fn pfilter_execute(
         return Err(err);
     }
     let out = if let Some(results) = ordered_results {
-        results.into_iter().filter_map(|v| v).collect::<Vector<_>>()
+        results.into_iter().flatten().collect::<Vector<_>>()
     } else {
         unordered_results.into_iter().collect::<Vector<_>>()
     };

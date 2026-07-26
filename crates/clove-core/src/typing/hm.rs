@@ -401,7 +401,7 @@ fn free_type_vars(ty: &Type) -> Vec<TypeVar> {
         Type::Var(v) => vec![*v],
         Type::Prim(_) | Type::Any => vec![],
         Type::Vector(inner) => free_type_vars(inner),
-        Type::Tuple(items) => items.iter().flat_map(|t| free_type_vars(t)).collect(),
+        Type::Tuple(items) => items.iter().flat_map(free_type_vars).collect(),
         Type::Map(k, v) => {
             let mut out = free_type_vars(k);
             out.extend(free_type_vars(v));
@@ -418,7 +418,7 @@ fn free_type_vars(ty: &Type) -> Vec<TypeVar> {
             out
         }
         Type::Opaque(_) => vec![],
-        Type::Overloaded(candidates) => candidates.iter().flat_map(|t| free_type_vars(t)).collect(),
+        Type::Overloaded(candidates) => candidates.iter().flat_map(free_type_vars).collect(),
         Type::Func(args, rest, ret) => {
             let mut out = Vec::new();
             for a in args {

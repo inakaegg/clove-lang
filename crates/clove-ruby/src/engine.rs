@@ -209,7 +209,7 @@ fn to_ruby(ruby: &Ruby, val: &Value) -> Result<magnus::Value, RubyError> {
             .float_from_f64(d.to_unit(DurationUnit::Second))
             .into_value_with(ruby)),
         Value::Regex(re) => {
-            let re_class: RClass = ruby.eval("Regexp").map_err(|e| e)?;
+            let re_class: RClass = ruby.eval("Regexp")?;
             let obj: RubyVal = re_class.funcall("new", (re.pattern.as_str(),))?;
             Ok(obj)
         }
@@ -253,7 +253,7 @@ fn to_ruby(ruby: &Ruby, val: &Value) -> Result<magnus::Value, RubyError> {
             for item in &items.entries {
                 ary.push(to_ruby(ruby, item)?)?;
             }
-            let set_class: magnus::RClass = ruby.eval("require 'set'; Set").map_err(|e| e)?;
+            let set_class: magnus::RClass = ruby.eval("require 'set'; Set")?;
             let set_obj: magnus::Value = set_class.funcall("new", (ary,))?;
             Ok(set_obj)
         }
@@ -262,7 +262,7 @@ fn to_ruby(ruby: &Ruby, val: &Value) -> Result<magnus::Value, RubyError> {
             for item in items {
                 ary.push(to_ruby(ruby, item)?)?;
             }
-            let set_class: magnus::RClass = ruby.eval("require 'set'; Set").map_err(|e| e)?;
+            let set_class: magnus::RClass = ruby.eval("require 'set'; Set")?;
             let set_obj: magnus::Value = set_class.funcall("new", (ary,))?;
             Ok(set_obj)
         }

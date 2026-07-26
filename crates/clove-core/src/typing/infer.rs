@@ -3217,7 +3217,7 @@ fn infer_dotimes(items: &[Form], st: &mut InferState) -> Result<Type, TypeError>
     let saved = st.env.snapshot_bindings();
     let result = (|| {
         let pairs = parse_binding_pairs(bindings_form);
-        if let Some((binding, count_form)) = pairs.get(0) {
+        if let Some((binding, count_form)) = pairs.first() {
             let count_ty = infer_form(count_form, st)?;
             st.try_unify(&count_ty, &Type::Prim(PrimType::Int), count_form.span, true)?;
             if let Some((name, hint)) = binding_symbol(binding, st) {

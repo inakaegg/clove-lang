@@ -1247,7 +1247,7 @@ pub fn interactive_repl_with_context(ctx: Arc<RuntimeCtx>) {
 }
 
 fn start_repl_loop(ctx: Arc<RuntimeCtx>) {
-    ctx.with_current_ctx(|ctx| start_repl_loop_inner(ctx));
+    ctx.with_current_ctx(start_repl_loop_inner);
 }
 
 fn start_repl_loop_inner(ctx: Arc<RuntimeCtx>) {
@@ -1297,7 +1297,7 @@ fn start_repl_loop_inner(ctx: Arc<RuntimeCtx>) {
     let mut rl = Reedline::create()
         .with_quick_completions(false)
         .with_validator(Box::new(ReplValidator))
-        .with_highlighter(Box::new(ReplHighlighter::default()))
+        .with_highlighter(Box::new(ReplHighlighter))
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(create_completion_menu()))
         .with_edit_mode(edit_mode)
@@ -1657,7 +1657,7 @@ impl<'a> InlineReplSession<'a> {
         let mut rl = Reedline::create()
             .with_quick_completions(false)
             .with_validator(Box::new(ReplValidator))
-            .with_highlighter(Box::new(ReplHighlighter::default()))
+            .with_highlighter(Box::new(ReplHighlighter))
             .with_completer(completer)
             .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
             .with_edit_mode(edit_mode)
@@ -1983,7 +1983,7 @@ enum MetaResult {
 }
 
 fn normalize_command(line: &str) -> Option<String> {
-    let mut parts = line.trim().split_whitespace();
+    let mut parts = line.split_whitespace();
     let cmd = parts.next()?;
     if parts.next().is_some() {
         return None;
@@ -2385,7 +2385,7 @@ fn should_page(content: &str) -> bool {
     let mut total_lines = 0usize;
     for line in content.split('\n') {
         let visible = visible_len(line);
-        let wrapped = ((visible + columns - 1) / columns).max(1);
+        let wrapped = visible.div_ceil(columns).max(1);
         total_lines = total_lines.saturating_add(wrapped);
         if total_lines > max_lines {
             return true;

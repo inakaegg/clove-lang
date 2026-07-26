@@ -1048,7 +1048,7 @@ fn extract_namespace_from_text(text: &str) -> Option<String> {
                 .next()
                 .unwrap_or("")
                 .trim_end_matches(')');
-            let token = token.trim_end_matches(|c| c == ')');
+            let token = token.trim_end_matches(')');
             if !token.is_empty() {
                 return Some(token.to_string());
             }

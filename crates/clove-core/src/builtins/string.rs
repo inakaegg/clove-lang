@@ -45,7 +45,7 @@ pub(crate) fn install(env: &mut Env) {
             }
         };
         let limit = limit_val
-            .map(|n| crate::builtins::as_number(n))
+            .map(crate::builtins::as_number)
             .transpose()?
             .map(|(n, _)| n.max(0.0) as usize);
         split_with_regex(&s, &regex, limit)

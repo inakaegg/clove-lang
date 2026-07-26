@@ -117,10 +117,7 @@ pub fn register(meta: FnMeta) {
     let runtime_id = current_runtime_id();
     let mut guard = REGISTRY.write().unwrap();
     let state = match runtime_id {
-        Some(id) => guard
-            .per_runtime
-            .entry(id)
-            .or_insert_with(RegistryState::default),
+        Some(id) => guard.per_runtime.entry(id).or_default(),
         None => &mut guard.global,
     };
     state.entries.insert(key.clone(), meta);

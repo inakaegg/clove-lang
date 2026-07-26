@@ -128,7 +128,7 @@ fn stub_dir(workspace_hash: &str) -> PathBuf {
 fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
     let dir = path
         .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "stub dir missing"))?;
+        .ok_or_else(|| io::Error::other("stub dir missing"))?;
     let tmp_path = dir.join(format!("{}.tmp-{}", STUB_FILENAME, unique_suffix()));
     fs::write(&tmp_path, contents)?;
     match fs::rename(&tmp_path, path) {

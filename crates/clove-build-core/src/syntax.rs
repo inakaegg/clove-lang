@@ -1165,7 +1165,7 @@ fn rewrite_dotimes(items: &[Expr]) -> Result<Expr, Clove2Error> {
         return Err(Clove2Error::new("dotimes expects [name count]"));
     }
     let name_expr = bindings
-        .get(0)
+        .first()
         .ok_or_else(|| Clove2Error::new("dotimes expects name"))?;
     let ExprKind::Symbol(_) = &name_expr.kind else {
         return Err(Clove2Error::new("dotimes expects symbol name"));
@@ -1196,7 +1196,7 @@ fn rewrite_each(items: &[Expr]) -> Result<Expr, Clove2Error> {
                 return Err(Clove2Error::new("each expects [name coll]"));
             }
             let name_expr = items_vec
-                .get(0)
+                .first()
                 .ok_or_else(|| Clove2Error::new("each expects name"))?;
             let ExprKind::Symbol(_) = &name_expr.kind else {
                 return Err(Clove2Error::new("each expects symbol name"));

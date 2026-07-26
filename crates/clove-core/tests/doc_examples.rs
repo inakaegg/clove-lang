@@ -406,7 +406,7 @@ fn render_value(value: &Value) -> String {
         Value::List(items) => render_seq_like(items.iter(), "(", ")"),
         Value::Vector(items) => render_seq_like(items.iter(), "[", "]"),
         Value::Set(set) => {
-            let mut items: Vec<String> = set.iter().map(|v| render_value(v)).collect();
+            let mut items: Vec<String> = set.iter().map(render_value).collect();
             items.sort();
             format!("#{{{}}}", items.join(" "))
         }
@@ -425,7 +425,7 @@ fn render_value(value: &Value) -> String {
 }
 
 fn render_seq_like<'a>(iter: impl Iterator<Item = &'a Value>, start: &str, end: &str) -> String {
-    let parts: Vec<String> = iter.map(|v| render_value(v)).collect();
+    let parts: Vec<String> = iter.map(render_value).collect();
     format!("{}{}{}", start, parts.join(" "), end)
 }
 

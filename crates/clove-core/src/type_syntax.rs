@@ -24,7 +24,6 @@ pub fn parse_type_from_form(form: &Form) -> Result<TypeKind, CloveError> {
     match &form.kind {
         FormKind::Symbol(sym) => TypeKind::parse(sym)
             .map_err(|err| CloveError::parse(format!("invalid type hint '{}': {}", sym, err)))
-            .map(|kind| kind)
             .map_err(|err| err.with_span(form.span)),
         FormKind::Keyword(name) => TypeKind::from_keyword(name).ok_or_else(|| {
             CloveError::parse(format!("invalid type hint ':{}'", name)).with_span(form.span)

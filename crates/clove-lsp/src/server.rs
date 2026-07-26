@@ -4212,7 +4212,7 @@ impl<'a> ReferenceAnalyzer<'a> {
                 if info.arities.is_empty() {
                     continue;
                 }
-                if info.arities.iter().any(|a| *a == arg_count) {
+                if info.arities.contains(&arg_count) {
                     return;
                 }
                 let expected = format_expected_arities(&info.arities);
@@ -6004,10 +6004,7 @@ fn symbol_token_range_from(line: &str, col: usize) -> (usize, usize) {
         if ch == ':' && angle_depth == 0 {
             let prev_is_colon = idx > start && chars[idx - 1] == ':';
             let next_is_colon = next == Some(':');
-            if idx > start
-                && !prev_is_colon
-                && !next_is_colon
-                && next.map_or(false, is_kw_seg_start)
+            if idx > start && !prev_is_colon && !next_is_colon && next.is_some_and(is_kw_seg_start)
             {
                 break;
             }
@@ -6018,13 +6015,13 @@ fn symbol_token_range_from(line: &str, col: usize) -> (usize, usize) {
                 if next == Some('(') {
                     break;
                 }
-                if next.map_or(false, is_oop_method_start) {
+                if next.is_some_and(is_oop_method_start) {
                     break;
                 }
                 if next == Some('"') {
                     break;
                 }
-                if next.map_or(false, |c| c.is_ascii_digit()) {
+                if next.is_some_and(|c| c.is_ascii_digit()) {
                     let numeric_prefix = chars[start..idx]
                         .iter()
                         .all(|c| c.is_ascii_digit() || *c == '_' || *c == '-');
@@ -6077,8 +6074,7 @@ fn find_word_occurrences(text: &str, word: &str) -> Vec<Range> {
             let abs = start + pos;
             let before = abs.checked_sub(1).and_then(|i| line.chars().nth(i));
             let after = line.chars().nth(abs + word.len());
-            if before.map_or(true, |c| !is_word_char(c)) && after.map_or(true, |c| !is_word_char(c))
-            {
+            if before.is_none_or(|c| !is_word_char(c)) && after.is_none_or(|c| !is_word_char(c)) {
                 ranges.push(Range {
                     start: Position {
                         line: line_idx as u32,
@@ -7330,7 +7326,7 @@ fn scan_doseq_bindings(
                 .get(idx + 2)
                 .map(|f| span_offset(&f.span, text))
                 .or_else(|| items.get(2).map(|f| span_offset(&f.span, text)))
-                .unwrap_or_else(|| text.len());
+                .unwrap_or(text.len());
             if !(target_offset >= val_start && target_offset < val_end) {
                 scan_pattern(pat, text, target_offset, name, best);
             }
@@ -7373,7 +7369,7 @@ fn scan_for_bindings(
                                 .get(j + 2)
                                 .map(|f| span_offset(&f.span, text))
                                 .or_else(|| items.get(2).map(|f| span_offset(&f.span, text)))
-                                .unwrap_or_else(|| text.len());
+                                .unwrap_or(text.len());
                             if !(target_offset >= val_start && target_offset < val_end) {
                                 scan_pattern(&inner[j], text, target_offset, name, best);
                             }

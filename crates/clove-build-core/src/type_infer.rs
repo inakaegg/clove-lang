@@ -3308,7 +3308,7 @@ fn seq_head_type_for_elem(name: &str, elem_ty: &Type) -> Option<Type> {
     match elem_ty {
         Type::Vec(inner) => Some((**inner).clone()),
         Type::Tuple(items) => match name {
-            "first" | "peek" => items.get(0).cloned(),
+            "first" | "peek" => items.first().cloned(),
             "second" => items.get(1).cloned(),
             "last" => items.last().cloned(),
             _ => None,
@@ -4543,7 +4543,7 @@ fn infer_reduce_call(
                 let mut elem_opt = None;
                 if let Some(init_ty) = &init_ty {
                     if let Type::Vec(inner) = init_ty {
-                        let init_is_empty = args.get(1).map_or(false, is_empty_collection_literal);
+                        let init_is_empty = args.get(1).is_some_and(is_empty_collection_literal);
                         if **inner != Type::Any || !init_is_empty {
                             elem_opt = Some((**inner).clone());
                         }
@@ -5198,7 +5198,7 @@ fn infer_juxt_call(
             return Type::Any;
         }
 
-        let other_rest_elem = other_rest.as_deref().and_then(|ty| rest_elem_type(ty));
+        let other_rest_elem = other_rest.as_deref().and_then(rest_elem_type);
         for (idx, base) in params.iter().enumerate() {
             let expected = if idx < other_params.len() {
                 other_params[idx].clone()
@@ -5222,7 +5222,7 @@ fn infer_juxt_call(
             }
         }
         if other_params.len() > params.len() {
-            let rest_elem = match rest.as_deref().and_then(|ty| rest_elem_type(ty)) {
+            let rest_elem = match rest.as_deref().and_then(rest_elem_type) {
                 Some(rest_elem) => rest_elem,
                 None => {
                     diags.push(error_diag(
@@ -6189,7 +6189,7 @@ fn resolve_literal_path_type(raw_ty: &Type, path_expr: &AstExpr, env: &TypeEnv) 
                     _ => None,
                 };
                 if let Some(field) = field {
-                    shape.fields.get(&field).cloned().unwrap_or_else(|| {
+                    shape.fields.get(&field).cloned().unwrap_or({
                         if shape.open {
                             Type::Any
                         } else {
@@ -10491,7 +10491,7 @@ fn infer_try_call(
     }
     env.push();
     let mut idx = 0;
-    if let Some(AstExpr::Vector(items)) = args.get(0) {
+    if let Some(AstExpr::Vector(items)) = args.first() {
         let mut i = 0;
         while i < items.len() {
             let (name, consumed) = parse_try_binding_name(items, i, diags);
@@ -12101,7 +12101,7 @@ fn contains_any(ty: &Type) -> bool {
         Type::Union(items) => items.iter().any(contains_any),
         Type::Function { params, rest, ret } => {
             params.iter().any(contains_any)
-                || rest.as_deref().map_or(false, contains_any)
+                || rest.as_deref().is_some_and(contains_any)
                 || contains_any(ret)
         }
         _ => false,
@@ -12119,7 +12119,7 @@ fn contains_dyn(ty: &Type) -> bool {
         Type::Union(items) => items.iter().any(contains_dyn),
         Type::Function { params, rest, ret } => {
             params.iter().any(contains_dyn)
-                || rest.as_deref().map_or(false, contains_dyn)
+                || rest.as_deref().is_some_and(contains_dyn)
                 || contains_dyn(ret)
         }
         _ => false,
@@ -12137,7 +12137,7 @@ fn contains_nil(ty: &Type) -> bool {
         Type::Tuple(items) => items.iter().any(contains_nil),
         Type::Function { params, rest, ret } => {
             params.iter().any(contains_nil)
-                || rest.as_deref().map_or(false, contains_nil)
+                || rest.as_deref().is_some_and(contains_nil)
                 || contains_nil(ret)
         }
         _ => false,

@@ -785,7 +785,7 @@ pub(crate) fn install(env: &mut Env) {
                     for (k, v) in map_coll {
                         let new_key = mapping
                             .get(k)
-                            .map(|repl| to_key_value_checked(repl))
+                            .map(to_key_value_checked)
                             .transpose()?
                             .unwrap_or_else(|| k.clone());
                         new_map.insert(new_key, v.clone());
@@ -800,7 +800,7 @@ pub(crate) fn install(env: &mut Env) {
                     for (k, v) in &map_coll.entries {
                         let new_key = mapping
                             .get(k)
-                            .map(|repl| to_key_value_checked(repl))
+                            .map(to_key_value_checked)
                             .transpose()?
                             .unwrap_or_else(|| k.clone());
                         sorted_map_insert_mut(&mut out, new_key, v.clone())?;
@@ -1374,7 +1374,7 @@ fn doc_from_name(name: &str) -> Option<String> {
             return Some(doc);
         }
     }
-    docs::find_doc_entry(name).and_then(|entry| docs::format_doc_entry(entry))
+    docs::find_doc_entry(name).and_then(docs::format_doc_entry)
 }
 
 fn source_from_name(name: &str) -> Option<String> {

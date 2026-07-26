@@ -42,7 +42,7 @@ fn sh(raise: bool, args: &[Value]) -> Result<Value, CloveError> {
         command.current_dir(dir);
     }
     if !opts.env.is_empty() {
-        command.envs(opts.env.iter().map(|(k, v)| (k, v)));
+        command.envs(opts.env.iter());
     }
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     if opts.stdin.is_some() {
@@ -72,11 +72,11 @@ fn sh(raise: bool, args: &[Value]) -> Result<Value, CloveError> {
         stdout = out_thread
             .join()
             .unwrap_or_else(|_| Ok(String::new()))
-            .map_err(|e| CloveError::runtime(e))?;
+            .map_err(CloveError::runtime)?;
         stderr = err_thread
             .join()
             .unwrap_or_else(|_| Ok(String::new()))
-            .map_err(|e| CloveError::runtime(e))?;
+            .map_err(CloveError::runtime)?;
     } else {
         if let Some(mut out) = child.stdout.take() {
             out.read_to_string(&mut stdout)
@@ -138,7 +138,7 @@ fn run(args: &[Value]) -> Result<Value, CloveError> {
         command.env_clear();
     }
     if !run_opts.env.is_empty() {
-        command.envs(run_opts.env.iter().map(|(k, v)| (k, v)));
+        command.envs(run_opts.env.iter());
     }
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     if run_opts.stdin.is_some() {

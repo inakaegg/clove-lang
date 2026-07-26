@@ -44,7 +44,7 @@ pub enum Type {
 
 impl Type {
     pub fn is_optional(&self) -> bool {
-        matches!(self, Type::Union(items) if items.iter().any(|t| *t == Type::Nil))
+        matches!(self, Type::Union(items) if items.contains(&Type::Nil))
     }
 
     pub fn union(items: Vec<Type>) -> Type {
