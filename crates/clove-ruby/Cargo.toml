@@ -10,3 +10,10 @@ clove-core = { path = "../clove-core" }
 magnus = { version = "0.8.2", features = ["embed"] }
 rb-sys = { version = "0.9", features = ["stable-api-compiled-fallback"] }
 im = "15.1"
+
+# `harness = false` so the assertions run on the process main thread: the embedded Ruby
+# VM is only visible to the thread that booted it.
+[[test]]
+name = "lazy_vm_boot"
+path = "tests/lazy_vm_boot.rs"
+harness = false
