@@ -3032,7 +3032,7 @@ impl Evaluator {
 
         let query_value = |query: &NavQuery| match query {
             NavQuery::Text(text) => Value::String(text.clone()),
-            NavQuery::Regex(regex) => Value::Regex(regex.clone()),
+            NavQuery::Regex(regex) => Value::Regex(Arc::new(regex.clone())),
             NavQuery::Other(value) => value.clone(),
         };
         let match_points = |query: &NavQuery, target: &str| -> Option<i64> {
@@ -3528,7 +3528,7 @@ impl Evaluator {
         let query_value_raw = self.eval(&args[0], env.clone())?;
         let query = match &query_value_raw {
             Value::Symbol(s) | Value::String(s) => NavQuery::Text(s.clone()),
-            Value::Regex(r) => NavQuery::Regex(r.clone()),
+            Value::Regex(r) => NavQuery::Regex(r.as_ref().clone()),
             other => NavQuery::Other(other.clone()),
         };
         let is_empty_text_query = matches!(query, NavQuery::Text(ref text) if text.is_empty());
@@ -9263,7 +9263,7 @@ impl Evaluator {
     }
 
     fn eval_regex_literal(&self, pattern: &str) -> Result<Value, CloveError> {
-        RegexValue::new(pattern.to_string()).map(Value::Regex)
+        RegexValue::new(pattern.to_string()).map(|rv| Value::Regex(Arc::new(rv)))
     }
 
     fn eval_foreign_raw(
@@ -9332,10 +9332,12 @@ impl Evaluator {
                 span_runtime_error(span, &msg)
             })?;
         Ok(Value::ForeignCallable {
-            tag: tag.to_string(),
-            path: path.to_string(),
-            engine,
-            span: Some(span),
+            data: Arc::new(crate::ast::ForeignCallableData {
+                tag: tag.to_string(),
+                path: path.to_string(),
+                engine,
+                span: Some(span),
+            }),
         })
     }
 
@@ -11863,7 +11865,9 @@ pub(crate) fn form_to_value(form: &Form) -> Result<Value, CloveError> {
         FormKind::Duration(d) => Ok(Value::Duration(*d)),
         FormKind::Symbol(s) => Ok(Value::Symbol(s.clone())),
         FormKind::Keyword(k) => Ok(Value::Symbol(format!(":{}", k))),
-        FormKind::Regex { pattern, .. } => RegexValue::new(pattern.clone()).map(Value::Regex),
+        FormKind::Regex { pattern, .. } => {
+            RegexValue::new(pattern.clone()).map(|rv| Value::Regex(Arc::new(rv)))
+        }
         FormKind::ShortFn(body) => {
             let expanded = expand_short_fn_to_list(body, form.span);
             form_to_value(&expanded)
@@ -11907,18 +11911,18 @@ pub(crate) fn form_to_value(form: &Form) -> Result<Value, CloveError> {
                 .map(|it| form_to_value(it))
                 .collect::<Result<HashSet<_>, _>>()?,
         )),
-        FormKind::ForeignBlock { tag, code } => Ok(Value::Foreign(ForeignValue {
+        FormKind::ForeignBlock { tag, code } => Ok(Value::Foreign(Arc::new(ForeignValue {
             tag: tag.clone(),
             data: Arc::new(code.clone()),
-        })),
-        FormKind::ForeignRaw { tag, code } => Ok(Value::Foreign(ForeignValue {
+        }))),
+        FormKind::ForeignRaw { tag, code } => Ok(Value::Foreign(Arc::new(ForeignValue {
             tag: tag.clone().unwrap_or_default(),
             data: Arc::new(code.clone()),
-        })),
-        FormKind::ForeignSymbol { tag, path } => Ok(Value::Foreign(ForeignValue {
+        }))),
+        FormKind::ForeignSymbol { tag, path } => Ok(Value::Foreign(Arc::new(ForeignValue {
             tag: tag.clone().unwrap_or_default(),
             data: Arc::new(path.clone()),
-        })),
+        }))),
     }
 }
 
@@ -12200,7 +12204,7 @@ fn callable_frame_meta(callable: &Value) -> Option<(Option<String>, Option<Span>
             .as_ref()
             .and_then(|name| fn_meta::get(name))
             .map(|meta| (meta.source_file, meta.source_span)),
-        Value::Partial { callable, .. } => callable_frame_meta(callable),
+        Value::Partial { data } => callable_frame_meta(&data.callable),
         _ => None,
     }
 }
@@ -12293,7 +12297,7 @@ fn value_accepts_n(value: &Value, n: usize) -> bool {
                 MultiArityCheck::Call(_)
             )
         }
-        Value::Partial { remaining, .. } => matches!(check_arity(*remaining, n), ArityCheck::Call),
+        Value::Partial { data } => matches!(check_arity(data.remaining, n), ArityCheck::Call),
         Value::Compose { funcs, kind } => {
             if funcs.is_empty() {
                 return false;
@@ -12372,22 +12376,18 @@ pub fn call_callable(callable: Value, args: Vec<Value>) -> Result<Value, CloveEr
     let profile_label = profile_label_for_callable(&callable);
     let _profile_guard = profile_label.as_deref().and_then(profiler::enter);
     match callable {
-        Value::Partial {
-            ref callable,
-            ref captured,
-            remaining,
-        } => match check_arity(remaining, args.len()) {
+        Value::Partial { ref data } => match check_arity(data.remaining, args.len()) {
             ArityCheck::Call => {
-                let mut all_args = captured.clone();
+                let mut all_args = data.captured.clone();
                 all_args.extend_from_slice(&args);
-                call_callable((**callable).clone(), all_args)
+                call_callable(data.callable.clone(), all_args)
             }
             ArityCheck::NeedMore(rem) => {
-                let mut next_captured = captured.clone();
+                let mut next_captured = data.captured.clone();
                 next_captured.extend_from_slice(&args);
-                Ok(make_partial((**callable).clone(), next_captured, rem))
+                Ok(make_partial(data.callable.clone(), next_captured, rem))
             }
-            ArityCheck::TooMany => Err(arity_error(remaining, args.len())),
+            ArityCheck::TooMany => Err(arity_error(data.remaining, args.len())),
         },
         Value::Compose { ref funcs, kind } => match kind {
             ComposeKind::Comp => {
@@ -12491,22 +12491,23 @@ pub fn call_callable(callable: Value, args: Vec<Value>) -> Result<Value, CloveEr
                 MultiArityCheck::TooMany => Err(multi_arity_error(&data.clauses, args.len())),
             }
         }
-        Value::ForeignCallable {
-            engine,
-            path,
-            span,
-            tag,
-        } => {
+        Value::ForeignCallable { data } => {
+            let crate::ast::ForeignCallableData {
+                engine,
+                path,
+                span,
+                tag,
+            } = data.as_ref();
             if args.iter().any(contains_mut_collection) {
                 return Err(CloveError::runtime(
                     "foreign call cannot accept mutable collection; use (imut x)",
                 ));
             }
             engine
-                .call_symbol(&path, &args, span)
+                .call_symbol(path, &args, *span)
                 .map_err(|err| match err {
                     CloveError::Other(data) => CloveError::Foreign {
-                        tag,
+                        tag: tag.clone(),
                         message: data.message,
                         context: data.context,
                     },
@@ -12680,9 +12681,11 @@ fn multi_arity_error(clauses: &[LambdaClause], provided: usize) -> CloveError {
 
 fn make_partial(callable: Value, captured: Vec<Value>, remaining: FnArity) -> Value {
     Value::Partial {
-        callable: Box::new(callable),
-        captured,
-        remaining,
+        data: Arc::new(crate::ast::PartialData {
+            callable,
+            captured,
+            remaining,
+        }),
     }
 }
 

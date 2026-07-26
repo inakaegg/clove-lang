@@ -488,9 +488,11 @@ pub(crate) fn install(env: &mut Env) {
         let f = args[0].clone();
         let captured = args[1..].to_vec();
         Ok(Value::Partial {
-            callable: Box::new(f),
-            captured,
-            remaining: FnArity::at_least(0),
+            data: std::sync::Arc::new(crate::ast::PartialData {
+                callable: f,
+                captured,
+                remaining: FnArity::at_least(0),
+            }),
         })
     });
     def_builtin!(env, "comp", FnArity::at_least(1), |args| {

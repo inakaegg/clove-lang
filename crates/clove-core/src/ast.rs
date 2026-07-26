@@ -228,7 +228,10 @@ impl DurationUnit {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DurationValue {
-    nanos: i128,
+    /// Nanoseconds as `i64` (±292 years), not `i128`: an `i128` field has 16-byte
+    /// alignment, which propagated to `Value` and rounded every value in every
+    /// collection up to 48 bytes. Overflow is reported rather than truncated.
+    nanos: i64,
 }
 
 impl DurationValue {
@@ -236,6 +239,8 @@ impl DurationValue {
         if nanos < 0 {
             return Err(CloveError::runtime("duration cannot be negative"));
         }
+        let nanos = i64::try_from(nanos)
+            .map_err(|_| CloveError::runtime("duration too large (over ~292 years)"))?;
         Ok(Self { nanos })
     }
 
@@ -247,7 +252,7 @@ impl DurationValue {
     }
 
     pub fn as_nanos(&self) -> i128 {
-        self.nanos
+        self.nanos as i128
     }
 
     pub fn to_unit(&self, unit: DurationUnit) -> f64 {
@@ -255,12 +260,8 @@ impl DurationValue {
     }
 
     pub fn to_millis_i64(&self) -> Result<i64, CloveError> {
-        const NANOS_PER_MS: i128 = 1_000_000;
-        let millis = self.nanos / NANOS_PER_MS;
-        if millis > i64::MAX as i128 {
-            return Err(CloveError::runtime("duration too large"));
-        }
-        Ok(millis as i64)
+        const NANOS_PER_MS: i64 = 1_000_000;
+        Ok(self.nanos / NANOS_PER_MS)
     }
 
     pub fn pretty(&self) -> String {
@@ -273,7 +274,7 @@ impl DurationValue {
             DurationUnit::Second,
             DurationUnit::Millisecond,
         ] {
-            let nanos_per = unit.nanos_per_unit();
+            let nanos_per = unit.nanos_per_unit() as i64;
             if self.nanos % nanos_per == 0 {
                 let magnitude = self.nanos / nanos_per;
                 return format!("{}{}", magnitude, unit.suffix());
@@ -816,13 +817,12 @@ pub enum Value {
     TransientVector(TransientHandle),
     TransientMap(TransientHandle),
     TransientSet(TransientHandle),
-    Regex(RegexValue),
+    Regex(Arc<RegexValue>),
     Duration(DurationValue),
     Func(Arc<NativeFn>),
+    /// Boxed for the same reason as [`Value::ForeignCallable`].
     Partial {
-        callable: Box<Value>,
-        captured: Vec<Value>,
-        remaining: FnArity,
+        data: Arc<PartialData>,
     },
     Compose {
         funcs: Vec<Value>,
@@ -850,13 +850,28 @@ pub enum Value {
         env: EnvSlot,
     },
     Symbol(String),
-    Foreign(crate::foreign::ForeignValue),
+    Foreign(Arc<crate::foreign::ForeignValue>),
+    /// Boxed: this used to be the widest variant (88 bytes) and set the size of every
+    /// `Value`, including the ints stored in collections. See tests/value_size.rs.
     ForeignCallable {
-        tag: String,
-        path: String,
-        engine: Arc<dyn ForeignEngine>,
-        span: Option<Span>,
+        data: Arc<ForeignCallableData>,
     },
+}
+
+/// Payload of [`Value::Partial`].
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct PartialData {
+    pub callable: Value,
+    pub captured: Vec<Value>,
+    pub remaining: FnArity,
+}
+
+/// Payload of [`Value::ForeignCallable`].
+pub struct ForeignCallableData {
+    pub tag: String,
+    pub path: String,
+    pub engine: Arc<dyn ForeignEngine>,
+    pub span: Option<Span>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -1073,18 +1088,7 @@ impl PartialEq for Value {
             (Value::Duration(a), Value::Duration(b)) => a == b,
             (Value::Symbol(a), Value::Symbol(b)) => a == b,
             (Value::Func(a), Value::Func(b)) => Arc::ptr_eq(a, b),
-            (
-                Value::Partial {
-                    callable: ac,
-                    captured: aa,
-                    remaining: ar,
-                },
-                Value::Partial {
-                    callable: bc,
-                    captured: ba,
-                    remaining: br,
-                },
-            ) => ac == bc && aa == ba && ar == br,
+            (Value::Partial { data: a }, Value::Partial { data: b }) => a == b,
             (
                 Value::Compose {
                     funcs: af,
@@ -1155,20 +1159,12 @@ impl PartialEq for Value {
             (Value::Foreign(a), Value::Foreign(b)) => {
                 a.tag == b.tag && Arc::ptr_eq(&a.data, &b.data)
             }
-            (
-                Value::ForeignCallable {
-                    tag: atag,
-                    path: apath,
-                    engine: aeng,
-                    span: aspan,
-                },
-                Value::ForeignCallable {
-                    tag: btag,
-                    path: bpath,
-                    engine: beng,
-                    span: bspan,
-                },
-            ) => atag == btag && apath == bpath && Arc::ptr_eq(aeng, beng) && aspan == bspan,
+            (Value::ForeignCallable { data: a }, Value::ForeignCallable { data: b }) => {
+                a.tag == b.tag
+                    && a.path == b.path
+                    && Arc::ptr_eq(&a.engine, &b.engine)
+                    && a.span == b.span
+            }
             _ => false,
         }
     }
@@ -1258,15 +1254,7 @@ impl Hash for Value {
                     Value::Regex(r) => r.pattern.hash(state),
                     Value::Duration(d) => d.hash(state),
                     Value::Func(f) => Arc::as_ptr(f).hash(state),
-                    Value::Partial {
-                        callable,
-                        captured,
-                        remaining,
-                    } => {
-                        callable.hash(state);
-                        captured.hash(state);
-                        remaining.hash(state);
-                    }
+                    Value::Partial { data } => data.hash(state),
                     Value::Compose { funcs, kind } => {
                         funcs.hash(state);
                         kind.hash(state);
@@ -1322,12 +1310,13 @@ impl Hash for Value {
                         fv.tag.hash(state);
                         Arc::as_ptr(&fv.data).hash(state);
                     }
-                    Value::ForeignCallable {
-                        tag,
-                        path,
-                        engine,
-                        span,
-                    } => {
+                    Value::ForeignCallable { data } => {
+                        let ForeignCallableData {
+                            tag,
+                            path,
+                            engine,
+                            span,
+                        } = data.as_ref();
                         tag.hash(state);
                         path.hash(state);
                         Arc::as_ptr(engine).hash(state);
@@ -1408,9 +1397,9 @@ pub fn callable_label(callable: &Value) -> Option<String> {
                 .unwrap_or_else(|| "<lambda>".into()),
         ),
         Value::Func(func) => func.debug_name().map(pretty_symbol),
-        Value::ForeignCallable { tag, path, .. } => Some(format!("{}::{}", tag, path)),
-        Value::Partial { callable, .. } => {
-            let base = callable_label(callable).unwrap_or_else(|| "<fn>".into());
+        Value::ForeignCallable { data } => Some(format!("{}::{}", data.tag, data.path)),
+        Value::Partial { data } => {
+            let base = callable_label(&data.callable).unwrap_or_else(|| "<fn>".into());
             Some(format!("partial {}", base))
         }
         Value::Compose { funcs, kind } => {
@@ -1454,11 +1443,12 @@ fn format_callable_value(callable: &Value) -> String {
                 "#<native-fn>".into()
             }
         }
-        Value::Partial {
-            callable,
-            captured,
-            remaining,
-        } => {
+        Value::Partial { data } => {
+            let PartialData {
+                callable,
+                captured,
+                remaining,
+            } = data.as_ref();
             let base = callable_label(callable).unwrap_or_else(|| "<fn>".into());
             let captured_repr = if captured.is_empty() {
                 String::new()
@@ -1484,7 +1474,7 @@ fn format_callable_value(callable: &Value) -> String {
             };
             format!("#<{} [{}]>", head, parts.join(" "))
         }
-        Value::ForeignCallable { tag, path, .. } => format!("#<foreign {}::{}>", tag, path),
+        Value::ForeignCallable { data } => format!("#<foreign {}::{}>", data.tag, data.path),
         _ => "#<fn>".into(),
     }
 }

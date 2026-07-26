@@ -372,7 +372,7 @@ impl SerializableValue {
             SerializableValue::Symbol(s) => Ok(Value::Symbol(s)),
             SerializableValue::Regex(pattern) => {
                 let regex = RegexValue::new(pattern).map_err(|e| e.to_string())?;
-                Ok(Value::Regex(regex))
+                Ok(Value::Regex(std::sync::Arc::new(regex)))
             }
             SerializableValue::Duration(nanos) => {
                 let duration = DurationValue::from_nanos(nanos).map_err(|e| e.to_string())?;

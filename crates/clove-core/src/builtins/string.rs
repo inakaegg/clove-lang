@@ -333,14 +333,14 @@ pub(crate) fn install(env: &mut Env) {
     def_builtin!(env, "re-pattern", FnArity::exact(1), |args| {
         let s = crate::builtins::expect_string(&args[0], "re-pattern", 1)?;
         let rv = crate::ast::RegexValue::new(s)?;
-        Ok(Value::Regex(rv))
+        Ok(Value::Regex(std::sync::Arc::new(rv)))
     });
     define_string_alias(env, "re-pattern", "re-pattern");
     // alias: regex (String -> Regex)
     def_builtin!(env, "regex", FnArity::exact(1), |args| {
         let s = crate::builtins::expect_string(&args[0], "regex", 1)?;
         let rv = crate::ast::RegexValue::new(s)?;
-        Ok(Value::Regex(rv))
+        Ok(Value::Regex(std::sync::Arc::new(rv)))
     });
     define_string_alias(env, "regex", "regex");
 
@@ -363,12 +363,12 @@ pub(crate) fn install(env: &mut Env) {
     def_builtin!(env, "re-matcher", FnArity::range(1, 2), |args| match args {
         [Value::String(s)] => {
             let rv = crate::ast::RegexValue::new(s.clone())?;
-            Ok(Value::Regex(rv))
+            Ok(Value::Regex(std::sync::Arc::new(rv)))
         }
         [pattern, Value::String(_text)] => {
             // simple matcher proxy; return compiled regex
             let regex = resolve_regex(pattern)?;
-            Ok(Value::Regex(crate::ast::RegexValue::new(regex.as_str())?))
+            Ok(Value::Regex(std::sync::Arc::new(crate::ast::RegexValue::new(regex.as_str())?)))
         }
         [_, text] => Err(crate::builtins::type_mismatch_arg(
             "string",

@@ -15,36 +15,80 @@ pub struct StackFrame {
     pub file: Option<String>,
 }
 
+/// Where an error happened, if anyone recorded it.
+///
+/// Boxed and optional because this sits in every `CloveError` variant, and the evaluator
+/// returns `Result<Value, CloveError>` from every recursive step: the payload is moved on
+/// the native stack for each Clove call. Most errors never get decorated, and those cost
+/// one pointer and no allocation.
 #[derive(Clone, Debug, Default)]
 pub struct ErrorContext {
-    pub span: Option<Span>,
-    pub stack: Vec<StackFrame>,
-    pub file: Option<String>,
-    pub env: Option<EnvRef>,
+    inner: Option<Box<ErrorContextData>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ErrorContextData {
+    span: Option<Span>,
+    stack: Vec<StackFrame>,
+    file: Option<String>,
+    env: Option<EnvRef>,
 }
 
 impl ErrorContext {
+    pub fn span(&self) -> Option<Span> {
+        self.inner.as_ref().and_then(|data| data.span)
+    }
+
+    pub fn file(&self) -> Option<&str> {
+        self.inner.as_ref().and_then(|data| data.file.as_deref())
+    }
+
+    pub fn env(&self) -> Option<EnvRef> {
+        self.inner.as_ref().and_then(|data| data.env.clone())
+    }
+
+    pub fn stack(&self) -> &[StackFrame] {
+        self.inner
+            .as_ref()
+            .map(|data| data.stack.as_slice())
+            .unwrap_or(&[])
+    }
+
+    fn data_mut(&mut self) -> &mut ErrorContextData {
+        self.inner.get_or_insert_with(Box::default)
+    }
+
     fn set_span(&mut self, span: Span) {
-        if self.span.is_none() {
-            self.span = Some(span);
+        let data = self.data_mut();
+        if data.span.is_none() {
+            data.span = Some(span);
         }
     }
 
     fn set_stack(&mut self, stack: Vec<StackFrame>) {
-        if self.stack.is_empty() && !stack.is_empty() {
-            self.stack = stack;
+        if stack.is_empty() {
+            return;
+        }
+        let data = self.data_mut();
+        if data.stack.is_empty() {
+            data.stack = stack;
         }
     }
 
     fn set_file(&mut self, file: Option<String>) {
-        if self.file.is_none() {
-            self.file = file;
+        if file.is_none() {
+            return;
+        }
+        let data = self.data_mut();
+        if data.file.is_none() {
+            data.file = file;
         }
     }
 
     fn set_env(&mut self, env: EnvRef) {
-        if self.env.is_none() {
-            self.env = Some(env);
+        let data = self.data_mut();
+        if data.env.is_none() {
+            data.env = Some(env);
         }
     }
 }
@@ -209,7 +253,7 @@ impl CloveError {
     }
 
     pub fn span(&self) -> Option<Span> {
-        self.context_ref().and_then(|ctx| ctx.span)
+        self.context_ref().and_then(|ctx| ctx.span())
     }
 
     pub fn with_file(mut self, file: Option<String>) -> Self {
@@ -227,16 +271,16 @@ impl CloveError {
     }
 
     pub fn file(&self) -> Option<&str> {
-        self.context_ref().and_then(|ctx| ctx.file.as_deref())
+        self.context_ref().and_then(|ctx| ctx.file())
     }
 
     pub fn env(&self) -> Option<EnvRef> {
-        self.context_ref().and_then(|ctx| ctx.env.clone())
+        self.context_ref().and_then(|ctx| ctx.env())
     }
 
     pub fn stack(&self) -> &[StackFrame] {
         self.context_ref()
-            .map(|ctx| ctx.stack.as_slice())
+            .map(|ctx| ctx.stack())
             .unwrap_or(&[])
     }
 

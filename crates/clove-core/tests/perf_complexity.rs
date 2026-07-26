@@ -20,18 +20,28 @@ where
     handle.join().expect("test thread panicked");
 }
 
-fn measure_eval(ctx: &Arc<RuntimeCtx>, src: &str) -> Duration {
-    let mut best = Duration::MAX;
-    for _ in 0..3 {
-        let start = Instant::now();
-        let value = ctx.eval_source(src).expect("eval");
-        black_box(value);
-        let elapsed = start.elapsed();
-        if elapsed < best {
-            best = elapsed;
-        }
+fn time_once(ctx: &Arc<RuntimeCtx>, src: &str) -> Duration {
+    let start = Instant::now();
+    let value = ctx.eval_source(src).expect("eval");
+    black_box(value);
+    start.elapsed()
+}
+
+/// Time both sizes with the runs interleaved.
+///
+/// These tests only compare the two timings to each other, so measuring all of one size
+/// and then all of the other lets a scheduler hiccup during the second phase look like
+/// super-linear complexity. `cargo test --workspace` runs these next to other tests, and
+/// that produced spurious failures. Interleaving puts any load on both sides, and the
+/// per-size minimum is the statistic that matters for a complexity check.
+fn measure_pair(ctx: &Arc<RuntimeCtx>, small_src: &str, large_src: &str) -> (Duration, Duration) {
+    let mut best_small = Duration::MAX;
+    let mut best_large = Duration::MAX;
+    for _ in 0..5 {
+        best_small = best_small.min(time_once(ctx, small_src));
+        best_large = best_large.min(time_once(ctx, large_src));
     }
-    best
+    (best_small, best_large)
 }
 
 fn assert_linear(label: &str, small: Duration, large: Duration) {
@@ -72,8 +82,7 @@ fn into_scales_linearly() {
         let n = 2000;
         let small = format!("(count (into [] (range {})))", n);
         let large = format!("(count (into [] (range {})))", n * 2);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("into", t_small, t_large);
     });
 }
@@ -85,8 +94,7 @@ fn reduce_conj_scales_linearly() {
         let n = 2000;
         let small = format!("(count (reduce conj [] (range {})))", n);
         let large = format!("(count (reduce conj [] (range {})))", n * 2);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("reduce+conj", t_small, t_large);
     });
 }
@@ -98,8 +106,7 @@ fn concat_scales_linearly() {
         let n = 2000;
         let small = format!("(count (concat (range {}) (range {})))", n, n);
         let large = format!("(count (concat (range {}) (range {})))", n * 2, n * 2);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("concat", t_small, t_large);
     });
 }
@@ -111,8 +118,7 @@ fn flatten_scales_linearly() {
         let n = 2000;
         let small = format!("(count (flatten (map (fn [x] [x]) (range {}))))", n);
         let large = format!("(count (flatten (map (fn [x] [x]) (range {}))))", n * 2);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("flatten", t_small, t_large);
     });
 }
@@ -124,8 +130,7 @@ fn map_scales_linearly() {
         let n = 2000;
         let small = format!("(count (map inc (range {})))", n);
         let large = format!("(count (map inc (range {})))", n * 2);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("map", t_small, t_large);
     });
 }
@@ -140,8 +145,7 @@ fn filter_scales_linearly() {
             "(count (filter (fn [x] (= 0 (mod x 2))) (range {})))",
             n * 2
         );
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("filter", t_small, t_large);
     });
 }
@@ -156,8 +160,7 @@ fn remove_scales_linearly() {
             "(count (remove (fn [x] (= 0 (mod x 2))) (range {})))",
             n * 2
         );
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("remove", t_small, t_large);
     });
 }
@@ -175,8 +178,7 @@ fn keep_scales_linearly() {
             "(count (keep (fn [x] (if (= 0 (mod x 2)) x nil)) (range {})))",
             n * 2
         );
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("keep", t_small, t_large);
     });
 }
@@ -188,8 +190,7 @@ fn take_scales_linearly() {
         let n = 2000;
         let small = format!("(count (take {} (range {})))", n, n * 2);
         let large = format!("(count (take {} (range {})))", n * 2, n * 4);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("take", t_small, t_large);
     });
 }
@@ -201,8 +202,7 @@ fn drop_scales_linearly() {
         let n = 2000;
         let small = format!("(count (drop {} (range {})))", n, n * 2);
         let large = format!("(count (drop {} (range {})))", n * 2, n * 4);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("drop", t_small, t_large);
     });
 }
@@ -221,8 +221,7 @@ fn nth_scales_linearly() {
             n * 2,
             n * 2
         );
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("nth", t_small, t_large);
     });
 }
@@ -240,8 +239,7 @@ fn get_in_scales_linearly() {
             "(let [m {{:a {{:b {{:c 1}}}}}}] (reduce (fn [acc _] (get-in m [:a :b :c])) 0 (range {})))",
             n * 2
         );
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("get-in", t_small, t_large);
     });
 }
@@ -253,8 +251,7 @@ fn join_scales_linearly() {
         let n = 2000;
         let small = format!("(count (join (repeat {} \"a\") \",\"))", n);
         let large = format!("(count (join (repeat {} \"a\") \",\"))", n * 2);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("join", t_small, t_large);
     });
 }
@@ -268,8 +265,7 @@ fn json_parse_scales_linearly() {
         let large_json = escape_string_literal(&json_array(n * 2));
         let small = format!("(count (json::parse \"{}\"))", small_json);
         let large = format!("(count (json::parse \"{}\"))", large_json);
-        let t_small = measure_eval(&ctx, &small);
-        let t_large = measure_eval(&ctx, &large);
+        let (t_small, t_large) = measure_pair(&ctx, &small, &large);
         assert_linear("json::parse", t_small, t_large);
     });
 }
