@@ -45,19 +45,8 @@ pub enum Expr {
         bindings: Vec<(String, Expr)>,
         body: Box<Expr>,
     },
-    Lambda1 {
-        param: String,
-        body: Box<Expr>,
-    },
-    Lambda2 {
-        param1: String,
-        param2: String,
-        body: Box<Expr>,
-    },
-    Lambda3 {
-        param1: String,
-        param2: String,
-        param3: String,
+    Lambda {
+        params: Vec<String>,
         body: Box<Expr>,
     },
     Call {
@@ -205,26 +194,12 @@ fn lower_symbol_callee(callee: &IrExpr) -> Result<String, FrontError> {
 }
 
 fn make_lambda_from_names(params: &[String], body: Expr) -> Result<Expr, FrontError> {
-    match params.len() {
-        1 => Ok(Expr::Lambda1 {
-            param: params[0].clone(),
-            body: Box::new(body),
-        }),
-        2 => Ok(Expr::Lambda2 {
-            param1: params[0].clone(),
-            param2: params[1].clone(),
-            body: Box::new(body),
-        }),
-        3 => Ok(Expr::Lambda3 {
-            param1: params[0].clone(),
-            param2: params[1].clone(),
-            param3: params[2].clone(),
-            body: Box::new(body),
-        }),
-        _ => Err(FrontError {
-            message: "lambda currently supports one to three params".to_string(),
-        }),
-    }
+    // Any arity: the backend inlines calls, so it does not care how many parameters there
+    // are (see `Compiler::inline_call`). This adapter used to cap it at three.
+    Ok(Expr::Lambda {
+        params: params.to_vec(),
+        body: Box::new(body),
+    })
 }
 
 #[cfg(test)]
@@ -261,10 +236,10 @@ mod tests {
             panic!("expected def");
         };
         assert_eq!(name, "step");
-        let Expr::Lambda1 { param, .. } = value else {
+        let Expr::Lambda { params, .. } = value else {
             panic!("expected lambda");
         };
-        assert_eq!(param, "x");
+        assert_eq!(params, &vec!["x".to_string()]);
     }
 
     #[test]
@@ -275,11 +250,10 @@ mod tests {
             panic!("expected def");
         };
         assert_eq!(name, "step2");
-        let Expr::Lambda2 { param1, param2, .. } = value else {
-            panic!("expected lambda2");
+        let Expr::Lambda { params, .. } = value else {
+            panic!("expected lambda");
         };
-        assert_eq!(param1, "i");
-        assert_eq!(param2, "x");
+        assert_eq!(params, &vec!["i".to_string(), "x".to_string()]);
     }
 
     #[test]
@@ -290,18 +264,13 @@ mod tests {
             panic!("expected def");
         };
         assert_eq!(name, "rf");
-        let Expr::Lambda3 {
-            param1,
-            param2,
-            param3,
-            ..
-        } = value
-        else {
-            panic!("expected lambda3");
+        let Expr::Lambda { params, .. } = value else {
+            panic!("expected lambda");
         };
-        assert_eq!(param1, "acc");
-        assert_eq!(param2, "k");
-        assert_eq!(param3, "v");
+        assert_eq!(
+            params,
+            &vec!["acc".to_string(), "k".to_string(), "v".to_string()]
+        );
     }
 
     #[test]
@@ -355,8 +324,8 @@ mod tests {
         let TopLevel::Def { value, .. } = &program.top_levels[0] else {
             panic!("expected def");
         };
-        let Expr::Lambda1 { body, .. } = value else {
-            panic!("expected lambda1");
+        let Expr::Lambda { body, .. } = value else {
+            panic!("expected lambda");
         };
         let Expr::Do(items) = body.as_ref() else {
             panic!("expected do body");

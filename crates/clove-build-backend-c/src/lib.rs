@@ -55,19 +55,8 @@ pub enum Expr {
         bindings: Vec<(String, Expr)>,
         body: Box<Expr>,
     },
-    Lambda1 {
-        param: String,
-        body: Box<Expr>,
-    },
-    Lambda2 {
-        param1: String,
-        param2: String,
-        body: Box<Expr>,
-    },
-    Lambda3 {
-        param1: String,
-        param2: String,
-        param3: String,
+    Lambda {
+        params: Vec<String>,
         body: Box<Expr>,
     },
     Call {
@@ -107,21 +96,22 @@ enum CRepr {
 #[derive(Debug, Clone)]
 enum Binding {
     Value(CValue),
-    Lambda1 {
-        param: String,
-        body: Expr,
-    },
-    Lambda2 {
-        param1: String,
-        param2: String,
-        body: Expr,
-    },
-    Lambda3 {
-        param1: String,
-        param2: String,
-        param3: String,
-        body: Expr,
-    },
+    Lambda { params: Vec<String>, body: Expr },
+}
+
+impl Binding {
+    /// The parameters and body of a lambda binding with exactly `arity` parameters.
+    ///
+    /// The sequence builtins lower callables of a fixed shape: `map` takes a unary
+    /// function, `reduce` a binary one, and so on.
+    fn as_lambda(&self, arity: usize) -> Option<(&[String], &Expr)> {
+        match self {
+            Binding::Lambda { params, body } if params.len() == arity => {
+                Some((params.as_slice(), body))
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -211,6 +201,7 @@ pub fn emit_c(program: &FrontProgram, config: &RuntimeConfig) -> Result<CArtifac
         map_vars: Vec::new(),
         str_vars: Vec::new(),
         temp_id: 0,
+        inlining: Vec::new(),
     };
     compiler.emit_program(program)?;
     Ok(CArtifact {
@@ -340,26 +331,10 @@ fn lower_ir_symbol_callee(expr: &IrExpr) -> Result<String, BackendError> {
 }
 
 fn lower_ir_lambda(params: &[String], body: Expr) -> Result<Expr, BackendError> {
-    match params.len() {
-        1 => Ok(Expr::Lambda1 {
-            param: params[0].clone(),
-            body: Box::new(body),
-        }),
-        2 => Ok(Expr::Lambda2 {
-            param1: params[0].clone(),
-            param2: params[1].clone(),
-            body: Box::new(body),
-        }),
-        3 => Ok(Expr::Lambda3 {
-            param1: params[0].clone(),
-            param2: params[1].clone(),
-            param3: params[2].clone(),
-            body: Box::new(body),
-        }),
-        _ => Err(BackendError {
-            message: "lambda currently supports one to three params".to_string(),
-        }),
-    }
+    Ok(Expr::Lambda {
+        params: params.to_vec(),
+        body: Box::new(body),
+    })
 }
 
 struct Compiler<'a> {
@@ -370,6 +345,8 @@ struct Compiler<'a> {
     map_vars: Vec<MapVar>,
     str_vars: Vec<String>,
     temp_id: usize,
+    /// Functions currently being inlined, innermost last. See [`Compiler::inline_call`].
+    inlining: Vec<String>,
 }
 
 impl<'a> Compiler<'a> {
@@ -548,21 +525,7 @@ impl<'a> Compiler<'a> {
             return None;
         }
         let (params, loop_body) = match lambda_expr {
-            Expr::Lambda1 { param, body } => (vec![param.clone()], body.as_ref().clone()),
-            Expr::Lambda2 {
-                param1,
-                param2,
-                body,
-            } => (vec![param1.clone(), param2.clone()], body.as_ref().clone()),
-            Expr::Lambda3 {
-                param1,
-                param2,
-                param3,
-                body,
-            } => (
-                vec![param1.clone(), param2.clone(), param3.clone()],
-                body.as_ref().clone(),
-            ),
+            Expr::Lambda { params, body } => (params.clone(), body.as_ref().clone()),
             _ => return None,
         };
         if params.len() != init_args.len() {
@@ -648,41 +611,11 @@ impl<'a> Compiler<'a> {
         // Pass 1: collect lambda defs to allow symbol references from later forms.
         for tl in &program.top_levels {
             if let TopLevel::Def { name, value } = tl {
-                if let Expr::Lambda1 { param, body } = value {
+                if let Expr::Lambda { params, body } = value {
                     self.bindings.insert(
                         name.clone(),
-                        Binding::Lambda1 {
-                            param: param.clone(),
-                            body: (**body).clone(),
-                        },
-                    );
-                } else if let Expr::Lambda2 {
-                    param1,
-                    param2,
-                    body,
-                } = value
-                {
-                    self.bindings.insert(
-                        name.clone(),
-                        Binding::Lambda2 {
-                            param1: param1.clone(),
-                            param2: param2.clone(),
-                            body: (**body).clone(),
-                        },
-                    );
-                } else if let Expr::Lambda3 {
-                    param1,
-                    param2,
-                    param3,
-                    body,
-                } = value
-                {
-                    self.bindings.insert(
-                        name.clone(),
-                        Binding::Lambda3 {
-                            param1: param1.clone(),
-                            param2: param2.clone(),
-                            param3: param3.clone(),
+                        Binding::Lambda {
+                            params: params.clone(),
                             body: (**body).clone(),
                         },
                     );
@@ -694,10 +627,7 @@ impl<'a> Compiler<'a> {
         for tl in &program.top_levels {
             match tl {
                 TopLevel::Def { name, value } => {
-                    if matches!(
-                        value,
-                        Expr::Lambda1 { .. } | Expr::Lambda2 { .. } | Expr::Lambda3 { .. }
-                    ) {
+                    if matches!(value, Expr::Lambda { .. }) {
                         continue;
                     }
                     let cval = self.compile_expr(value)?;
@@ -1532,9 +1462,7 @@ impl<'a> Compiler<'a> {
             }),
             Expr::Symbol(name) => match self.bindings.get(name) {
                 Some(Binding::Value(v)) => Ok(v.clone()),
-                Some(
-                    Binding::Lambda1 { .. } | Binding::Lambda2 { .. } | Binding::Lambda3 { .. },
-                ) => Err(BackendError {
+                Some(Binding::Lambda { .. }) => Err(BackendError {
                     message: format!("symbol '{}' is lambda and cannot be used as value", name),
                 }),
                 None => Err(BackendError {
@@ -1721,28 +1649,8 @@ impl<'a> Compiler<'a> {
                 let mut saved = Vec::with_capacity(bindings.len());
                 for (name, value_expr) in bindings {
                     let binding = match value_expr {
-                        Expr::Lambda1 { param, body } => Binding::Lambda1 {
-                            param: param.clone(),
-                            body: body.as_ref().clone(),
-                        },
-                        Expr::Lambda2 {
-                            param1,
-                            param2,
-                            body,
-                        } => Binding::Lambda2 {
-                            param1: param1.clone(),
-                            param2: param2.clone(),
-                            body: body.as_ref().clone(),
-                        },
-                        Expr::Lambda3 {
-                            param1,
-                            param2,
-                            param3,
-                            body,
-                        } => Binding::Lambda3 {
-                            param1: param1.clone(),
-                            param2: param2.clone(),
-                            param3: param3.clone(),
+                        Expr::Lambda { params, body } => Binding::Lambda {
+                            params: params.clone(),
                             body: body.as_ref().clone(),
                         },
                         _ => {
@@ -1764,14 +1672,8 @@ impl<'a> Compiler<'a> {
                 }
                 result
             }
-            Expr::Lambda1 { .. } => Err(BackendError {
+            Expr::Lambda { .. } => Err(BackendError {
                 message: "lambda value is only allowed as builtin argument".to_string(),
-            }),
-            Expr::Lambda2 { .. } => Err(BackendError {
-                message: "lambda2 value is only allowed as builtin argument".to_string(),
-            }),
-            Expr::Lambda3 { .. } => Err(BackendError {
-                message: "lambda3 value is only allowed as builtin argument".to_string(),
             }),
             Expr::Call { callee, args } => self.compile_call(callee, args),
         }
@@ -5967,16 +5869,9 @@ impl<'a> Compiler<'a> {
 
                 if callee == "fn?" {
                     let is_fn = match &args[0] {
-                        Expr::Lambda1 { .. } | Expr::Lambda2 { .. } | Expr::Lambda3 { .. } => true,
+                        Expr::Lambda { .. } => true,
                         Expr::Symbol(name) => {
-                            matches!(
-                                self.bindings.get(name),
-                                Some(
-                                    Binding::Lambda1 { .. }
-                                        | Binding::Lambda2 { .. }
-                                        | Binding::Lambda3 { .. }
-                                )
-                            )
+                            matches!(self.bindings.get(name), Some(Binding::Lambda { .. }))
                         }
                         _ => false,
                     };
@@ -6115,83 +6010,8 @@ impl<'a> Compiler<'a> {
                 })
             }
             _ => {
-                if let Some(binding) = self.bindings.get(callee).cloned() {
-                    match binding {
-                        Binding::Lambda1 { param, body } => {
-                            if args.len() != 1 {
-                                return Err(BackendError {
-                                    message: format!("{} expects 1 arg", callee),
-                                });
-                            }
-                            let raw = self.compile_expr(&args[0])?;
-                            let value = self.materialize_value("call_arg", raw)?;
-                            return self.with_temp_binding(&param, Binding::Value(value), |this| {
-                                this.compile_expr(&body)
-                            });
-                        }
-                        Binding::Lambda2 {
-                            param1,
-                            param2,
-                            body,
-                        } => {
-                            if args.len() != 2 {
-                                return Err(BackendError {
-                                    message: format!("{} expects 2 args", callee),
-                                });
-                            }
-                            let raw1 = self.compile_expr(&args[0])?;
-                            let value1 = self.materialize_value("call_arg", raw1)?;
-                            let raw2 = self.compile_expr(&args[1])?;
-                            let value2 = self.materialize_value("call_arg", raw2)?;
-                            return self.with_temp_binding(
-                                &param1,
-                                Binding::Value(value1),
-                                |this| {
-                                    this.with_temp_binding(
-                                        &param2,
-                                        Binding::Value(value2),
-                                        |this| this.compile_expr(&body),
-                                    )
-                                },
-                            );
-                        }
-                        Binding::Lambda3 {
-                            param1,
-                            param2,
-                            param3,
-                            body,
-                        } => {
-                            if args.len() != 3 {
-                                return Err(BackendError {
-                                    message: format!("{} expects 3 args", callee),
-                                });
-                            }
-                            let raw1 = self.compile_expr(&args[0])?;
-                            let value1 = self.materialize_value("call_arg", raw1)?;
-                            let raw2 = self.compile_expr(&args[1])?;
-                            let value2 = self.materialize_value("call_arg", raw2)?;
-                            let raw3 = self.compile_expr(&args[2])?;
-                            let value3 = self.materialize_value("call_arg", raw3)?;
-                            return self.with_temp_binding(
-                                &param1,
-                                Binding::Value(value1),
-                                |this| {
-                                    this.with_temp_binding(
-                                        &param2,
-                                        Binding::Value(value2),
-                                        |this| {
-                                            this.with_temp_binding(
-                                                &param3,
-                                                Binding::Value(value3),
-                                                |this| this.compile_expr(&body),
-                                            )
-                                        },
-                                    )
-                                },
-                            );
-                        }
-                        Binding::Value(_) => {}
-                    }
+                if let Some(Binding::Lambda { params, body }) = self.bindings.get(callee).cloned() {
+                    return self.inline_call(callee, &params, &body, args);
                 }
                 Err(BackendError {
                     message: format!("unsupported call in phase2 C build: {}", callee),
@@ -6252,7 +6072,7 @@ impl<'a> Compiler<'a> {
                     message: "map expects unary function".to_string(),
                 }),
             },
-            Expr::Lambda1 { param, body } => lower_lambda_map(param, body),
+            Expr::Lambda { params, body } if params.len() == 1 => lower_lambda_map(&params[0], body),
             _ => Err(BackendError {
                 message: "map expects unary function".to_string(),
             }),
@@ -6260,12 +6080,12 @@ impl<'a> Compiler<'a> {
     }
 
     fn lookup_lambda_map(&self, symbol: &str) -> Result<MapOp, BackendError> {
-        let Some(Binding::Lambda1 { param, body }) = self.bindings.get(symbol) else {
+        let Some((params, body)) = self.bindings.get(symbol).and_then(|b| b.as_lambda(1)) else {
             return Err(BackendError {
                 message: format!("map unsupported function: {}", symbol),
             });
         };
-        lower_lambda_map(param, body)
+        lower_lambda_map(&params[0], body)
     }
 
     fn resolve_unary_callable(
@@ -6274,10 +6094,12 @@ impl<'a> Compiler<'a> {
         builtin_name: &str,
     ) -> Result<(String, Expr), BackendError> {
         match expr {
-            Expr::Lambda1 { param, body } => Ok((param.clone(), body.as_ref().clone())),
+            Expr::Lambda { params, body } if params.len() == 1 => {
+                Ok((params[0].clone(), body.as_ref().clone()))
+            }
             Expr::Symbol(sym) => {
-                if let Some(Binding::Lambda1 { param, body }) = self.bindings.get(sym) {
-                    Ok((param.clone(), body.clone()))
+                if let Some((params, body)) = self.bindings.get(sym).and_then(|b| b.as_lambda(1)) {
+                    Ok((params[0].clone(), body.clone()))
                 } else {
                     let param = "__run_item".to_string();
                     Ok((
@@ -6293,6 +6115,68 @@ impl<'a> Compiler<'a> {
                 message: format!("{} expects unary function", builtin_name),
             }),
         }
+    }
+
+    /// Compile a call to a user-defined function by expanding its body at the call site.
+    ///
+    /// The backend has no notion of a C function yet, so a call is an inline expansion.
+    /// That makes recursion impossible to compile — expanding it never terminates — so
+    /// recursive calls are reported instead of taking the build process down with a stack
+    /// overflow. `inlining` holds the functions currently being expanded, which catches
+    /// mutual recursion too.
+    fn inline_call(
+        &mut self,
+        callee: &str,
+        params: &[String],
+        body: &Expr,
+        args: &[Expr],
+    ) -> Result<CValue, BackendError> {
+        if self.inlining.iter().any(|name| name == callee) {
+            return Err(BackendError {
+                message: format!(
+                    "recursive function '{}' is not supported by the C backend yet (calls are inlined); rewrite it with (loop ... (recur ...)) or run it with `clove {}`",
+                    callee, "app.clv"
+                ),
+            });
+        }
+        if args.len() != params.len() {
+            return Err(BackendError {
+                message: format!(
+                    "{} expects {} arg(s), got {}",
+                    callee,
+                    params.len(),
+                    args.len()
+                ),
+            });
+        }
+
+        // Arguments are evaluated in the caller's scope, so compile them all before any
+        // parameter shadows a name.
+        let mut values = Vec::with_capacity(args.len());
+        for arg in args {
+            let raw = self.compile_expr(arg)?;
+            values.push(self.materialize_value("call_arg", raw)?);
+        }
+
+        let mut saved = Vec::with_capacity(params.len());
+        for (param, value) in params.iter().zip(values) {
+            let previous = self.bindings.insert(param.clone(), Binding::Value(value));
+            saved.push((param.clone(), previous));
+        }
+        self.inlining.push(callee.to_string());
+        let result = self.compile_expr(body);
+        self.inlining.pop();
+        for (name, previous) in saved.into_iter().rev() {
+            match previous {
+                Some(previous) => {
+                    self.bindings.insert(name, previous);
+                }
+                None => {
+                    self.bindings.remove(&name);
+                }
+            }
+        }
+        result
     }
 
     fn with_temp_binding<T, F>(
@@ -6372,7 +6256,7 @@ impl<'a> Compiler<'a> {
                     message: "filter expects unary predicate".to_string(),
                 })
             }
-            Expr::Lambda1 { param, body } => lower_lambda_pred(param, body),
+            Expr::Lambda { params, body } if params.len() == 1 => lower_lambda_pred(&params[0], body),
             _ => Err(BackendError {
                 message: "filter expects unary predicate".to_string(),
             }),
@@ -6380,29 +6264,22 @@ impl<'a> Compiler<'a> {
     }
 
     fn lookup_lambda_pred(&self, symbol: &str) -> Result<PredOp, BackendError> {
-        let Some(Binding::Lambda1 { param, body }) = self.bindings.get(symbol) else {
+        let Some((params, body)) = self.bindings.get(symbol).and_then(|b| b.as_lambda(1)) else {
             return Err(BackendError {
                 message: format!("filter unsupported predicate: {}", symbol),
             });
         };
-        lower_lambda_pred(param, body)
+        lower_lambda_pred(&params[0], body)
     }
 
     fn lower_map_indexed_op(&self, expr: &Expr) -> Result<MapIndexedOp, BackendError> {
         match expr {
-            Expr::Lambda2 {
-                param1,
-                param2,
-                body,
-            } => lower_lambda_map_indexed(param1, param2, body),
+            Expr::Lambda { params, body } if params.len() == 2 => {
+                lower_lambda_map_indexed(&params[0], &params[1], body)
+            },
             Expr::Symbol(sym) => {
-                if let Some(Binding::Lambda2 {
-                    param1,
-                    param2,
-                    body,
-                }) = self.bindings.get(sym)
-                {
-                    return lower_lambda_map_indexed(param1, param2, body);
+                if let Some((params, body)) = self.bindings.get(sym).and_then(|b| b.as_lambda(2)) {
+                    return lower_lambda_map_indexed(&params[0], &params[1], body);
                 }
                 let base = self.lower_map_op(expr)?;
                 Ok(MapIndexedOp {
@@ -6422,19 +6299,12 @@ impl<'a> Compiler<'a> {
 
     fn lower_pred_indexed_op(&self, expr: &Expr) -> Result<PredIndexedOp, BackendError> {
         match expr {
-            Expr::Lambda2 {
-                param1,
-                param2,
-                body,
-            } => lower_lambda_pred_indexed(param1, param2, body),
+            Expr::Lambda { params, body } if params.len() == 2 => {
+                lower_lambda_pred_indexed(&params[0], &params[1], body)
+            },
             Expr::Symbol(sym) => {
-                if let Some(Binding::Lambda2 {
-                    param1,
-                    param2,
-                    body,
-                }) = self.bindings.get(sym)
-                {
-                    return lower_lambda_pred_indexed(param1, param2, body);
+                if let Some((params, body)) = self.bindings.get(sym).and_then(|b| b.as_lambda(2)) {
+                    return lower_lambda_pred_indexed(&params[0], &params[1], body);
                 }
                 let base = self.lower_pred_op(expr)?;
                 Ok(PredIndexedOp {
@@ -6485,21 +6355,18 @@ impl<'a> Compiler<'a> {
                 "max" => Ok(ReduceOp { code: 2 }),
                 "min" => Ok(ReduceOp { code: 3 }),
                 _ => match self.bindings.get(sym) {
-                    Some(Binding::Lambda2 {
-                        param1,
-                        param2,
-                        body,
-                    }) => lower_lambda_reduce(param1, param2, body),
+                    Some(binding) if binding.as_lambda(2).is_some() => {
+                        let (params, body) = binding.as_lambda(2).expect("checked above");
+                        lower_lambda_reduce(&params[0], &params[1], body)
+                    },
                     _ => Err(BackendError {
                         message: format!("reduce unsupported op: {}", sym),
                     }),
                 },
             },
-            Expr::Lambda2 {
-                param1,
-                param2,
-                body,
-            } => lower_lambda_reduce(param1, param2, body),
+            Expr::Lambda { params, body } if params.len() == 2 => {
+                lower_lambda_reduce(&params[0], &params[1], body)
+            },
             _ => Err(BackendError {
                 message: "reduce expects symbol op".to_string(),
             }),
@@ -6510,22 +6377,17 @@ impl<'a> Compiler<'a> {
         match expr {
             Expr::Symbol(sym) if sym == "+" => Ok(1),
             Expr::Symbol(sym) => match self.bindings.get(sym) {
-                Some(Binding::Lambda3 {
-                    param1,
-                    param2: _,
-                    param3,
-                    body,
-                }) => lower_lambda_reduce_kv(param1, param3, body),
+                Some(binding) if binding.as_lambda(3).is_some() => {
+                    let (params, body) = binding.as_lambda(3).expect("checked above");
+                    lower_lambda_reduce_kv(&params[0], &params[2], body)
+                },
                 _ => Err(BackendError {
                     message: format!("reduce-kv unsupported reducer: {}", sym),
                 }),
             },
-            Expr::Lambda3 {
-                param1,
-                param2: _,
-                param3,
-                body,
-            } => lower_lambda_reduce_kv(param1, param3, body),
+            Expr::Lambda { params, body } if params.len() == 3 => {
+                lower_lambda_reduce_kv(&params[0], &params[2], body)
+            },
             _ => Err(BackendError {
                 message: "reduce-kv expects reducer symbol or lambda3".to_string(),
             }),
@@ -10280,8 +10142,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "take-while".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "<".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(4)],
@@ -11021,8 +10883,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "rem".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(3)],
@@ -11037,8 +10899,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "compare".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(5)],
@@ -11159,8 +11021,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "bit-and".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(63)],
@@ -11185,8 +11047,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "bit-shift-right".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(1)],
@@ -11352,8 +11214,8 @@ mod tests {
                             Expr::Call {
                                 callee: "map".to_string(),
                                 args: vec![
-                                    Expr::Lambda1 {
-                                        param: "i".to_string(),
+                                    Expr::Lambda {
+                                        params: vec!["i".to_string()],
                                         body: Box::new(Expr::Call {
                                             callee: "max".to_string(),
                                             args: vec![Expr::Symbol("i".to_string()), Expr::Int(7)],
@@ -11378,8 +11240,8 @@ mod tests {
                             Expr::Call {
                                 callee: "map".to_string(),
                                 args: vec![
-                                    Expr::Lambda1 {
-                                        param: "i".to_string(),
+                                    Expr::Lambda {
+                                        params: vec!["i".to_string()],
                                         body: Box::new(Expr::Call {
                                             callee: "min".to_string(),
                                             args: vec![Expr::Symbol("i".to_string()), Expr::Int(7)],
@@ -11430,8 +11292,8 @@ mod tests {
                             Expr::Call {
                                 callee: "map".to_string(),
                                 args: vec![
-                                    Expr::Lambda1 {
-                                        param: "x".to_string(),
+                                    Expr::Lambda {
+                                        params: vec!["x".to_string()],
                                         body: Box::new(Expr::Call {
                                             callee: "-".to_string(),
                                             args: vec![Expr::Symbol("x".to_string()), Expr::Int(5)],
@@ -11476,8 +11338,8 @@ mod tests {
                             Expr::Call {
                                 callee: "map".to_string(),
                                 args: vec![
-                                    Expr::Lambda1 {
-                                        param: "i".to_string(),
+                                    Expr::Lambda {
+                                        params: vec!["i".to_string()],
                                         body: Box::new(Expr::Call {
                                             callee: "mod".to_string(),
                                             args: vec![
@@ -11521,8 +11383,8 @@ mod tests {
                             Expr::Call {
                                 callee: "map".to_string(),
                                 args: vec![
-                                    Expr::Lambda1 {
-                                        param: "i".to_string(),
+                                    Expr::Lambda {
+                                        params: vec!["i".to_string()],
                                         body: Box::new(Expr::Call {
                                             callee: "quot".to_string(),
                                             args: vec![Expr::Symbol("i".to_string()), Expr::Int(3)],
@@ -11752,8 +11614,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "filter".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "not=".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(0)],
@@ -11857,8 +11719,8 @@ mod tests {
             top_levels: vec![
                 TopLevel::Def {
                     name: "id".to_string(),
-                    value: Expr::Lambda1 {
-                        param: "x".to_string(),
+                    value: Expr::Lambda {
+                        params: vec!["x".to_string()],
                         body: Box::new(Expr::Symbol("x".to_string())),
                     },
                 },
@@ -11892,8 +11754,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "filter".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "<".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(5)],
@@ -11908,8 +11770,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "filter".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: ">=".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(5)],
@@ -11924,8 +11786,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "some".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: ">".to_string(),
                                     args: vec![Expr::Symbol("x".to_string()), Expr::Int(7)],
@@ -12409,9 +12271,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map-indexed".to_string(),
                         args: vec![
-                            Expr::Lambda2 {
-                                param1: "i".to_string(),
-                                param2: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["i".to_string(), "x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "+".to_string(),
                                     args: vec![
@@ -12429,9 +12290,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "keep-indexed".to_string(),
                         args: vec![
-                            Expr::Lambda2 {
-                                param1: "i".to_string(),
-                                param2: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["i".to_string(), "x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "<".to_string(),
                                     args: vec![Expr::Symbol("i".to_string()), Expr::Int(8)],
@@ -12670,10 +12530,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "reduce-kv".to_string(),
                         args: vec![
-                            Expr::Lambda3 {
-                                param1: "acc".to_string(),
-                                param2: "k".to_string(),
-                                param3: "v".to_string(),
+                            Expr::Lambda {
+                                params: vec!["acc".to_string(), "k".to_string(), "v".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "+".to_string(),
                                     args: vec![
@@ -13013,8 +12871,8 @@ mod tests {
                 args: vec![Expr::Let {
                     bindings: vec![(
                         "__loop__1".to_string(),
-                        Expr::Lambda1 {
-                            param: "i".to_string(),
+                        Expr::Lambda {
+                            params: vec!["i".to_string()],
                             body: Box::new(Expr::If {
                                 cond: Box::new(Expr::Call {
                                     callee: "<".to_string(),
@@ -13069,8 +12927,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "*".to_string(),
                                     args: vec![
@@ -13088,8 +12946,8 @@ mod tests {
                     value: Expr::Call {
                         callee: "map".to_string(),
                         args: vec![
-                            Expr::Lambda1 {
-                                param: "x".to_string(),
+                            Expr::Lambda {
+                                params: vec!["x".to_string()],
                                 body: Box::new(Expr::Call {
                                     callee: "+".to_string(),
                                     args: vec![

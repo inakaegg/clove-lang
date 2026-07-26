@@ -181,3 +181,93 @@ fn build_predicates_evaluate_inputs_and_inspect_optional_values() {
 
     assert_success_stdout(output, "true\n87\ntrue\nfalse\nfalse\ntrue\ntrue\nfalse\n");
 }
+
+/// Defects recorded in docs/tooling/build.md on 2026-07-25.
+mod recorded_defects {
+    use super::*;
+
+    fn build_output(source: &str) -> Output {
+        let root = tempdir().expect("create temporary build directory");
+        let input = root.path().join("input.clv");
+        let binary = root.path().join("output");
+        fs::write(&input, source).expect("write Clove source");
+        Command::new(env!("CARGO_BIN_EXE_clove"))
+            .arg("build")
+            .arg(&input)
+            .arg("--out")
+            .arg(&binary)
+            .output()
+            .expect("run clove build")
+    }
+
+    fn build_message(source: &str) -> String {
+        let output = build_output(source);
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+
+    #[test]
+    fn return_type_annotation_builds() {
+        // The interpreter accepts a keyword return type right after the name
+        // (docs/language/type_hints.md); the native path rejected it as
+        // "params must be a vector".
+        assert_success_stdout(
+            build_and_run("(defn add :int [x<Int> y<Int>] (+ x y))\n(println (add 1 2))"),
+            "3\n",
+        );
+        assert_success_stdout(
+            build_and_run("(defn twice :int [x] (* x 2))\n(println (twice 21))"),
+            "42\n",
+        );
+    }
+
+    #[test]
+    fn zero_and_many_parameter_functions_build() {
+        assert_success_stdout(build_and_run("(defn f [] 1)\n(println (f))"), "1\n");
+        assert_success_stdout(
+            build_and_run("(defn f [a b c d] (+ a (+ b (+ c d))))\n(println (f 1 2 3 4))"),
+            "10\n",
+        );
+        assert_success_stdout(
+            build_and_run(
+                "(defn g [a b c d e] (+ a (+ b (+ c (+ d e)))))\n(println (g 1 2 3 4 5))",
+            ),
+            "15\n",
+        );
+    }
+
+    #[test]
+    fn self_recursion_reports_an_error_instead_of_crashing_the_build() {
+        // The backend inlines a function body at each call site, so a recursive call
+        // expanded forever and took the build process down with a stack overflow.
+        let message = build_message("(defn f [n] (if (< n 2) 1 (* n (f (dec n)))))\n(println (f 5))");
+        assert!(
+            message.contains("recursive"),
+            "expected a recursion error, got:\n{message}"
+        );
+        assert!(
+            !message.contains("overflowed its stack"),
+            "the build must not crash:\n{message}"
+        );
+    }
+
+    #[test]
+    fn mutual_recursion_reports_an_error_instead_of_crashing_the_build() {
+        let message = build_message(
+            "(defn even2? [n] (if (= n 0) true (odd2? (dec n))))\n\
+             (defn odd2? [n] (if (= n 0) false (even2? (dec n))))\n\
+             (println (even2? 4))",
+        );
+        assert!(
+            message.contains("recursive"),
+            "expected a recursion error, got:\n{message}"
+        );
+        assert!(
+            !message.contains("overflowed its stack"),
+            "the build must not crash:\n{message}"
+        );
+    }
+}
