@@ -54,6 +54,7 @@ const META_COMMANDS: &[&str] = &[
     ":quit",
     ":h",
     ":help",
+    ":intro",
     ":c",
     ":cont",
     ":continue",
@@ -209,6 +210,7 @@ const COMPLETION_MENU_NAME: &str = "completion_menu";
 const REPL_LAST_VALUE_SYM: &str = "*repl-last*";
 const INTERACTIVE_HELP_TEXT: &str = "Available commands:
   :help / :h         Show this help
+  :intro             Show example one-liners (randomly picked)
   :env               Show global environment (paged)
   :vars              Show current namespace bindings
   :doc SYMBOL        Show documentation
@@ -223,6 +225,7 @@ const INTERACTIVE_HELP_TEXT: &str = "Available commands:
   :quit / :q         Exit the REPL";
 const DEBUG_HELP_TEXT: &str = "debug REPL commands:
   :help / :h         Show this help
+  :intro             Show example one-liners (randomly picked)
   :vars              Show local variables
   :env               Show full environment (paged)
   :doc SYMBOL        Show documentation
@@ -305,6 +308,7 @@ fn meta_description(cmd: &str) -> &'static str {
         Some("doc") => "show documentation for a symbol",
         Some("q") | Some("quit") => "exit the REPL",
         Some("help") | Some("h") => "show REPL help",
+        Some("intro") => "show example one-liners",
         Some("continue") | Some("cont") | Some("c") => "leave post-mortem session (debug REPL)",
         Some("next") | Some("n") => "resume execution (alias of :continue in debug REPL)",
         Some("whereami") | Some("where") | Some("w") => "show snippet around last error",
@@ -1307,9 +1311,7 @@ fn start_repl_loop_inner(ctx: Arc<RuntimeCtx>) {
         rl = rl.with_history(Box::new(history));
     }
 
-    println!("clove REPL. :q to quit. Tab opens completions; arrow keys move inside the menu.");
-    println!(":env to show vars, :load FILE to load code, :doc SYMBOL for docs.");
-    println!(":source PATH [LINE COL] sets source name and position, :lang TAG sets the default host language.");
+    print!("{}", crate::intro::intro_text());
     let mut prompt_seq = 1usize;
     let mut last_error: Option<CloveError> = None;
     let mut last_value: Option<Value> = None;
@@ -1421,6 +1423,10 @@ fn handle_meta(
     }
     if command_matches(line, &["help", "h"]) {
         print_content_with_optional_pager(INTERACTIVE_HELP_TEXT);
+        return MetaResult::Continue;
+    }
+    if command_matches(line, &["intro"]) {
+        print!("{}", crate::intro::intro_text());
         return MetaResult::Continue;
     }
     if command_matches(line, &["whereami", "where", "w"]) {
@@ -1810,6 +1816,12 @@ impl<'a> InlineReplSession<'a> {
         }
         if command_matches(line, &["help", "h"]) {
             println!("{}", DEBUG_HELP_TEXT);
+            return MetaResult::Continue;
+        }
+        // `:intro` は補完候補 (META_COMMANDS) を対話 REPL と共有しているため、
+        // debug REPL でも受け付けないと補完だけできて動かない状態になる。
+        if command_matches(line, &["intro"]) {
+            print!("{}", crate::intro::intro_text());
             return MetaResult::Continue;
         }
         if command_matches(line, &["vars", "local_vars", "local_variables"]) {

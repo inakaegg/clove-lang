@@ -15,6 +15,7 @@ clove --repl
 ## 2. Main commands
 
 - `:help` ... help
+- `:intro` ... show example one-liners (randomly picked)
 - `:env` / `:vars` ... current vars
 - `:doc SYMBOL` ... docs
 - `:load FILE` ... evaluate a file

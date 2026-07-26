@@ -24,6 +24,7 @@ cargo build -p clove-lang --release
 REPL で使える主なコマンド:
 
 - `:help` … ヘルプ
+- `:intro` … サンプルのワンライナーを表示（毎回ランダムに選ばれる）
 - `:doc SYMBOL` … ドキュメント
 - `:source PATH` … “この入力はどのファイル由来か” を設定（LSP/エラー表示用）
 - `:load FILE` … ファイルを評価
