@@ -40,6 +40,14 @@ Writing `*x` inside collections means “spread”.
 `*x` / `* expr` can also be used in function args.
 `*(...)` counts as spread when `*` is **adjacent to the expression**.
 
+Because `* expr` is spread, a bare `*` in an argument position is read as a spread
+marker, not as the multiplication function. Pass it by its qualified name instead:
+
+```clojure
+(map core::* [1 2] [3 4])   ; => (3 8)
+(reduce core::* 1 [2 3 4])  ; => 24
+```
+
 ## 3. Quotes
 
 - quote: `'form` / `(quote form)`

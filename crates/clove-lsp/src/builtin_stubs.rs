@@ -1,6 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clove_core::type_registry::{self, TypeEntry};
@@ -145,10 +146,18 @@ fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
     }
 }
 
+/// 一時ファイル名の重複を避けるための連番。
+///
+/// 以前は pid とナノ秒だけで作っていた。同じプロセスの複数スレッドが同時に
+/// 呼ぶと同じ名前になり得る。衝突すると片方の rename が対象を失い、
+/// フォールバックが既存のスタブを消してしまう。
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 fn unique_suffix() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("{}-{}", std::process::id(), nanos)
+    let seq = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("{}-{}-{}", std::process::id(), nanos, seq)
 }

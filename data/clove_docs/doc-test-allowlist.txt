@@ -54,8 +54,6 @@ ns
 #  Rust の Debug 表記の漏れと順序依存は修正済み（tests/composite_map_keys.rs）。
 #  複合キーを Key で表せるようにするのが本来の直し
 set::index
-#  partial: 表示が #<lambda> になり、部分適用の情報が出ない
-partial
 #  infer-type: 型注釈付きリテラル ([1 2]: [Int Int]) で Any を返す
 infer-type
 #  mut: (mut? (get world :player)) が false。入れ子のマップが mut にならないのが

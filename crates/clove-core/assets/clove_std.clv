@@ -563,9 +563,9 @@
 (defn partial {:subject-pos 1}
   "Return a function with the first arguments of `f` pre-applied."
   [f & captured]
-  (let [captured-vec (vec captured)]
-    (fn [& more]
-      (core::apply f (into captured-vec more)))))
+  ; core::partial の値を返す。素の lambda で包むと表示が #<lambda> になり、
+  ; どの関数にどの引数を束ねたのか分からなくなる。
+  (core::apply core::partial (into [f] (vec captured))))
 
 (defn comp {:subject-pos 1}
   "Right-to-left function composition."
