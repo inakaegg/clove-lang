@@ -853,6 +853,23 @@ impl AgentHandle {
         true
     }
 
+    /// Mark the message the worker just finished, then wake anyone in [`Self::await_all`].
+    ///
+    /// The counters are updated while holding the condvar's mutex. Without it the wakeup
+    /// can be lost: `await_all` holds the mutex, reads `pending > 0`, and is about to
+    /// wait; if the worker clears the counters and notifies in that window, the notify
+    /// reaches nobody and `await_all` blocks forever. Taking the same mutex makes the
+    /// waiter's check-then-wait atomic against this update.
+    fn finish_message(&self) {
+        let (lock, cvar) = &self.inner.cond;
+        {
+            let _state = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            self.inner.pending.fetch_sub(1, Ordering::SeqCst);
+            self.inner.processing.store(false, Ordering::SeqCst);
+        }
+        cvar.notify_all();
+    }
+
     pub fn await_all(&self) {
         let (lock, cvar) = &self.inner.cond;
         let mut guard = lock.lock().unwrap();
@@ -899,7 +916,7 @@ fn start_agent_worker(handle: AgentHandle, receiver: Receiver<AgentMessage>) {
     spawn_with_current_file(move || {
         while let Ok(message) = receiver.recv() {
             if handle.inner.error.lock().unwrap().is_some() {
-                handle.inner.pending.fetch_sub(1, Ordering::SeqCst);
+                handle.finish_message();
                 continue;
             }
             handle.inner.processing.store(true, Ordering::SeqCst);
@@ -918,10 +935,7 @@ fn start_agent_worker(handle: AgentHandle, receiver: Receiver<AgentMessage>) {
                     handle.fire_watches(previous_state.clone(), previous_state);
                 }
             }
-            handle.inner.pending.fetch_sub(1, Ordering::SeqCst);
-            handle.inner.processing.store(false, Ordering::SeqCst);
-            let (_, cvar) = &handle.inner.cond;
-            cvar.notify_all();
+            handle.finish_message();
         }
         let (_, cvar) = &handle.inner.cond;
         cvar.notify_all();
@@ -1432,6 +1446,33 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("task wait timed out");
         assert!(result.is_err(), "panic should become an error");
+    }
+
+    #[test]
+    fn await_all_is_not_lost_when_the_worker_finishes_first() {
+        // The wakeup used to be issued without the condvar's mutex, so `await_all` could
+        // miss it and block forever. It reproduced on a 2-core CI machine; repeating the
+        // handoff makes the window likely to be hit locally too.
+        for _ in 0..200 {
+            let agent = AgentHandle::new(Value::Int(0));
+            let callable = Value::native_fn(FnArity::exact(1), |args| {
+                let current = match args.first() {
+                    Some(Value::Int(v)) => *v,
+                    _ => 0,
+                };
+                Ok(Value::Int(current + 1))
+            });
+            assert!(agent.send(callable, Vec::new()));
+            let (tx, rx) = mpsc::channel();
+            let agent_clone = agent.clone();
+            thread::spawn(move || {
+                agent_clone.await_all();
+                let _ = tx.send(());
+            });
+            rx.recv_timeout(Duration::from_secs(5))
+                .expect("await_all must wake up after the worker finishes");
+            assert_eq!(agent.state(), Value::Int(1));
+        }
     }
 
     #[test]
