@@ -12715,6 +12715,10 @@ fn invoke_lambda(
         }
     }
 
+    // Each Clove call costs several kilobytes of native stack, so stop with a language
+    // error while there is still room to unwind instead of taking a SIGSEGV.
+    crate::stack::check(body.first().map(|form| form.span))?;
+
     let positional_len = params.len();
     let has_rest = rest.is_some();
     let total_params = positional_len + if has_rest { 1 } else { 0 };

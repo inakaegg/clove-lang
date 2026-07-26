@@ -649,10 +649,19 @@ where
 {
     let file = current_file_name();
     let cancel_ctx = current_cancel_ctx();
-    thread::spawn(move || {
-        set_current_file(file);
-        with_cancel_ctx(cancel_ctx, f)
-    })
+    let stack_bytes = crate::stack::task_stack_size();
+    // `thread::spawn` itself panics when a thread cannot be created, so `expect` here
+    // keeps the previous failure behavior.
+    thread::Builder::new()
+        .stack_size(stack_bytes)
+        .spawn(move || {
+            // Task threads evaluate user code, so they need the same stack budget treatment
+            // as the main evaluation thread (see `crate::stack`).
+            crate::stack::configure_thread(stack_bytes);
+            set_current_file(file);
+            with_cancel_ctx(cancel_ctx, f)
+        })
+        .expect("failed to spawn a Clove task thread")
 }
 
 pub fn spawn_task(thunk: Value) -> TaskHandle {
