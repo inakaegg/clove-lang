@@ -47,28 +47,19 @@ deftype
 with-redefs-fn
 ns
 #
-# [D] 期待値を文字列比較しているためのレンダリング差（エスケープ・複数行・マップ順）
+#
+# [D'] 分類Dのうち、ハーネスを値比較へ直しても残ったもの
+#  json::generate / json::generate-pretty:
+#    docの期待値 `"{"a":1}"` は Clove の文字列として読めない（内側の " が未エスケープ）。
+#    docを `"{\"a\":1}"` へ直す作業。分類Eと同じ扱い
 json::generate
 json::generate-pretty
-ini::generate
-yaml::generate
-yaml::generate-pretty
-toml::generate
+#  pr-str / pp-str: docの期待値が実際の出力と違う（pp-str は複数行に整形する）。分類Eと同じ扱い
 pr-str
 pp-str
-set::rename
-set::rename-keys
+#  set::index: 出力のマップキーに Rust の Debug 表記 `{Keyword("a"): 1}` が混ざる。実装側の不具合
 set::index
-sorted-map
-sorted-map-by
-sorted-map-desc
-sorted?
-hash-map
-with-meta
-symbol
-reverse
-instance?
-keyword?
+#  mut: (mut? (get world :player)) が false。入れ子のマップが mut にならないのが仕様か不具合か未確定
 mut
 #
 # [E] docの期待値が実装より古い（一部は仕様確認が必要）
@@ -93,6 +84,19 @@ keyword
 partial
 #
 # [G] OOP例の自動生成が成立しない組み合わせ
+#  以下は本体テストでは通るが、生成器が主語にならない引数（キーワードなど）を
+#  主語へ持ち上げるためOOP側だけ落ちる: `(hash-map :a 1 :b 2)` → `:a.hash-map(1 :b 2)`
+hash-map
+sorted-map
+sorted-map-by
+sorted-map-desc
+sorted?
+with-meta
+instance?
+reverse
+keyword?
+symbol
+#
 filter
 remove
 keep
