@@ -837,13 +837,8 @@ fn narrow_type(value: &Type, target: &Type, env: &TypeEnv) -> Type {
                 Type::union(keep)
             }
         }
-        _ => {
-            if is_assignable_with_env(value, target, env) {
-                value.clone()
-            } else {
-                value.clone()
-            }
-        }
+        // union 以外は絞り込まない。単一型の narrowing は未実装。
+        _ => value.clone(),
     }
 }
 
@@ -862,13 +857,8 @@ fn exclude_type(value: &Type, target: &Type, env: &TypeEnv) -> Type {
                 Type::union(keep)
             }
         }
-        _ => {
-            if is_assignable_with_env(value, target, env) {
-                value.clone()
-            } else {
-                value.clone()
-            }
-        }
+        // union 以外は除外しない。単一型を除いた結果を表す型がまだない。
+        _ => value.clone(),
     }
 }
 

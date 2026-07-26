@@ -3219,9 +3219,7 @@ fn write_aligned_map(
         }
     }
     let had_dangling = emit_dangling_comments(form.span.index, entry_indent, comments, out);
-    if had_dangling {
-        write_indent(indent, out);
-    } else if out.ends_with('\n') {
+    if had_dangling || out.ends_with('\n') {
         write_indent(indent, out);
     }
     out.push('}');
@@ -3291,9 +3289,7 @@ fn write_map_block(
         }
     }
     let had_dangling = emit_dangling_comments(form.span.index, entry_indent, comments, out);
-    if had_dangling {
-        write_indent(indent, out);
-    } else if out.ends_with('\n') {
+    if had_dangling || out.ends_with('\n') {
         write_indent(indent, out);
     }
     out.push('}');
@@ -4370,10 +4366,7 @@ fn render_oop_chain(
             buf.push_str("?.");
             used_dot = true;
             nil_safe_next = false;
-        } else if force_keyword_dot && keyword_stage {
-            buf.push('.');
-            used_dot = true;
-        } else if !keyword_stage {
+        } else if !keyword_stage || force_keyword_dot {
             buf.push('.');
             used_dot = true;
         }

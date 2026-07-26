@@ -1721,13 +1721,7 @@ impl fmt::Display for Value {
                 write!(f, "{}", crate::native_buf::format_native_buf_handle(handle))
             }
             Value::Seq(_) => write!(f, "<seq>"),
-            Value::Symbol(s) => {
-                if s.starts_with(':') || s.contains("::") {
-                    write!(f, "{}", s)
-                } else {
-                    write!(f, "{}", s)
-                }
-            }
+            Value::Symbol(s) => write!(f, "{}", s),
             Value::Foreign(_) => write!(f, "<foreign>"),
         }
     }

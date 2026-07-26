@@ -78,12 +78,9 @@ fn parse_yaml(s: &str) -> Result<Value, CloveError> {
 
 fn generate_yaml(v: &Value, pretty: bool) -> Result<Value, CloveError> {
     let serde_val = value_to_serde(v)?;
-    let out = if pretty {
-        serde_yaml::to_string(&serde_val)
-    } else {
-        serde_yaml::to_string(&serde_val)
-    }
-    .map_err(|e| CloveError::runtime(format!("yaml generate error: {}", e)))?;
+    // serde_yaml に非pretty出力はない。pretty はこの後の整形だけで効く。
+    let out = serde_yaml::to_string(&serde_val)
+        .map_err(|e| CloveError::runtime(format!("yaml generate error: {}", e)))?;
     let beautified = if pretty {
         out.replace("\n-", "\n  -")
     } else {

@@ -1212,46 +1212,20 @@ fn emit_key_expr(ctx: &mut TypedContext, key_ast: &AstExpr, key: &TypedExpr) -> 
         }
         _ => {}
     }
+    // Rc<str>::from(&str) は借用から作るので、キーが変数でも式でも同じ生成コードでよい。
     match key.kind {
-        TypedKind::Str => {
-            if key.is_symbol {
-                Some(format!(
-                    "Key::Str(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            } else {
-                Some(format!(
-                    "Key::Str(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            }
-        }
-        TypedKind::Keyword => {
-            if key.is_symbol {
-                Some(format!(
-                    "Key::Keyword(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            } else {
-                Some(format!(
-                    "Key::Keyword(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            }
-        }
-        TypedKind::Symbol => {
-            if key.is_symbol {
-                Some(format!(
-                    "Key::Symbol(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            } else {
-                Some(format!(
-                    "Key::Symbol(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            }
-        }
+        TypedKind::Str => Some(format!(
+            "Key::Str(std::rc::Rc::<str>::from({}.as_str()))",
+            key.code
+        )),
+        TypedKind::Keyword => Some(format!(
+            "Key::Keyword(std::rc::Rc::<str>::from({}.as_str()))",
+            key.code
+        )),
+        TypedKind::Symbol => Some(format!(
+            "Key::Symbol(std::rc::Rc::<str>::from({}.as_str()))",
+            key.code
+        )),
         TypedKind::Int => Some(format!("Key::Int({})", key.code)),
         TypedKind::Bool => Some(format!("Key::Bool({})", key.code)),
         _ => None,
@@ -4580,19 +4554,12 @@ fn emit_typed_rest(
     let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
     let can_move_coll = !coll.is_symbol || coll.can_move;
     let code = if can_move_coll {
-        let coll_bind = if coll.is_symbol {
-            format!(
-                "        let mut {coll_var} = {coll};\n",
-                coll_var = coll_var,
-                coll = coll.code
-            )
-        } else {
-            format!(
-                "        let mut {coll_var} = {coll};\n",
-                coll_var = coll_var,
-                coll = coll.code
-            )
-        };
+        // 移動できると分かっているので、変数でも式でも同じ束縛でよい。
+        let coll_bind = format!(
+            "        let mut {coll_var} = {coll};\n",
+            coll_var = coll_var,
+            coll = coll.code
+        );
         let len_expr = format!("{coll_var}.len().saturating_sub(1)", coll_var = coll_var);
         format!(
             "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_expr});\n        for {value_var} in {coll_var}.into_iter().skip(1) {{\n            {out_var}.push({value_var});\n        }}\n        {out_var}\n    }}",
@@ -5238,36 +5205,6 @@ fn emit_typed_sort_by(
             out_var = out_var,
             value_ref = value_ref,
             key_block = key_inline_block
-        )
-    } else if args.len() == 2 {
-        let left_key = format!(
-            "{{\n            let {value_var} = {left_expr};\n{inline_prelude}            {inline_expr}\n        }}",
-            value_var = value_var,
-            left_expr = if typed_kind_is_copy(&elem_kind) {
-                "(*left_ref)".to_string()
-            } else {
-                "left_ref.clone()".to_string()
-            },
-            inline_prelude = indent(&key_inline_prelude, 12),
-            inline_expr = key_inline_expr
-        );
-        let right_key = format!(
-            "{{\n            let {value_var} = {right_expr};\n{inline_prelude}            {inline_expr}\n        }}",
-            value_var = value_var,
-            right_expr = if typed_kind_is_copy(&elem_kind) {
-                "(*right_ref)".to_string()
-            } else {
-                "right_ref.clone()".to_string()
-            },
-            inline_prelude = indent(&key_inline_prelude, 12),
-            inline_expr = key_inline_expr
-        );
-        format!(
-            "        {out_var}.sort_by(|left_ref, right_ref| {{\n            let left_key = {left_key};\n            let right_key = {right_key};\n            {cmp_block}\n        }});\n",
-            out_var = out_var,
-            left_key = left_key,
-            right_key = right_key,
-            cmp_block = cmp_block
         )
     } else {
         let left_key = format!(

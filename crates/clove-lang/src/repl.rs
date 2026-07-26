@@ -479,17 +479,17 @@ impl ReplCompleter {
             group_names.dedup();
             for entry in group_entries {
                 let display_name = canonical_symbol_name(&entry.name).into_owned();
-                let match_kind = if Self::symbol_starts_with(&display_name, fragment) {
-                    MatchKind::Prefix
-                } else if fragment.is_empty() {
-                    MatchKind::Prefix
-                } else if Self::symbol_contains(&display_name, fragment) {
-                    MatchKind::Contains
-                } else if Self::symbol_subsequence(&display_name, fragment) {
-                    MatchKind::Subsequence
-                } else {
-                    continue;
-                };
+                // 空のフラグメントは全件が前方一致。
+                let match_kind =
+                    if fragment.is_empty() || Self::symbol_starts_with(&display_name, fragment) {
+                        MatchKind::Prefix
+                    } else if Self::symbol_contains(&display_name, fragment) {
+                        MatchKind::Contains
+                    } else if Self::symbol_subsequence(&display_name, fragment) {
+                        MatchKind::Subsequence
+                    } else {
+                        continue;
+                    };
                 let aliases: Vec<String> = group_names
                     .iter()
                     .filter(|name| *name != &display_name)

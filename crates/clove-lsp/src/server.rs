@@ -5799,11 +5799,7 @@ fn build_require_edit(doc: &DocumentData, target_ns: &str, sym: &str) -> Option<
             new_text: snippet,
         });
     }
-    let insertion = if text.is_empty() {
-        format!("(require {} refer [{}])\n", target_ns, sym)
-    } else {
-        format!("(require {} refer [{}])\n", target_ns, sym)
-    };
+    let insertion = format!("(require {} refer [{}])\n", target_ns, sym);
     let position = Position {
         line: 0,
         character: 0,
