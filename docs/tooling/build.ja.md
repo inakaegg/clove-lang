@@ -29,6 +29,10 @@ clove build path/to/app.clv --emit-c
   - 生成するバイナリの出力先。
 - `--emit-c`
   - バイナリは通常どおり生成した上で、表示をバイナリパスではなく生成 C ファイルパス（`<out>.c`）に切り替えます。
+- `--main`
+  - トップレベルのフォームを実行したあとに `(-main)` を呼びます。指定しない場合は
+    トップレベルのみを実行し、`-main` を定義しているのに未指定ならビルド時に警告します。
+    インタプリタの `clove --main` と対称です。
 - `-o`, `--output`
   - `--out` の別名。
 
@@ -55,15 +59,21 @@ clove build path/to/app.clv --emit-c
 以下は 2026-07-25 に実測した結果です。ここに挙がっている項目を踏んだ場合、
 それは新しい不具合ではありません。
 
-### 4.1 不具合（修正対象）
+### 4.1 再帰
 
-| 症状 | 再現 |
-| --- | --- |
-| **自己再帰関数でビルドがスタックオーバーフローして異常終了する** | `(defn f [n] (if (< n 2) 1 (f (dec n))))` |
-| **引数0個の関数がビルドできない** | `(defn f [] 1)` → `lambda currently supports one to three params` |
-| **引数4個以上の関数がビルドできない** | `(defn f [a b c d] a)` → 同上 |
-| **`-main` が実行されない** | `(defn -main [& args] ...)` はビルドが通るが、生成バイナリは何も出力しない。明示的に `(-main)` と書くと `-main expects 1 arg` |
-| **戻り値の型注釈がビルドできない** | `(defn add :int [x<Int> y<Int>] ...)` → `syntax error: params must be a vector`。引数の後置注釈 `x<Int>` は使える |
+呼び出しは関数本体を呼び出し箇所へ展開してコンパイルするため、再帰関数は
+コンパイルできません。ビルド時に明示されます。
+
+```clojure
+(defn f [n] (if (< n 2) 1 (* n (f (dec n)))))
+; => recursive function 'f' is not supported by the C backend yet (calls are inlined)
+```
+
+相互再帰も同様に報告されます。`(loop ... (recur ...))` で書き直すか、
+`clove app.clv` で実行してください。
+
+2026-07-26に修正（以前はビルドプロセスがスタックオーバーフローで異常終了し、
+引数0個・4個以上の関数と戻り値の型注釈はビルドできませんでした）。
 
 いずれも実行時（`clove app.clv`）には問題ありません。ネイティブビルド経路のみの制限です。
 
@@ -77,7 +87,6 @@ clove build path/to/app.clv --emit-c
 | `mut` / `imut` | `unsupported call in phase2 C build: mut` |
 | `atom` | `unsupported call in phase2 C build: atom` |
 | `$rb{...}` / `$py{...}` foreign ブロック | `foreign block is not supported in typed IR yet` |
-| `(range n)`（1引数） | `range currently expects 2 args`。`(range 0 n)` は使える |
 | 遅延シーケンス | 未対応。すべて eager |
 
 ### 4.3 動的機能（意図的な非対応）
@@ -90,8 +99,9 @@ clove build path/to/app.clv --emit-c
 
 ### 4.4 動作を確認したもの
 
-トップレベルのフォーム、1〜3引数の関数、可変長引数、`loop` / `recur`、
-vec / map リテラル、`(range 0 n)`、`reduce`、`take`、`map`、`str`、
+トップレベルのフォーム、任意個数の引数の関数（0個を含む）、`--main` による
+`(-main)` 呼び出し、戻り値の型注釈、可変長引数、`loop` / `recur`、
+vec / map リテラル、`(range n)` / `(range 0 n)`、`reduce`、`take`、`map`、`str`、
 引数の後置型注釈（型不一致はビルドエラーになる）。
 
 ---

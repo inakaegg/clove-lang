@@ -362,18 +362,18 @@ fn from_python(py: Python<'_>, val: &PyAny) -> Result<Value, String> {
             if val.is_instance(pattern_type).unwrap_or(false) {
                 if let Ok(pat) = val.getattr("pattern").and_then(|p| p.extract::<String>()) {
                     return RegexValue::new(pat)
-                        .map(Value::Regex)
+                        .map(|rv| Value::Regex(std::sync::Arc::new(rv)))
                         .map_err(|e| e.to_string());
                 }
             }
         }
     }
-    Ok(Value::Foreign(ForeignValue {
+    Ok(Value::Foreign(Arc::new(ForeignValue {
         tag: "py".into(),
         data: Arc::new(PythonForeignValue {
             value: val.to_object(py),
         }),
-    }))
+    })))
 }
 
 fn format_python_err(_py: Python<'_>, err: pyo3::PyErr, span: Option<Span>) -> String {

@@ -27,6 +27,10 @@ clove build path/to/app.clv --emit-c
 
 - `--out PATH`
   - Output binary path.
+- `--main`
+  - Call `(-main)` after the top-level forms. Without it the binary runs only the
+    top-level forms, and defining `-main` without passing this prints a warning at
+    build time. This mirrors the interpreter's `clove --main`.
 - `--emit-c`
   - Still builds the binary, but prints the generated C file path (`<out>.c`) instead of the binary path.
 - `-o`, `--output`
@@ -53,17 +57,24 @@ Use `clove` runtime options for script execution, and `clove --help` / `clove bu
 unsupported feature it stops with a build error instead of falling back to the
 interpreter ([design note](../design-notes/two-phase-implementation.md)).
 
-The following was measured on 2026-07-25. Hitting one of these is not a new bug.
+The following was measured on 2026-07-26. Hitting one of these is not a new bug.
 
-### 4.1 Defects (to be fixed)
+### 4.1 Recursion
 
-| Symptom | Reproduction |
-| --- | --- |
-| **A self-recursive function makes the build abort with a stack overflow** | `(defn f [n] (if (< n 2) 1 (f (dec n))))` |
-| **Zero-parameter functions do not build** | `(defn f [] 1)` → `lambda currently supports one to three params` |
-| **Functions with four or more parameters do not build** | `(defn f [a b c d] a)` → same |
-| **`-main` is never called** | `(defn -main [& args] ...)` builds, but the binary prints nothing. Calling `(-main)` explicitly gives `-main expects 1 arg` |
-| **Return-type annotations do not build** | `(defn add :int [x<Int> y<Int>] ...)` → `syntax error: params must be a vector`. Postfix argument annotations (`x<Int>`) do work |
+Calls are compiled by expanding the function body at the call site, so a recursive
+function cannot be compiled. The build reports it:
+
+```clojure
+(defn f [n] (if (< n 2) 1 (* n (f (dec n)))))
+; => recursive function 'f' is not supported by the C backend yet (calls are inlined)
+```
+
+Mutual recursion is reported the same way. Rewrite the loop with
+`(loop ... (recur ...))`, which does compile, or run the program with `clove app.clv`.
+
+Fixed on 2026-07-26 (previously the build process aborted with a stack overflow, and
+zero- or four-or-more-parameter functions and return-type annotations did not build at
+all).
 
 None of these affect script execution (`clove app.clv`). They are specific to the
 native build path.
@@ -78,7 +89,6 @@ native build path.
 | `mut` / `imut` | `unsupported call in phase2 C build: mut` |
 | `atom` | `unsupported call in phase2 C build: atom` |
 | `$rb{...}` / `$py{...}` foreign blocks | `foreign block is not supported in typed IR yet` |
-| `(range n)` with one argument | `range currently expects 2 args`. `(range 0 n)` works |
 | Lazy sequences | Not supported; everything is eager |
 
 ### 4.3 Dynamic features (intentionally unsupported)
@@ -92,8 +102,9 @@ design:
 
 ### 4.4 Confirmed working
 
-Top-level forms, functions with one to three parameters, variadic parameters,
-`loop` / `recur`, vector and map literals, `(range 0 n)`, `reduce`, `take`,
+Top-level forms, functions with any number of parameters (including none),
+`(-main)` via `--main`, return-type annotations, variadic parameters,
+`loop` / `recur`, vector and map literals, `(range n)` / `(range 0 n)`, `reduce`, `take`,
 `map`, `str`, and postfix argument type annotations (type mismatches fail the
 build).
 

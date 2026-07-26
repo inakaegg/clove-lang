@@ -40,6 +40,7 @@ pub mod runtime;
 pub mod settings;
 mod short_fn;
 pub mod spread;
+pub mod stack;
 pub mod symbols;
 pub mod try_form;
 pub mod type_registry;

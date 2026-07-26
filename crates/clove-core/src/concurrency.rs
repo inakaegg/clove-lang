@@ -649,10 +649,19 @@ where
 {
     let file = current_file_name();
     let cancel_ctx = current_cancel_ctx();
-    thread::spawn(move || {
-        set_current_file(file);
-        with_cancel_ctx(cancel_ctx, f)
-    })
+    let stack_bytes = crate::stack::task_stack_size();
+    // `thread::spawn` itself panics when a thread cannot be created, so `expect` here
+    // keeps the previous failure behavior.
+    thread::Builder::new()
+        .stack_size(stack_bytes)
+        .spawn(move || {
+            // Task threads evaluate user code, so they need the same stack budget treatment
+            // as the main evaluation thread (see `crate::stack`).
+            crate::stack::configure_thread(stack_bytes);
+            set_current_file(file);
+            with_cancel_ctx(cancel_ctx, f)
+        })
+        .expect("failed to spawn a Clove task thread")
 }
 
 pub fn spawn_task(thunk: Value) -> TaskHandle {
@@ -747,13 +756,20 @@ pub fn future_from_promise(promise: PromiseHandle) -> FutureHandle {
 
 #[derive(Clone)]
 pub struct AgentHandle {
-    state: Arc<Mutex<Value>>,
+    /// One pointer, so `Value::Agent` stays small and cloning a handle is a single
+    /// refcount bump. Seven separate `Arc`s made this the widest `Value` variant (64
+    /// bytes), which set the size of every value stored in every collection.
+    inner: Arc<AgentInner>,
+}
+
+pub(crate) struct AgentInner {
+    state: Mutex<Value>,
     sender: Sender<AgentMessage>,
-    pending: Arc<AtomicUsize>,
-    processing: Arc<AtomicBool>,
-    cond: Arc<(Mutex<()>, Condvar)>,
-    error: Arc<Mutex<Option<CloveError>>>,
-    watches: Arc<Mutex<StdHashMap<Value, Value>>>,
+    pending: AtomicUsize,
+    processing: AtomicBool,
+    cond: (Mutex<()>, Condvar),
+    error: Mutex<Option<CloveError>>,
+    watches: Mutex<StdHashMap<Value, Value>>,
 }
 
 struct AgentMessage {
@@ -772,39 +788,35 @@ pub struct AgentDebugInfo {
 impl AgentHandle {
     pub fn new(initial: Value) -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded();
-        let state = Arc::new(Mutex::new(initial));
-        let pending = Arc::new(AtomicUsize::new(0));
-        let processing = Arc::new(AtomicBool::new(false));
-        let cond = Arc::new((Mutex::new(()), Condvar::new()));
-        let error = Arc::new(Mutex::new(None));
-        let watches = Arc::new(Mutex::new(StdHashMap::new()));
         let handle = Self {
-            state: state.clone(),
-            sender,
-            pending: pending.clone(),
-            processing: processing.clone(),
-            cond: cond.clone(),
-            error: error.clone(),
-            watches: watches.clone(),
+            inner: Arc::new(AgentInner {
+                state: Mutex::new(initial),
+                sender,
+                pending: AtomicUsize::new(0),
+                processing: AtomicBool::new(false),
+                cond: (Mutex::new(()), Condvar::new()),
+                error: Mutex::new(None),
+                watches: Mutex::new(StdHashMap::new()),
+            }),
         };
         start_agent_worker(handle.clone(), receiver);
         handle
     }
 
     pub fn state(&self) -> Value {
-        self.state.lock().unwrap().clone()
+        self.inner.state.lock().unwrap().clone()
     }
 
     pub fn add_watch(&self, key: Value, func: Value) {
-        self.watches.lock().unwrap().insert(key, func);
+        self.inner.watches.lock().unwrap().insert(key, func);
     }
 
     pub fn remove_watch(&self, key: &Value) -> bool {
-        self.watches.lock().unwrap().remove(key).is_some()
+        self.inner.watches.lock().unwrap().remove(key).is_some()
     }
 
     fn fire_watches(&self, old_value: Value, new_value: Value) {
-        let watchers = self.watches.lock().unwrap();
+        let watchers = self.inner.watches.lock().unwrap();
         if watchers.is_empty() {
             return;
         }
@@ -833,82 +845,99 @@ impl AgentHandle {
     }
 
     pub fn send(&self, func: Value, args: Vec<Value>) -> bool {
-        self.pending.fetch_add(1, Ordering::SeqCst);
-        if self.sender.send(AgentMessage { func, args }).is_err() {
-            self.pending.fetch_sub(1, Ordering::SeqCst);
+        self.inner.pending.fetch_add(1, Ordering::SeqCst);
+        if self.inner.sender.send(AgentMessage { func, args }).is_err() {
+            self.inner.pending.fetch_sub(1, Ordering::SeqCst);
             return false;
         }
         true
     }
 
+    /// Mark the message the worker just finished, then wake anyone in [`Self::await_all`].
+    ///
+    /// The counters are updated while holding the condvar's mutex. Without it the wakeup
+    /// can be lost: `await_all` holds the mutex, reads `pending > 0`, and is about to
+    /// wait; if the worker clears the counters and notifies in that window, the notify
+    /// reaches nobody and `await_all` blocks forever. Taking the same mutex makes the
+    /// waiter's check-then-wait atomic against this update.
+    fn finish_message(&self) {
+        let (lock, cvar) = &self.inner.cond;
+        {
+            let _state = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            self.inner.pending.fetch_sub(1, Ordering::SeqCst);
+            self.inner.processing.store(false, Ordering::SeqCst);
+        }
+        cvar.notify_all();
+    }
+
     pub fn await_all(&self) {
-        let (lock, cvar) = &*self.cond;
+        let (lock, cvar) = &self.inner.cond;
         let mut guard = lock.lock().unwrap();
-        while self.pending.load(Ordering::SeqCst) > 0 || self.processing.load(Ordering::SeqCst) {
+        while self.inner.pending.load(Ordering::SeqCst) > 0
+            || self.inner.processing.load(Ordering::SeqCst)
+        {
             guard = cvar.wait(guard).unwrap();
         }
     }
 
     pub fn is_idle(&self) -> bool {
-        self.pending.load(Ordering::SeqCst) == 0 && !self.processing.load(Ordering::SeqCst)
+        self.inner.pending.load(Ordering::SeqCst) == 0
+            && !self.inner.processing.load(Ordering::SeqCst)
     }
 
     pub fn error(&self) -> Option<CloveError> {
-        self.error.lock().unwrap().clone()
+        self.inner.error.lock().unwrap().clone()
     }
 
     pub fn debug_info(&self) -> AgentDebugInfo {
         AgentDebugInfo {
             state: self.state(),
-            pending: self.pending.load(Ordering::SeqCst),
-            processing: self.processing.load(Ordering::SeqCst),
+            pending: self.inner.pending.load(Ordering::SeqCst),
+            processing: self.inner.processing.load(Ordering::SeqCst),
             error: self.error(),
         }
     }
 
     pub fn restart(&self, value: Value) {
         let previous = self.state();
-        *self.state.lock().unwrap() = value.clone();
-        self.error.lock().unwrap().take();
+        *self.inner.state.lock().unwrap() = value.clone();
+        self.inner.error.lock().unwrap().take();
         self.fire_watches(previous, value);
-        let (_, cvar) = &*self.cond;
+        let (_, cvar) = &self.inner.cond;
         cvar.notify_all();
     }
 
-    pub(crate) fn ptr(&self) -> *const Mutex<Value> {
-        Arc::as_ptr(&self.state)
+    pub(crate) fn ptr(&self) -> *const AgentInner {
+        Arc::as_ptr(&self.inner)
     }
 }
 
 fn start_agent_worker(handle: AgentHandle, receiver: Receiver<AgentMessage>) {
     spawn_with_current_file(move || {
         while let Ok(message) = receiver.recv() {
-            if handle.error.lock().unwrap().is_some() {
-                handle.pending.fetch_sub(1, Ordering::SeqCst);
+            if handle.inner.error.lock().unwrap().is_some() {
+                handle.finish_message();
                 continue;
             }
-            handle.processing.store(true, Ordering::SeqCst);
-            let previous_state = handle.state.lock().unwrap().clone();
+            handle.inner.processing.store(true, Ordering::SeqCst);
+            let previous_state = handle.inner.state.lock().unwrap().clone();
             let mut args = Vec::with_capacity(1 + message.args.len());
             args.push(previous_state.clone());
             args.extend(message.args);
             let result = call_callable_guarded(message.func, args);
             match result {
                 Ok(next) => {
-                    *handle.state.lock().unwrap() = next.clone();
+                    *handle.inner.state.lock().unwrap() = next.clone();
                     handle.fire_watches(previous_state, next);
                 }
                 Err(err) => {
-                    *handle.error.lock().unwrap() = Some(err);
+                    *handle.inner.error.lock().unwrap() = Some(err);
                     handle.fire_watches(previous_state.clone(), previous_state);
                 }
             }
-            handle.pending.fetch_sub(1, Ordering::SeqCst);
-            handle.processing.store(false, Ordering::SeqCst);
-            let (_, cvar) = &*handle.cond;
-            cvar.notify_all();
+            handle.finish_message();
         }
-        let (_, cvar) = &*handle.cond;
+        let (_, cvar) = &handle.inner.cond;
         cvar.notify_all();
     });
 }
@@ -1417,6 +1446,33 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .expect("task wait timed out");
         assert!(result.is_err(), "panic should become an error");
+    }
+
+    #[test]
+    fn await_all_is_not_lost_when_the_worker_finishes_first() {
+        // The wakeup used to be issued without the condvar's mutex, so `await_all` could
+        // miss it and block forever. It reproduced on a 2-core CI machine; repeating the
+        // handoff makes the window likely to be hit locally too.
+        for _ in 0..200 {
+            let agent = AgentHandle::new(Value::Int(0));
+            let callable = Value::native_fn(FnArity::exact(1), |args| {
+                let current = match args.first() {
+                    Some(Value::Int(v)) => *v,
+                    _ => 0,
+                };
+                Ok(Value::Int(current + 1))
+            });
+            assert!(agent.send(callable, Vec::new()));
+            let (tx, rx) = mpsc::channel();
+            let agent_clone = agent.clone();
+            thread::spawn(move || {
+                agent_clone.await_all();
+                let _ = tx.send(());
+            });
+            rx.recv_timeout(Duration::from_secs(5))
+                .expect("await_all must wake up after the worker finishes");
+            assert_eq!(agent.state(), Value::Int(1));
+        }
     }
 
     #[test]

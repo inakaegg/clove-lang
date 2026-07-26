@@ -225,12 +225,24 @@ fn parse_defn(items: &[Expr], span: &Span) -> Result<TopLevel, Clove2Error> {
     if name.ends_with(':') {
         return Err(Clove2Error::new("defn name cannot be typed"));
     }
+    // A keyword right after the name is the return type
+    // (docs/language/type_hints.md), which the interpreter accepts. It used to reach
+    // `parse_params` and fail with "params must be a vector".
+    let mut params_index = 2;
+    let mut ret = None;
+    if let Some(Expr {
+        kind: ExprKind::Keyword(sym),
+        ..
+    }) = items.get(params_index)
+    {
+        ret = Some(Type::parse(sym)?);
+        params_index += 1;
+    }
     let params_expr = items
-        .get(2)
+        .get(params_index)
         .ok_or_else(|| Clove2Error::new("defn expects params vector"))?;
     let params = parse_params(params_expr)?;
-    let mut idx = 3;
-    let mut ret = None;
+    let mut idx = params_index + 1;
     if let Some(Expr {
         kind: ExprKind::Symbol(sym),
         ..

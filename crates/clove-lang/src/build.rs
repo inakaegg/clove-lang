@@ -4,20 +4,35 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clove_build_backend_c::emit_c_ir;
-use clove_build_front::{parse_typed_ir_source, SourceFile};
+use clove_build_front::{
+    append_main_call, defines_main, parse_typed_ir_source, SourceFile, MAIN_FN,
+};
 use clove_build_runtime_c::RuntimeConfig;
+use clove_core::error::WARN_TAG;
 
 #[derive(Debug)]
 struct BuildOptions {
     input: PathBuf,
     output: PathBuf,
     emit_c: bool,
+    call_main: bool,
 }
 
 pub fn run_build(args: Vec<String>) -> Result<(), String> {
     let opts = parse_args(args)?;
     let src = read_source(&opts.input)?;
-    let parsed = parse_typed_ir_source(&src).map_err(|err| err.to_string())?;
+    let mut parsed = parse_typed_ir_source(&src).map_err(|err| err.to_string())?;
+    // Calling `-main` is opt-in so the same source behaves the same way under
+    // `clove --main app.clv`; building it without the flag used to print nothing.
+    match (opts.call_main, defines_main(&parsed)) {
+        (true, true) => append_main_call(&mut parsed).map_err(|err| format!("--main: {}", err))?,
+        (true, false) => return Err(format!("--main was given but '{}' is not defined", MAIN_FN)),
+        (false, true) => eprintln!(
+            "{} '{}' is defined but native builds only run top-level forms; pass --main to call it",
+            WARN_TAG, MAIN_FN
+        ),
+        (false, false) => {}
+    }
     let config = RuntimeConfig::default();
     let artifact = emit_c_ir(&parsed, &config).map_err(|err| err.to_string())?;
 
@@ -41,12 +56,14 @@ pub fn run_build(args: Vec<String>) -> Result<(), String> {
 
 fn parse_args(args: Vec<String>) -> Result<BuildOptions, String> {
     let mut emit_c = false;
+    let mut call_main = false;
     let mut output: Option<PathBuf> = None;
     let mut input: Option<PathBuf> = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--emit-c" => emit_c = true,
+            "--main" => call_main = true,
             "--out" | "--output" | "-o" => {
                 let Some(path) = iter.next() else {
                     return Err(format!("{} requires a value", arg));
@@ -98,6 +115,7 @@ fn parse_args(args: Vec<String>) -> Result<BuildOptions, String> {
         input,
         output,
         emit_c,
+        call_main,
     })
 }
 
@@ -106,6 +124,7 @@ fn print_help() {
     println!();
     println!("Options:");
     println!("  --emit-c            Print generated C file path instead of binary path");
+    println!("  --main              Call (-main) after the top-level forms");
     println!("  --out PATH          Output binary path (default: target/clove/bin/<file-stem>)");
     println!("  -o, --output PATH   Alias of --out");
 }

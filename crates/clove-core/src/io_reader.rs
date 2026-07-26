@@ -71,10 +71,10 @@ impl Read for ReaderHandle {
 }
 
 pub fn reader_value(handle: ReaderHandle) -> Value {
-    Value::Foreign(ForeignValue {
+    Value::Foreign(Arc::new(ForeignValue {
         tag: IO_READER_TAG.to_string(),
         data: Arc::new(handle),
-    })
+    }))
 }
 
 pub fn reader_from_value(value: &Value) -> Option<ReaderHandle> {

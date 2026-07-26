@@ -181,3 +181,232 @@ fn build_predicates_evaluate_inputs_and_inspect_optional_values() {
 
     assert_success_stdout(output, "true\n87\ntrue\nfalse\nfalse\ntrue\ntrue\nfalse\n");
 }
+
+/// Defects recorded in docs/tooling/build.md on 2026-07-25.
+mod recorded_defects {
+    use super::*;
+
+    fn build_output(source: &str) -> Output {
+        let root = tempdir().expect("create temporary build directory");
+        let input = root.path().join("input.clv");
+        let binary = root.path().join("output");
+        fs::write(&input, source).expect("write Clove source");
+        Command::new(env!("CARGO_BIN_EXE_clove"))
+            .arg("build")
+            .arg(&input)
+            .arg("--out")
+            .arg(&binary)
+            .output()
+            .expect("run clove build")
+    }
+
+    fn build_message(source: &str) -> String {
+        let output = build_output(source);
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+
+    #[test]
+    fn return_type_annotation_builds() {
+        // The interpreter accepts a keyword return type right after the name
+        // (docs/language/type_hints.md); the native path rejected it as
+        // "params must be a vector".
+        assert_success_stdout(
+            build_and_run("(defn add :int [x<Int> y<Int>] (+ x y))\n(println (add 1 2))"),
+            "3\n",
+        );
+        assert_success_stdout(
+            build_and_run("(defn twice :int [x] (* x 2))\n(println (twice 21))"),
+            "42\n",
+        );
+    }
+
+    #[test]
+    fn zero_and_many_parameter_functions_build() {
+        assert_success_stdout(build_and_run("(defn f [] 1)\n(println (f))"), "1\n");
+        assert_success_stdout(
+            build_and_run("(defn f [a b c d] (+ a (+ b (+ c d))))\n(println (f 1 2 3 4))"),
+            "10\n",
+        );
+        assert_success_stdout(
+            build_and_run(
+                "(defn g [a b c d e] (+ a (+ b (+ c (+ d e)))))\n(println (g 1 2 3 4 5))",
+            ),
+            "15\n",
+        );
+    }
+
+    #[test]
+    fn self_recursion_reports_an_error_instead_of_crashing_the_build() {
+        // The backend inlines a function body at each call site, so a recursive call
+        // expanded forever and took the build process down with a stack overflow.
+        let message =
+            build_message("(defn f [n] (if (< n 2) 1 (* n (f (dec n)))))\n(println (f 5))");
+        assert!(
+            message.contains("recursive"),
+            "expected a recursion error, got:\n{message}"
+        );
+        assert!(
+            !message.contains("overflowed its stack"),
+            "the build must not crash:\n{message}"
+        );
+    }
+
+    #[test]
+    fn mutual_recursion_reports_an_error_instead_of_crashing_the_build() {
+        let message = build_message(
+            "(defn even2? [n] (if (= n 0) true (odd2? (dec n))))\n\
+             (defn odd2? [n] (if (= n 0) false (even2? (dec n))))\n\
+             (println (even2? 4))",
+        );
+        assert!(
+            message.contains("recursive"),
+            "expected a recursion error, got:\n{message}"
+        );
+        assert!(
+            !message.contains("overflowed its stack"),
+            "the build must not crash:\n{message}"
+        );
+    }
+}
+
+/// `-main` in native builds: opt-in with `--main`, mirroring the interpreter's flag.
+mod main_entry {
+    use super::*;
+
+    fn build_with(
+        source: &str,
+        extra_args: &[&str],
+    ) -> (Output, std::path::PathBuf, tempfile::TempDir) {
+        let root = tempdir().expect("create temporary build directory");
+        let input = root.path().join("input.clv");
+        let binary = root.path().join("output");
+        fs::write(&input, source).expect("write Clove source");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_clove"));
+        command.arg("build").arg(&input).arg("--out").arg(&binary);
+        command.args(extra_args);
+        let output = command.output().expect("run clove build");
+        (output, binary, root)
+    }
+
+    #[test]
+    fn main_is_called_only_with_the_flag() {
+        let source = "(defn -main [] (println \"from main\"))\n(println \"top level\")\n";
+
+        let (build, binary, _root) = build_with(source, &["--main"]);
+        assert!(
+            build.status.success(),
+            "build --main failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "top level\nfrom main\n");
+
+        let (build, binary, _root) = build_with(source, &[]);
+        assert!(build.status.success(), "build without --main failed");
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "top level\n");
+    }
+
+    #[test]
+    fn defining_main_without_the_flag_warns() {
+        let (build, _binary, _root) =
+            build_with("(defn -main [] (println \"x\"))\n(println \"y\")\n", &[]);
+        let stderr = String::from_utf8_lossy(&build.stderr).to_string();
+        assert!(
+            stderr.contains("-main"),
+            "expected a warning about -main, got:\n{stderr}"
+        );
+    }
+
+    #[test]
+    fn variadic_main_is_called_with_no_arguments() {
+        // `(defn -main [& args] ...)` is the common shape. Native builds do not pass
+        // command-line arguments, so the rest parameter is bound to an empty vector.
+        let source = "(defn -main [& args] (println \"from main\"))\n";
+        let (build, binary, _root) = build_with(source, &["--main"]);
+        assert!(
+            build.status.success(),
+            "build --main with a variadic -main failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "from main\n");
+    }
+
+    #[test]
+    fn the_last_main_definition_is_the_one_called() {
+        // The backend registers definitions in order, so a redefined `-main` resolves to
+        // the last one; the call it synthesizes has to match that definition's arity.
+        let source = "(defn -main [& args] (println \"first\"))\n\
+                      (defn -main [] (println \"last\"))\n";
+        let (build, binary, _root) = build_with(source, &["--main"]);
+        assert!(
+            build.status.success(),
+            "build --main with a redefined -main failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "last\n");
+    }
+
+    #[test]
+    fn variadic_main_can_read_its_rest_parameter() {
+        let (build, binary, _root) = build_with(
+            "(defn -main [& args] (println (count args)))\n",
+            &["--main"],
+        );
+        assert!(
+            build.status.success(),
+            "build --main reading args failed:\n{}",
+            String::from_utf8_lossy(&build.stderr)
+        );
+        let run = Command::new(&binary).output().expect("run binary");
+        assert_success_stdout(run, "0\n");
+    }
+
+    #[test]
+    fn main_with_positional_parameters_is_reported() {
+        let (build, _binary, _root) = build_with("(defn -main [x] (println x))\n", &["--main"]);
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&build.stdout),
+            String::from_utf8_lossy(&build.stderr)
+        );
+        assert!(
+            !build.status.success() && message.contains("-main"),
+            "expected a clear error for a -main that needs arguments, got:\n{message}"
+        );
+        assert!(
+            !message.contains("expects 1 arg(s), got 0"),
+            "the message must explain the limitation, not leak the inliner's arity check:\n{message}"
+        );
+    }
+
+    #[test]
+    fn asking_for_main_without_defining_it_is_an_error() {
+        let (build, _binary, _root) = build_with("(println \"y\")\n", &["--main"]);
+        let message = format!(
+            "{}{}",
+            String::from_utf8_lossy(&build.stdout),
+            String::from_utf8_lossy(&build.stderr)
+        );
+        assert!(
+            !build.status.success() && message.contains("-main"),
+            "expected an error about the missing -main, got:\n{message}"
+        );
+    }
+}
+
+/// A local lambda may shadow an outer function of the same name; calling it is not
+/// recursion, and the recursion check must not reject it.
+#[test]
+fn shadowed_local_lambda_is_not_treated_as_recursion() {
+    assert_success_stdout(
+        build_and_run("(defn f [x] (let [f (fn [y] (+ y 1))] (f x)))\n(println (f 1))"),
+        "2\n",
+    );
+}

@@ -112,16 +112,18 @@
       #{}
       r)))
 
+; every? lives in std, which loads after this library and into another namespace, so it
+; is unbound here. Count the matches with core primitives instead.
 (defn subset? {:subject-pos 1}
   "Is set1 a subset of set2?"
   [set1 set2]
   (let [set1 (ensure-set set1)
         set2 (ensure-set set2)]
-    (every? #(contains? set2 %) set1)))
+    (= (count set1) (count (filter #(contains? set2 %) set1)))))
 
 (defn superset? {:subject-pos 1}
   "Is set1 a superset of set2?"
   [set1 set2]
   (let [set1 (ensure-set set1)
         set2 (ensure-set set2)]
-    (every? #(contains? set1 %) set2)))
+    (= (count set2) (count (filter #(contains? set1 %) set2)))))

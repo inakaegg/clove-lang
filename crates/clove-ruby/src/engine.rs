@@ -14,19 +14,61 @@ use clove_core::eval::to_key_value;
 use clove_core::foreign::ForeignEngine;
 use clove_core::form_to_string::form_to_string;
 use im::HashSet;
-use std::sync::Once;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Once, OnceLock};
+use std::thread::{self, ThreadId};
 
 pub struct RubyEngine;
 
+/// Thread allowed to boot the embedded Ruby VM.
+///
+/// Ruby records its stack base when it starts up, so the VM has to be booted from the
+/// thread that will use it. `RubyEngine::new()` runs while the runtime is being created
+/// (the process main thread for the CLI), so that thread is the owner.
+static OWNER_THREAD: OnceLock<ThreadId> = OnceLock::new();
+
+/// Set once the embedded VM is up. See [`RubyEngine::vm`] for why `Ruby::get()` cannot
+/// be used for this.
+static VM_BOOTED: AtomicBool = AtomicBool::new(false);
+
+/// Whether the embedded Ruby VM has been booted in this process.
+pub fn vm_booted() -> bool {
+    VM_BOOTED.load(Ordering::Acquire)
+}
+
 impl RubyEngine {
     pub fn new() -> Arc<Self> {
-        static INIT: Once = Once::new();
-        static mut _CLEANUP: Option<embed::Cleanup> = None;
-        INIT.call_once(|| unsafe {
-            _CLEANUP = Some(embed::init());
-            set_ruby_encoding();
-        });
+        // Booting Ruby here would cost every `clove` start ~50ms and RSS even for scripts
+        // that never touch Ruby, and Ruby's SIGSEGV handler would then report unrelated
+        // Clove stack overflows as a `ruby ... [BUG]` crash dump. Boot on first use.
+        let _ = OWNER_THREAD.set(thread::current().id());
         Arc::new(Self)
+    }
+
+    /// Boot the embedded VM on first use, then hand back the per-thread Ruby handle.
+    ///
+    /// `Ruby::get()` must not be called before the VM is up: magnus caches
+    /// `NonRubyThread` in a thread-local for the rest of the thread's life, so an early
+    /// probe would permanently mark this thread as Ruby-less. `VM_BOOTED` is our own
+    /// state so the first probe happens only after `embed::init`.
+    fn vm() -> Result<Ruby, CloveError> {
+        if !VM_BOOTED.load(Ordering::Acquire) {
+            let owner = OWNER_THREAD.get().copied();
+            if owner != Some(thread::current().id()) {
+                return Err(CloveError::foreign(
+                    "rb",
+                    "ruby not available: foreign blocks must run on the thread that created the runtime",
+                ));
+            }
+            static INIT: Once = Once::new();
+            static mut _CLEANUP: Option<embed::Cleanup> = None;
+            INIT.call_once(|| unsafe {
+                _CLEANUP = Some(embed::init());
+                set_ruby_encoding();
+            });
+            VM_BOOTED.store(true, Ordering::Release);
+        }
+        Ruby::get().map_err(|e| CloveError::foreign("rb", format!("ruby not available: {}", e)))
     }
 }
 
@@ -41,8 +83,7 @@ impl ForeignEngine for RubyEngine {
         env: EnvRef,
         span: Option<clove_core::ast::Span>,
     ) -> Result<Value, CloveError> {
-        let ruby = Ruby::get()
-            .map_err(|e| CloveError::foreign("rb", format!("ruby not available: {}", e)))?;
+        let ruby = Self::vm()?;
 
         let binding = ruby
             .eval::<RubyVal>("binding()")
@@ -110,8 +151,7 @@ impl ForeignEngine for RubyEngine {
         args: &[Value],
         span: Option<clove_core::ast::Span>,
     ) -> Result<Value, CloveError> {
-        let ruby = Ruby::get()
-            .map_err(|e| CloveError::foreign("rb", format!("ruby not available: {}", e)))?;
+        let ruby = Self::vm()?;
 
         let parts: Vec<&str> = path.split('.').collect();
         if parts.len() < 2 {
@@ -351,10 +391,12 @@ fn from_ruby_value(val: magnus::Value) -> Result<Value, RubyError> {
     }
     if let Ok(re) = RRegexp::try_convert(val) {
         let pat: String = re.funcall("source", ())?;
-        return RegexValue::new(pat).map(Value::Regex).map_err(|e| {
-            let ruby = Ruby::get().unwrap();
-            RubyError::new(ruby.exception_arg_error(), e.to_string())
-        });
+        return RegexValue::new(pat)
+            .map(|rv| Value::Regex(std::sync::Arc::new(rv)))
+            .map_err(|e| {
+                let ruby = Ruby::get().unwrap();
+                RubyError::new(ruby.exception_arg_error(), e.to_string())
+            });
     }
     if let Ok(b) = bool::try_convert(val) {
         return Ok(Value::Bool(b));

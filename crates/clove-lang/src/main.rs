@@ -3,6 +3,7 @@ use std::fs;
 use std::io;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::thread;
 
 mod build;
 mod deps;
@@ -44,6 +45,7 @@ fn help() -> ! {
     println!("  --mem-soft SIZE       Soft memory cap (e.g. 3G, 3072M)");
     println!("  --mem-hard SIZE       Hard memory cap (e.g. 4G, 4096M)");
     println!("  --mem-guard=off       Disable memory guard");
+    println!("  --stack SIZE          Native stack for the evaluator (default 512M)");
     println!("  build                 Build a standalone binary from a script");
     println!("  pkg                   Package management (install/list/update/uninstall)");
     println!("  plugin                Plugin helper commands (write-meta, etc.)");
@@ -96,7 +98,95 @@ fn configure_guard(mem_soft: Option<u64>, mem_hard: Option<u64>, enabled: Option
 
 fn main() {
     let mut args = env::args().skip(1).collect::<Vec<_>>();
+    let stack_bytes = match take_stack_arg(&mut args) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("{} {}", ERROR_TAG, err);
+            std::process::exit(1);
+        }
+    };
 
+    // The tree-walking evaluator needs far more native stack than the 8MB the process
+    // main thread gets, so everything runs on one worker thread with a large stack. The
+    // reservation is virtual; only pages deep recursion actually touches cost RSS.
+    // This is also the thread that boots the embedded Ruby VM on first use, which is
+    // required because Ruby records the stack of the thread that starts it.
+    let worker = thread::Builder::new()
+        .name("clove-main".to_string())
+        .stack_size(stack_bytes)
+        .spawn(move || {
+            clove_core::stack::configure_thread(stack_bytes);
+            clove_core::stack::set_task_stack_size(
+                stack_bytes.min(clove_core::stack::DEFAULT_TASK_STACK),
+            );
+            run(args);
+        });
+    match worker {
+        Ok(handle) => {
+            if handle.join().is_err() {
+                // The panic message has already been printed by the default hook.
+                std::process::exit(101);
+            }
+        }
+        Err(err) => {
+            eprintln!(
+                "{} failed to start the clove runtime thread ({}); try a smaller --stack",
+                ERROR_TAG, err
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Options whose value is the next argument, and so must be stepped over when scanning
+/// for `--stack`. Missing one leaves `--stack` behind, and it is then reported as an
+/// unknown option.
+const VALUE_TAKING_OPTIONS: &[&str] = &["-e", "--mem-soft", "--mem-hard", "--plugin-dir"];
+
+/// Take `--stack SIZE` / `--stack=SIZE` out of the leading options.
+///
+/// Only leading options are scanned so that a script can still receive its own
+/// `--stack` argument after the file name.
+fn take_stack_arg(args: &mut Vec<String>) -> Result<usize, String> {
+    let mut bytes = clove_core::stack::DEFAULT_THREAD_STACK;
+    let mut idx = 0;
+    while idx < args.len() {
+        let arg = args[idx].clone();
+        if VALUE_TAKING_OPTIONS.contains(&arg.as_str()) {
+            // The value is not an option even when it starts with '-'.
+            idx += 2;
+            continue;
+        }
+        if arg == "--stack" {
+            let Some(value) = args.get(idx + 1).cloned() else {
+                return Err("--stack requires a value (e.g. --stack 1G)".to_string());
+            };
+            bytes = parse_bytes_arg(&value)? as usize;
+            args.drain(idx..idx + 2);
+            continue;
+        }
+        if let Some(value) = arg.strip_prefix("--stack=") {
+            bytes = parse_bytes_arg(value)? as usize;
+            args.remove(idx);
+            continue;
+        }
+        if !arg.starts_with('-') {
+            break;
+        }
+        idx += 1;
+    }
+    if bytes < MIN_STACK_BYTES {
+        return Err(format!(
+            "--stack must be at least {}MB",
+            MIN_STACK_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(bytes)
+}
+
+const MIN_STACK_BYTES: usize = 1024 * 1024;
+
+fn run(mut args: Vec<String>) {
     if args.first().map(|s| s.as_str()) == Some("build") {
         args.remove(0);
         if let Err(e) = build::run_build(args) {

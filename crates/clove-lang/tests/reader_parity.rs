@@ -34,6 +34,10 @@ const SHARED: &[(&str, &str)] = &[
     ("hint : Int", "(def x: Int 1)"),
     ("hint Map<Str, Int>", "(def m: Map<Str, Int> {\"a\" 1})"),
     ("hint fn type", "(def f: [Int Int] -> Str (fn [a b] \"x\"))"),
+    (
+        "hint defn return",
+        "(defn add :int [x<Int> y<Int>] (+ x y))",
+    ),
     ("indexer", "(def xs [1 2 3])\n(println xs[0])"),
     ("indexer default", "(def xs [1])\n(println xs[9 || :ng])"),
     ("indexer range", "(def xs [1 2 3])\n(println xs[0...2])"),

@@ -3032,7 +3032,7 @@ impl Evaluator {
 
         let query_value = |query: &NavQuery| match query {
             NavQuery::Text(text) => Value::String(text.clone()),
-            NavQuery::Regex(regex) => Value::Regex(regex.clone()),
+            NavQuery::Regex(regex) => Value::Regex(Arc::new(regex.clone())),
             NavQuery::Other(value) => value.clone(),
         };
         let match_points = |query: &NavQuery, target: &str| -> Option<i64> {
@@ -3528,7 +3528,7 @@ impl Evaluator {
         let query_value_raw = self.eval(&args[0], env.clone())?;
         let query = match &query_value_raw {
             Value::Symbol(s) | Value::String(s) => NavQuery::Text(s.clone()),
-            Value::Regex(r) => NavQuery::Regex(r.clone()),
+            Value::Regex(r) => NavQuery::Regex(r.as_ref().clone()),
             other => NavQuery::Other(other.clone()),
         };
         let is_empty_text_query = matches!(query, NavQuery::Text(ref text) if text.is_empty());
@@ -4111,6 +4111,12 @@ impl Evaluator {
     }
 
     fn enum_variant_lookup(&self, name: &str, env: &EnvRef) -> Option<EnumVariantLookup> {
+        // Only `Enum::Variant` shaped symbols can match, and resolving the current
+        // namespace walks the environment chain and allocates a String. Every symbol
+        // resolution came through here, so check the cheap condition first.
+        if !name.contains("::") {
+            return None;
+        }
         let current_ns =
             current_namespace_name(env).or_else(|| self.default_namespace.read().unwrap().clone());
         enum_variant_lookup_with_ns(name, current_ns.as_deref())
@@ -6894,41 +6900,38 @@ impl Evaluator {
     }
 
     fn dot_chain_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::DotChain), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::DotChain, env)
     }
 
     fn oop_syntax_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::OopSyntax), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::OopSyntax, env)
     }
 
     fn dot_indexer_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::DotIndexer), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::DotIndexer, env)
     }
 
     fn indexer_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::Indexer), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::Indexer, env)
     }
 
     fn map_refs_enabled(&self, env: &EnvRef) -> bool {
-        let pkg_id = self.package_id_for_env(env);
-        self.settings
-            .feature_toggle_enabled(FeatureToggle::Syntax(SyntaxFeatureId::MapRefs), &pkg_id)
+        self.syntax_feature_enabled(SyntaxFeatureId::MapRefs, env)
     }
 
     fn foreign_blocks_enabled(&self, env: &EnvRef) -> bool {
+        self.syntax_feature_enabled(SyntaxFeatureId::ForeignBlocks, env)
+    }
+
+    /// Resolving the package id allocates a `String`, so ask the settings first whether
+    /// any package overrides toggles at all. Nothing does in the common case.
+    fn syntax_feature_enabled(&self, id: SyntaxFeatureId, env: &EnvRef) -> bool {
+        let feature = FeatureToggle::Syntax(id);
+        if let Some(enabled) = self.settings.feature_toggle_default(feature) {
+            return enabled;
+        }
         let pkg_id = self.package_id_for_env(env);
-        self.settings.feature_toggle_enabled(
-            FeatureToggle::Syntax(SyntaxFeatureId::ForeignBlocks),
-            &pkg_id,
-        )
+        self.settings.feature_toggle_enabled(feature, &pkg_id)
     }
 
     fn ensure_foreign_allowed(&self, env: &EnvRef, span: Option<Span>) -> Result<(), CloveError> {
@@ -9260,7 +9263,7 @@ impl Evaluator {
     }
 
     fn eval_regex_literal(&self, pattern: &str) -> Result<Value, CloveError> {
-        RegexValue::new(pattern.to_string()).map(Value::Regex)
+        RegexValue::new(pattern.to_string()).map(|rv| Value::Regex(Arc::new(rv)))
     }
 
     fn eval_foreign_raw(
@@ -9329,17 +9332,31 @@ impl Evaluator {
                 span_runtime_error(span, &msg)
             })?;
         Ok(Value::ForeignCallable {
-            tag: tag.to_string(),
-            path: path.to_string(),
-            engine,
-            span: Some(span),
+            data: Arc::new(crate::ast::ForeignCallableData {
+                tag: tag.to_string(),
+                path: path.to_string(),
+                engine,
+                span: Some(span),
+            }),
         })
     }
 
     fn decorate_error(&self, err: CloveError, span: Span, env: EnvRef) -> CloveError {
+        // `recur` is carried by an error variant that holds no context, so every loop
+        // iteration came through here and paid for a file-name clone and a captured
+        // stack that were then dropped.
+        if !err.carries_context() {
+            return err;
+        }
         let with_span = err.with_span(span);
         let with_file = with_span.with_file(current_file_name());
         let with_env = with_file.with_env(env);
+        if !with_env.stack().is_empty() {
+            // Unwinding calls this at every level, and `capture_stack` copies the whole
+            // call stack each time. Capturing again once the error carries a stack made a
+            // deep failure quadratic: a recursion-limit error at ~90k frames took minutes.
+            return with_env;
+        }
         let stack = capture_stack();
         with_env.with_stack(stack)
     }
@@ -11854,7 +11871,9 @@ pub(crate) fn form_to_value(form: &Form) -> Result<Value, CloveError> {
         FormKind::Duration(d) => Ok(Value::Duration(*d)),
         FormKind::Symbol(s) => Ok(Value::Symbol(s.clone())),
         FormKind::Keyword(k) => Ok(Value::Symbol(format!(":{}", k))),
-        FormKind::Regex { pattern, .. } => RegexValue::new(pattern.clone()).map(Value::Regex),
+        FormKind::Regex { pattern, .. } => {
+            RegexValue::new(pattern.clone()).map(|rv| Value::Regex(Arc::new(rv)))
+        }
         FormKind::ShortFn(body) => {
             let expanded = expand_short_fn_to_list(body, form.span);
             form_to_value(&expanded)
@@ -11898,18 +11917,18 @@ pub(crate) fn form_to_value(form: &Form) -> Result<Value, CloveError> {
                 .map(|it| form_to_value(it))
                 .collect::<Result<HashSet<_>, _>>()?,
         )),
-        FormKind::ForeignBlock { tag, code } => Ok(Value::Foreign(ForeignValue {
+        FormKind::ForeignBlock { tag, code } => Ok(Value::Foreign(Arc::new(ForeignValue {
             tag: tag.clone(),
             data: Arc::new(code.clone()),
-        })),
-        FormKind::ForeignRaw { tag, code } => Ok(Value::Foreign(ForeignValue {
+        }))),
+        FormKind::ForeignRaw { tag, code } => Ok(Value::Foreign(Arc::new(ForeignValue {
             tag: tag.clone().unwrap_or_default(),
             data: Arc::new(code.clone()),
-        })),
-        FormKind::ForeignSymbol { tag, path } => Ok(Value::Foreign(ForeignValue {
+        }))),
+        FormKind::ForeignSymbol { tag, path } => Ok(Value::Foreign(Arc::new(ForeignValue {
             tag: tag.clone().unwrap_or_default(),
             data: Arc::new(path.clone()),
-        })),
+        }))),
     }
 }
 
@@ -12191,7 +12210,7 @@ fn callable_frame_meta(callable: &Value) -> Option<(Option<String>, Option<Span>
             .as_ref()
             .and_then(|name| fn_meta::get(name))
             .map(|meta| (meta.source_file, meta.source_span)),
-        Value::Partial { callable, .. } => callable_frame_meta(callable),
+        Value::Partial { data } => callable_frame_meta(&data.callable),
         _ => None,
     }
 }
@@ -12284,7 +12303,7 @@ fn value_accepts_n(value: &Value, n: usize) -> bool {
                 MultiArityCheck::Call(_)
             )
         }
-        Value::Partial { remaining, .. } => matches!(check_arity(*remaining, n), ArityCheck::Call),
+        Value::Partial { data } => matches!(check_arity(data.remaining, n), ArityCheck::Call),
         Value::Compose { funcs, kind } => {
             if funcs.is_empty() {
                 return false;
@@ -12363,22 +12382,18 @@ pub fn call_callable(callable: Value, args: Vec<Value>) -> Result<Value, CloveEr
     let profile_label = profile_label_for_callable(&callable);
     let _profile_guard = profile_label.as_deref().and_then(profiler::enter);
     match callable {
-        Value::Partial {
-            ref callable,
-            ref captured,
-            remaining,
-        } => match check_arity(remaining, args.len()) {
+        Value::Partial { ref data } => match check_arity(data.remaining, args.len()) {
             ArityCheck::Call => {
-                let mut all_args = captured.clone();
+                let mut all_args = data.captured.clone();
                 all_args.extend_from_slice(&args);
-                call_callable((**callable).clone(), all_args)
+                call_callable(data.callable.clone(), all_args)
             }
             ArityCheck::NeedMore(rem) => {
-                let mut next_captured = captured.clone();
+                let mut next_captured = data.captured.clone();
                 next_captured.extend_from_slice(&args);
-                Ok(make_partial((**callable).clone(), next_captured, rem))
+                Ok(make_partial(data.callable.clone(), next_captured, rem))
             }
-            ArityCheck::TooMany => Err(arity_error(remaining, args.len())),
+            ArityCheck::TooMany => Err(arity_error(data.remaining, args.len())),
         },
         Value::Compose { ref funcs, kind } => match kind {
             ComposeKind::Comp => {
@@ -12482,22 +12497,23 @@ pub fn call_callable(callable: Value, args: Vec<Value>) -> Result<Value, CloveEr
                 MultiArityCheck::TooMany => Err(multi_arity_error(&data.clauses, args.len())),
             }
         }
-        Value::ForeignCallable {
-            engine,
-            path,
-            span,
-            tag,
-        } => {
+        Value::ForeignCallable { data } => {
+            let crate::ast::ForeignCallableData {
+                engine,
+                path,
+                span,
+                tag,
+            } = data.as_ref();
             if args.iter().any(contains_mut_collection) {
                 return Err(CloveError::runtime(
                     "foreign call cannot accept mutable collection; use (imut x)",
                 ));
             }
             engine
-                .call_symbol(&path, &args, span)
+                .call_symbol(path, &args, *span)
                 .map_err(|err| match err {
                     CloveError::Other(data) => CloveError::Foreign {
-                        tag,
+                        tag: tag.clone(),
                         message: data.message,
                         context: data.context,
                     },
@@ -12671,9 +12687,11 @@ fn multi_arity_error(clauses: &[LambdaClause], provided: usize) -> CloveError {
 
 fn make_partial(callable: Value, captured: Vec<Value>, remaining: FnArity) -> Value {
     Value::Partial {
-        callable: Box::new(callable),
-        captured,
-        remaining,
+        data: Arc::new(crate::ast::PartialData {
+            callable,
+            captured,
+            remaining,
+        }),
     }
 }
 
@@ -12714,6 +12732,10 @@ fn invoke_lambda(
             set_current_file(self.prev.clone());
         }
     }
+
+    // Each Clove call costs several kilobytes of native stack, so stop with a language
+    // error while there is still room to unwind instead of taking a SIGSEGV.
+    crate::stack::check(body.first().map(|form| form.span))?;
 
     let positional_len = params.len();
     let has_rest = rest.is_some();

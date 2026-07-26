@@ -24,7 +24,12 @@ const SKIP_SYMBOLS: &[&str] = &[
     "async::scope-loop",
     "select",
     "select-blocking",
+    // Observing an agent right after a send is a race: the worker thread may not have
+    // applied the function yet. Under load this produced
+    // `expected #<agent state=1 pending=0> got #<agent state=0 pending=1>`.
     "agent-await",
+    "agent-send!",
+    "agent-send-io!",
     "http::request",
     "http::get",
     "http::post",
@@ -54,8 +59,35 @@ struct DocEntry {
     examples: Vec<String>,
 }
 
+/// Doc examples include recursive definitions, and libtest threads are small, so the
+/// corpus runs on a thread with the same kind of stack budget the CLI configures.
+const TEST_STACK: usize = 256 * 1024 * 1024;
+
+/// Wall-clock budget for one pass over the corpus. Exceeding it fails instead of
+/// silently reporting success on a partial run.
+const EXAMPLE_BUDGET_SECS: u64 = 600;
+
+fn with_example_stack<F>(body: F)
+where
+    F: FnOnce() + Send + 'static,
+{
+    std::thread::Builder::new()
+        .stack_size(TEST_STACK)
+        .spawn(move || {
+            clove_core::stack::configure_thread(TEST_STACK);
+            body();
+        })
+        .expect("spawn doc example thread")
+        .join()
+        .expect("doc example thread panicked");
+}
+
 #[test]
 fn doc_examples_match_actual_results() {
+    with_example_stack(check_doc_examples);
+}
+
+fn check_doc_examples() {
     let _guard = EnvVarGuard::set("CLOVE_NO_USER_CONFIG", "1");
     let repo_root = workspace_root();
     let doc_path = repo_root
@@ -76,7 +108,7 @@ fn doc_examples_match_actual_results() {
             continue;
         }
         for (idx, example) in entry.examples.iter().enumerate() {
-            if start_time.elapsed() > Duration::from_secs(30) {
+            if start_time.elapsed() > Duration::from_secs(EXAMPLE_BUDGET_SECS) {
                 eprintln!(
                     "stop doc examples after {:?} (executed {})",
                     start_time.elapsed(),
@@ -136,6 +168,10 @@ fn doc_examples_match_actual_results() {
 
 #[test]
 fn doc_examples_oop_match_actual_results() {
+    with_example_stack(check_oop_doc_examples);
+}
+
+fn check_oop_doc_examples() {
     let _guard = EnvVarGuard::set("CLOVE_NO_USER_CONFIG", "1");
     let repo_root = workspace_root();
     let doc_path = repo_root
@@ -156,7 +192,7 @@ fn doc_examples_oop_match_actual_results() {
             continue;
         }
         for (idx, example) in entry.examples.iter().enumerate() {
-            if start_time.elapsed() > Duration::from_secs(30) {
+            if start_time.elapsed() > Duration::from_secs(EXAMPLE_BUDGET_SECS) {
                 eprintln!(
                     "stop oop doc examples after {:?} (executed {})",
                     start_time.elapsed(),

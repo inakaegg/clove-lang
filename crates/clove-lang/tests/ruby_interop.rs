@@ -85,9 +85,9 @@ fn tagless_foreign_uses_ruby_default() {
     let value =
         eval_source_with_engines(src, EvalOptions::default(), &clove_ruby::engines()).unwrap();
     match value {
-        Value::ForeignCallable { tag, path, .. } => {
-            assert_eq!(tag, "rb");
-            assert_eq!(path, "Foo.bar");
+        Value::ForeignCallable { data } => {
+            assert_eq!(data.tag, "rb");
+            assert_eq!(data.path, "Foo.bar");
         }
         other => panic!("expected Ruby foreign callable, got {:?}", other),
     }

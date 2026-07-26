@@ -2163,11 +2163,6 @@ impl RuntimeCtx {
             .get_mut(ns_name)
             .ok_or_else(|| CloveError::runtime(format!("namespace '{}' not found", ns_name)))?;
         let aliases = symbol_aliases(symbol);
-        let env = crate::builtins::default_env();
-        {
-            let mut env_guard = env.write().unwrap();
-            crate::builtins::memo::install(&mut env_guard);
-        }
         let env_ref = entry.env();
         {
             let mut writer = env_ref.write().unwrap();

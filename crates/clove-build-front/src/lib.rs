@@ -1,12 +1,93 @@
 use std::path::PathBuf;
 
 use clove_build_core::ast::Literal;
+use clove_build_core::ast::Span as IrSpan;
 use clove_build_core::reader::read_all;
 use clove_build_core::syntax::parse_forms;
 use clove_build_core::typed_ir::{
-    lower_program, Expr as IrExpr, ExprKind as IrExprKind, Program as IrProgram,
-    TopLevel as IrTopLevel,
+    lower_program, Effect as IrEffect, Expr as IrExpr, ExprKind as IrExprKind,
+    LoweringMode as IrLoweringMode, Mutability as IrMutability, Ownership as IrOwnership,
+    Param as IrParam, Program as IrProgram, TopLevel as IrTopLevel,
 };
+
+/// Entry-point function name, matching the interpreter's `clove --main`.
+pub const MAIN_FN: &str = "-main";
+
+/// Whether the program defines the entry-point function.
+pub fn defines_main(program: &IrProgram) -> bool {
+    main_params(program).is_some()
+}
+
+/// Parameters of the entry-point function, whether it was written as `defn` or as a
+/// lambda bound with `def`.
+///
+/// Searches from the end: the backend registers every top-level definition in order, so
+/// the last `-main` is the one it will inline. Taking the first would emit a call whose
+/// arity does not match the definition that gets used.
+fn main_params(program: &IrProgram) -> Option<&[IrParam]> {
+    program.top_levels.iter().rev().find_map(|top| match top {
+        IrTopLevel::FnDef { name, params, .. } if name == MAIN_FN => Some(params.as_slice()),
+        IrTopLevel::Def { name, value, .. } if name == MAIN_FN => match &value.kind {
+            IrExprKind::Lambda { params, .. } => Some(params.as_slice()),
+            _ => Some(&[]),
+        },
+        _ => None,
+    })
+}
+
+/// Append a call to the entry-point function as the last top-level form.
+///
+/// Native builds otherwise only run top-level forms, so a program written around `-main`
+/// built successfully and printed nothing.
+///
+/// A native binary has no command-line arguments wired into the runtime, so `-main` may
+/// take none, or a single rest parameter which is bound to an empty vector — the shape
+/// `(defn -main [& args] ...)` that Clojure-style programs use.
+pub fn append_main_call(program: &mut IrProgram) -> Result<(), FrontError> {
+    let span = || IrSpan::new(0, 0);
+    let args = match main_params(program) {
+        None => {
+            return Err(FrontError {
+                message: format!("'{}' is not defined", MAIN_FN),
+            })
+        }
+        Some([]) => Vec::new(),
+        Some([only]) if only.rest => vec![ir_expr(IrExprKind::VectorLit(Vec::new()), span())],
+        Some(params) => {
+            return Err(FrontError {
+                message: format!(
+                    "'{}' takes {} parameter(s); native builds pass no command-line arguments, so it must take none or a single rest parameter (`[& args]`)",
+                    MAIN_FN,
+                    params.len()
+                ),
+            })
+        }
+    };
+    let expr = ir_expr(
+        IrExprKind::Call {
+            callee: Box::new(ir_expr(IrExprKind::Var(MAIN_FN.to_string()), span())),
+            args,
+        },
+        span(),
+    );
+    program
+        .top_levels
+        .push(IrTopLevel::Expr { expr, span: span() });
+    Ok(())
+}
+
+/// A synthesized typed-IR node. `-main` is called for its output, so the effect is IO.
+fn ir_expr(kind: IrExprKind, span: IrSpan) -> IrExpr {
+    IrExpr {
+        kind,
+        ty: None,
+        span,
+        effect: IrEffect::IO,
+        ownership: IrOwnership::Owned,
+        mutability: IrMutability::Imut,
+        lowering: IrLoweringMode::NativePreferred,
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
@@ -45,19 +126,8 @@ pub enum Expr {
         bindings: Vec<(String, Expr)>,
         body: Box<Expr>,
     },
-    Lambda1 {
-        param: String,
-        body: Box<Expr>,
-    },
-    Lambda2 {
-        param1: String,
-        param2: String,
-        body: Box<Expr>,
-    },
-    Lambda3 {
-        param1: String,
-        param2: String,
-        param3: String,
+    Lambda {
+        params: Vec<String>,
         body: Box<Expr>,
     },
     Call {
@@ -205,26 +275,12 @@ fn lower_symbol_callee(callee: &IrExpr) -> Result<String, FrontError> {
 }
 
 fn make_lambda_from_names(params: &[String], body: Expr) -> Result<Expr, FrontError> {
-    match params.len() {
-        1 => Ok(Expr::Lambda1 {
-            param: params[0].clone(),
-            body: Box::new(body),
-        }),
-        2 => Ok(Expr::Lambda2 {
-            param1: params[0].clone(),
-            param2: params[1].clone(),
-            body: Box::new(body),
-        }),
-        3 => Ok(Expr::Lambda3 {
-            param1: params[0].clone(),
-            param2: params[1].clone(),
-            param3: params[2].clone(),
-            body: Box::new(body),
-        }),
-        _ => Err(FrontError {
-            message: "lambda currently supports one to three params".to_string(),
-        }),
-    }
+    // Any arity: the backend inlines calls, so it does not care how many parameters there
+    // are (see `Compiler::inline_call`). This adapter used to cap it at three.
+    Ok(Expr::Lambda {
+        params: params.to_vec(),
+        body: Box::new(body),
+    })
 }
 
 #[cfg(test)]
@@ -261,10 +317,10 @@ mod tests {
             panic!("expected def");
         };
         assert_eq!(name, "step");
-        let Expr::Lambda1 { param, .. } = value else {
+        let Expr::Lambda { params, .. } = value else {
             panic!("expected lambda");
         };
-        assert_eq!(param, "x");
+        assert_eq!(params, &vec!["x".to_string()]);
     }
 
     #[test]
@@ -275,11 +331,10 @@ mod tests {
             panic!("expected def");
         };
         assert_eq!(name, "step2");
-        let Expr::Lambda2 { param1, param2, .. } = value else {
-            panic!("expected lambda2");
+        let Expr::Lambda { params, .. } = value else {
+            panic!("expected lambda");
         };
-        assert_eq!(param1, "i");
-        assert_eq!(param2, "x");
+        assert_eq!(params, &vec!["i".to_string(), "x".to_string()]);
     }
 
     #[test]
@@ -290,18 +345,13 @@ mod tests {
             panic!("expected def");
         };
         assert_eq!(name, "rf");
-        let Expr::Lambda3 {
-            param1,
-            param2,
-            param3,
-            ..
-        } = value
-        else {
-            panic!("expected lambda3");
+        let Expr::Lambda { params, .. } = value else {
+            panic!("expected lambda");
         };
-        assert_eq!(param1, "acc");
-        assert_eq!(param2, "k");
-        assert_eq!(param3, "v");
+        assert_eq!(
+            params,
+            &vec!["acc".to_string(), "k".to_string(), "v".to_string()]
+        );
     }
 
     #[test]
@@ -355,8 +405,8 @@ mod tests {
         let TopLevel::Def { value, .. } = &program.top_levels[0] else {
             panic!("expected def");
         };
-        let Expr::Lambda1 { body, .. } = value else {
-            panic!("expected lambda1");
+        let Expr::Lambda { body, .. } = value else {
+            panic!("expected lambda");
         };
         let Expr::Do(items) = body.as_ref() else {
             panic!("expected do body");

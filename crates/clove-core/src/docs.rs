@@ -46,7 +46,22 @@ const LOCK_FILE: &str = "clove.lock.json";
 
 static EXTRA_DOC_DIRS: Lazy<RwLock<Vec<PathBuf>>> = Lazy::new(|| RwLock::new(Vec::new()));
 
-static DOC_STORE: Lazy<RwLock<DocStoreState>> = Lazy::new(|| RwLock::new(build_doc_store(&[])));
+/// Built on first lookup, from whatever [`EXTRA_DOC_DIRS`] holds at that point.
+static DOC_STORE: Lazy<RwLock<DocStoreState>> = Lazy::new(|| {
+    let dirs = EXTRA_DOC_DIRS
+        .read()
+        .map(|dirs| dirs.clone())
+        .unwrap_or_default();
+    RwLock::new(build_doc_store(&dirs))
+});
+
+/// Only used when the doc store is built with no runtime in scope, which the CLI avoids
+/// by not touching the store during startup.
+///
+/// It loads std: `gen_oop_examples` reads `fn_meta`, and the subject positions of the
+/// standard library's functions are registered while `clove_std.clv` is evaluated. Skipping
+/// it left entries such as `tap` (`{:subject-pos :last}`) without OOP examples for an
+/// embedder that looks up a doc before creating a runtime.
 static DOC_RUNTIME: Lazy<Mutex<Arc<RuntimeCtx>>> =
     Lazy::new(|| Mutex::new(RuntimeCtx::new(EvalOptions::default(), &[])));
 
@@ -59,7 +74,12 @@ pub fn set_extra_doc_dirs(dirs: Vec<PathBuf>) {
     if let Ok(mut guard) = EXTRA_DOC_DIRS.write() {
         *guard = normalized.clone();
     }
-    reload_doc_store(&normalized);
+    // Rebuild only what already exists. Startup calls this before anything asks for a
+    // doc, and forcing the store to be built there cost a second runtime (~200ms) plus a
+    // full parse of the bundled docs on every `clove` invocation.
+    if Lazy::get(&DOC_STORE).is_some() {
+        reload_doc_store(&normalized);
+    }
 }
 
 pub fn package_doc_dirs_from_roots(roots: &[PathBuf]) -> Vec<PathBuf> {

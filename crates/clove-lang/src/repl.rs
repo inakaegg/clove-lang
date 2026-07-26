@@ -2177,7 +2177,7 @@ fn nav_collect_entries<'a>(value: Option<&'a Value>) -> Vec<&'a Value> {
 fn nav_query_from_value(value: &Value) -> Option<NavQuery> {
     match value {
         Value::String(text) | Value::Symbol(text) => Some(NavQuery::Text(text.clone())),
-        Value::Regex(regex) => Some(NavQuery::Regex(regex.clone())),
+        Value::Regex(regex) => Some(NavQuery::Regex(regex.as_ref().clone())),
         other => Some(NavQuery::Other(other.clone())),
     }
 }

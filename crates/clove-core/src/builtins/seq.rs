@@ -1446,8 +1446,14 @@ pub(crate) fn install_derived(env: &mut Env) {
             [n, value] => {
                 let (count, _) = as_number(n)?;
                 let count = count.max(0.0) as usize;
+                // Sized from a number: refuse the impossible case, then keep checking.
+                guard::reserve(
+                    (count as u64).saturating_mul(guard::VALUE_SIZE_ESTIMATE),
+                    None,
+                )?;
                 let mut out = Vector::new();
                 for _ in 0..count {
+                    guard::tick(None)?;
                     out.push_back(value.clone());
                 }
                 Ok(Value::Vector(out))
@@ -2068,16 +2074,27 @@ fn range(start: f64, end: f64, step: f64, force_float: bool) -> Result<Value, Cl
     if step == 0.0 {
         return err("range step cannot be zero");
     }
+    // The element count comes from numbers, not from an existing collection, so refuse an
+    // impossible range up front and keep checking as it materializes.
+    let span = ((end - start) / step).ceil();
+    if span.is_finite() && span > 0.0 {
+        guard::reserve(
+            (span as u64).saturating_mul(guard::VALUE_SIZE_ESTIMATE),
+            None,
+        )?;
+    }
     let mut items = Vector::new();
     let mut cur = start;
     let is_float = force_float || start.fract() != 0.0 || end.fract() != 0.0 || step.fract() != 0.0;
     if step > 0.0 {
         while cur < end {
+            guard::tick(None)?;
             items.push_back(make_number(cur, is_float || cur.fract() != 0.0));
             cur += step;
         }
     } else {
         while cur > end {
+            guard::tick(None)?;
             items.push_back(make_number(cur, is_float || cur.fract() != 0.0));
             cur += step;
         }
