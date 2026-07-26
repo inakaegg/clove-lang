@@ -43,3 +43,21 @@ fn startup_does_not_repeat_expensive_work() {
     let entry = clove_core::docs::find_doc_entry("map").expect("map must have a doc entry");
     assert_eq!(entry.canonical, "map");
 }
+
+/// The doc store may be built before any runtime exists (an embedder looking up a doc
+/// first). The fallback runtime it creates for itself has to evaluate the standard
+/// library, because the subject positions that `gen_oop_examples` needs are registered
+/// there: without them, std entries silently lose their OOP examples.
+#[test]
+fn doc_entries_keep_oop_examples_for_std_functions() {
+    let entry = clove_core::docs::find_doc_entry("tap").expect("tap must have a doc entry");
+    assert!(
+        !entry.examples.is_empty(),
+        "tap should document plain examples"
+    );
+    assert!(
+        !entry.oop_examples.is_empty(),
+        "tap declares {{:subject-pos :last}} in the standard library, so it must have OOP \
+         examples; an empty list means the doc store was built without std"
+    );
+}

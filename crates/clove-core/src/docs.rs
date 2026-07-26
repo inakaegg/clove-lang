@@ -56,15 +56,14 @@ static DOC_STORE: Lazy<RwLock<DocStoreState>> = Lazy::new(|| {
 });
 
 /// Only used when the doc store is built with no runtime in scope, which the CLI avoids
-/// by not touching the store during startup. Loads no std: `gen_oop_examples` needs a
-/// runtime context for `fn_meta` lookups, not the standard library.
-static DOC_RUNTIME: Lazy<Mutex<Arc<RuntimeCtx>>> = Lazy::new(|| {
-    let opts = EvalOptions {
-        no_std: true,
-        ..EvalOptions::default()
-    };
-    Mutex::new(RuntimeCtx::new(opts, &[]))
-});
+/// by not touching the store during startup.
+///
+/// It loads std: `gen_oop_examples` reads `fn_meta`, and the subject positions of the
+/// standard library's functions are registered while `clove_std.clv` is evaluated. Skipping
+/// it left entries such as `tap` (`{:subject-pos :last}`) without OOP examples for an
+/// embedder that looks up a doc before creating a runtime.
+static DOC_RUNTIME: Lazy<Mutex<Arc<RuntimeCtx>>> =
+    Lazy::new(|| Mutex::new(RuntimeCtx::new(EvalOptions::default(), &[])));
 
 pub fn doc_entries() -> &'static [DocEntry] {
     DOC_STORE.read().map(|guard| guard.entries).unwrap_or(&[])

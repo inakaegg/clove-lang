@@ -400,3 +400,13 @@ mod main_entry {
         );
     }
 }
+
+/// A local lambda may shadow an outer function of the same name; calling it is not
+/// recursion, and the recursion check must not reject it.
+#[test]
+fn shadowed_local_lambda_is_not_treated_as_recursion() {
+    assert_success_stdout(
+        build_and_run("(defn f [x] (let [f (fn [y] (+ y 1))] (f x)))\n(println (f 1))"),
+        "2\n",
+    );
+}

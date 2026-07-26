@@ -96,7 +96,14 @@ enum CRepr {
 #[derive(Debug, Clone)]
 enum Binding {
     Value(CValue),
-    Lambda { params: Vec<String>, body: Expr },
+    Lambda {
+        /// Identifies this particular lambda binding. Recursion detection compares ids,
+        /// not names: a local lambda may shadow an outer function of the same name, and
+        /// calling it is not recursion.
+        id: usize,
+        params: Vec<String>,
+        body: Expr,
+    },
 }
 
 impl Binding {
@@ -106,7 +113,7 @@ impl Binding {
     /// function, `reduce` a binary one, and so on.
     fn as_lambda(&self, arity: usize) -> Option<(&[String], &Expr)> {
         match self {
-            Binding::Lambda { params, body } if params.len() == arity => {
+            Binding::Lambda { params, body, .. } if params.len() == arity => {
                 Some((params.as_slice(), body))
             }
             _ => None,
@@ -202,6 +209,7 @@ pub fn emit_c(program: &FrontProgram, config: &RuntimeConfig) -> Result<CArtifac
         str_vars: Vec::new(),
         temp_id: 0,
         inlining: Vec::new(),
+        lambda_ids: 0,
     };
     compiler.emit_program(program)?;
     Ok(CArtifact {
@@ -345,8 +353,10 @@ struct Compiler<'a> {
     map_vars: Vec<MapVar>,
     str_vars: Vec<String>,
     temp_id: usize,
-    /// Functions currently being inlined, innermost last. See [`Compiler::inline_call`].
-    inlining: Vec<String>,
+    /// Lambda bindings currently being inlined, innermost last. See
+    /// [`Compiler::inline_call`].
+    inlining: Vec<usize>,
+    lambda_ids: usize,
 }
 
 impl<'a> Compiler<'a> {
@@ -612,13 +622,12 @@ impl<'a> Compiler<'a> {
         for tl in &program.top_levels {
             if let TopLevel::Def { name, value } = tl {
                 if let Expr::Lambda { params, body } = value {
-                    self.bindings.insert(
-                        name.clone(),
-                        Binding::Lambda {
-                            params: params.clone(),
-                            body: (**body).clone(),
-                        },
-                    );
+                    let binding = Binding::Lambda {
+                        id: self.next_lambda_id(),
+                        params: params.clone(),
+                        body: (**body).clone(),
+                    };
+                    self.bindings.insert(name.clone(), binding);
                 }
             }
         }
@@ -1650,6 +1659,7 @@ impl<'a> Compiler<'a> {
                 for (name, value_expr) in bindings {
                     let binding = match value_expr {
                         Expr::Lambda { params, body } => Binding::Lambda {
+                            id: self.next_lambda_id(),
                             params: params.clone(),
                             body: body.as_ref().clone(),
                         },
@@ -6014,8 +6024,10 @@ impl<'a> Compiler<'a> {
                 })
             }
             _ => {
-                if let Some(Binding::Lambda { params, body }) = self.bindings.get(callee).cloned() {
-                    return self.inline_call(callee, &params, &body, args);
+                if let Some(Binding::Lambda { id, params, body }) =
+                    self.bindings.get(callee).cloned()
+                {
+                    return self.inline_call(callee, id, &params, &body, args);
                 }
                 Err(BackendError {
                     message: format!("unsupported call in phase2 C build: {}", callee),
@@ -6133,11 +6145,12 @@ impl<'a> Compiler<'a> {
     fn inline_call(
         &mut self,
         callee: &str,
+        lambda_id: usize,
         params: &[String],
         body: &Expr,
         args: &[Expr],
     ) -> Result<CValue, BackendError> {
-        if self.inlining.iter().any(|name| name == callee) {
+        if self.inlining.contains(&lambda_id) {
             return Err(BackendError {
                 message: format!(
                     "recursive function '{}' is not supported by the C backend yet (calls are inlined); rewrite it with (loop ... (recur ...)) or run it with `clove {}`",
@@ -6169,7 +6182,7 @@ impl<'a> Compiler<'a> {
             let previous = self.bindings.insert(param.clone(), Binding::Value(value));
             saved.push((param.clone(), previous));
         }
-        self.inlining.push(callee.to_string());
+        self.inlining.push(lambda_id);
         let result = self.compile_expr(body);
         self.inlining.pop();
         for (name, previous) in saved.into_iter().rev() {
@@ -6183,6 +6196,11 @@ impl<'a> Compiler<'a> {
             }
         }
         result
+    }
+
+    fn next_lambda_id(&mut self) -> usize {
+        self.lambda_ids += 1;
+        self.lambda_ids
     }
 
     fn with_temp_binding<T, F>(
