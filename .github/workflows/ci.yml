@@ -47,9 +47,8 @@ jobs:
           RUST_MIN_STACK: 16777216
 
   clippy:
-    name: Clippy (advisory while existing warnings are cleared)
+    name: Clippy
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -65,5 +64,11 @@ jobs:
       - name: Install Rust components
         run: rustup toolchain install stable --profile minimal --component clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Run Clippy
+      # deny-by-default の correctness lint はここで落とす。現在0件で、これは必須。
+      - name: Run Clippy (correctness lints are required)
+        run: cargo clippy --locked --workspace --all-targets
+      # style / complexity の既存警告を片付けるまでは助言のみ。
+      # 残件と必須化までの手順は _ai/2026-07-26-clippy-remaining.md を参照。
+      - name: Run Clippy with -D warnings (advisory)
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+        continue-on-error: true

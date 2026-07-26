@@ -6823,15 +6823,16 @@ impl Evaluator {
                 ))
             }
         };
-        let mut rewritten_form = None;
+        // defn を -defn へ書き換えた形は defn_form の借用元として生かす必要がある。
+        let rewritten_form;
         let defn_form = if head == "defn" {
             let mut rewritten = Vec::with_capacity(items.len());
             let mut head_form = items[0].clone();
             head_form.kind = FormKind::Symbol("-defn".into());
             rewritten.push(head_form);
             rewritten.extend_from_slice(&items[1..]);
-            rewritten_form = Some(Form::new(FormKind::List(rewritten), form.span));
-            rewritten_form.as_ref().unwrap_or(form)
+            rewritten_form = Form::new(FormKind::List(rewritten), form.span);
+            &rewritten_form
         } else {
             form
         };
