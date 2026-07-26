@@ -368,7 +368,9 @@ pub(crate) fn install(env: &mut Env) {
         [pattern, Value::String(_text)] => {
             // simple matcher proxy; return compiled regex
             let regex = resolve_regex(pattern)?;
-            Ok(Value::Regex(std::sync::Arc::new(crate::ast::RegexValue::new(regex.as_str())?)))
+            Ok(Value::Regex(std::sync::Arc::new(
+                crate::ast::RegexValue::new(regex.as_str())?,
+            )))
         }
         [_, text] => Err(crate::builtins::type_mismatch_arg(
             "string",

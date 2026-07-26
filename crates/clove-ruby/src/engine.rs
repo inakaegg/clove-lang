@@ -391,10 +391,12 @@ fn from_ruby_value(val: magnus::Value) -> Result<Value, RubyError> {
     }
     if let Ok(re) = RRegexp::try_convert(val) {
         let pat: String = re.funcall("source", ())?;
-        return RegexValue::new(pat).map(|rv| Value::Regex(std::sync::Arc::new(rv))).map_err(|e| {
-            let ruby = Ruby::get().unwrap();
-            RubyError::new(ruby.exception_arg_error(), e.to_string())
-        });
+        return RegexValue::new(pat)
+            .map(|rv| Value::Regex(std::sync::Arc::new(rv)))
+            .map_err(|e| {
+                let ruby = Ruby::get().unwrap();
+                RubyError::new(ruby.exception_arg_error(), e.to_string())
+            });
     }
     if let Ok(b) = bool::try_convert(val) {
         return Ok(Value::Bool(b));

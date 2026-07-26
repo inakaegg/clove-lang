@@ -279,9 +279,7 @@ impl CloveError {
     }
 
     pub fn stack(&self) -> &[StackFrame] {
-        self.context_ref()
-            .map(|ctx| ctx.stack())
-            .unwrap_or(&[])
+        self.context_ref().map(|ctx| ctx.stack()).unwrap_or(&[])
     }
 
     /// Whether this error can hold span / file / stack information.

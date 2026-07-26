@@ -23,7 +23,10 @@ fn main() {
 fn creating_the_engine_does_not_boot_ruby() {
     let engine = RubyEngine::new();
     assert_eq!(engine.tag(), "rb");
-    assert!(!vm_booted(), "creating RubyEngine must not boot the Ruby VM");
+    assert!(
+        !vm_booted(),
+        "creating RubyEngine must not boot the Ruby VM"
+    );
 }
 
 fn running_a_script_without_foreign_blocks_does_not_boot_ruby() {
@@ -39,11 +42,9 @@ fn running_a_script_without_foreign_blocks_does_not_boot_ruby() {
 
 fn evaluating_a_foreign_block_boots_ruby() {
     let engines = clove_ruby::engines();
-    let value = clove_core::eval_source_with_engines("$rb{1 + 2}", EvalOptions::default(), &engines)
-        .expect("ruby block should evaluate");
+    let value =
+        clove_core::eval_source_with_engines("$rb{1 + 2}", EvalOptions::default(), &engines)
+            .expect("ruby block should evaluate");
     assert_eq!(value, Value::Int(3));
-    assert!(
-        vm_booted(),
-        "evaluating a ruby block must boot the Ruby VM"
-    );
+    assert!(vm_booted(), "evaluating a ruby block must boot the Ruby VM");
 }

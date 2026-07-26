@@ -856,13 +856,16 @@ impl AgentHandle {
     pub fn await_all(&self) {
         let (lock, cvar) = &self.inner.cond;
         let mut guard = lock.lock().unwrap();
-        while self.inner.pending.load(Ordering::SeqCst) > 0 || self.inner.processing.load(Ordering::SeqCst) {
+        while self.inner.pending.load(Ordering::SeqCst) > 0
+            || self.inner.processing.load(Ordering::SeqCst)
+        {
             guard = cvar.wait(guard).unwrap();
         }
     }
 
     pub fn is_idle(&self) -> bool {
-        self.inner.pending.load(Ordering::SeqCst) == 0 && !self.inner.processing.load(Ordering::SeqCst)
+        self.inner.pending.load(Ordering::SeqCst) == 0
+            && !self.inner.processing.load(Ordering::SeqCst)
     }
 
     pub fn error(&self) -> Option<CloveError> {

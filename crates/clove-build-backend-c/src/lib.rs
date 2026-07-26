@@ -2476,13 +2476,17 @@ impl<'a> Compiler<'a> {
                 })
             }
             "range" => {
-                if args.len() != 2 {
-                    return Err(BackendError {
-                        message: "range currently expects 2 args".to_string(),
-                    });
-                }
-                let start = self.as_i64_expr(&args[0])?;
-                let end = self.as_i64_expr(&args[1])?;
+                // `(range end)` starts at 0, like the interpreter. The public benchmark
+                // in docs/phase2/bench uses that form.
+                let (start, end) = match args {
+                    [end] => ("0LL".to_string(), self.as_i64_expr(end)?),
+                    [start, end] => (self.as_i64_expr(start)?, self.as_i64_expr(end)?),
+                    _ => {
+                        return Err(BackendError {
+                            message: "range expects (end) or (start end)".to_string(),
+                        })
+                    }
+                };
                 let var = self.next_tmp("range");
                 self.lines.push(format!(
                     "clv_vec_i64 {} = clv_range_i64({}, {});",
@@ -6072,7 +6076,9 @@ impl<'a> Compiler<'a> {
                     message: "map expects unary function".to_string(),
                 }),
             },
-            Expr::Lambda { params, body } if params.len() == 1 => lower_lambda_map(&params[0], body),
+            Expr::Lambda { params, body } if params.len() == 1 => {
+                lower_lambda_map(&params[0], body)
+            }
             _ => Err(BackendError {
                 message: "map expects unary function".to_string(),
             }),
@@ -6256,7 +6262,9 @@ impl<'a> Compiler<'a> {
                     message: "filter expects unary predicate".to_string(),
                 })
             }
-            Expr::Lambda { params, body } if params.len() == 1 => lower_lambda_pred(&params[0], body),
+            Expr::Lambda { params, body } if params.len() == 1 => {
+                lower_lambda_pred(&params[0], body)
+            }
             _ => Err(BackendError {
                 message: "filter expects unary predicate".to_string(),
             }),
@@ -6276,7 +6284,7 @@ impl<'a> Compiler<'a> {
         match expr {
             Expr::Lambda { params, body } if params.len() == 2 => {
                 lower_lambda_map_indexed(&params[0], &params[1], body)
-            },
+            }
             Expr::Symbol(sym) => {
                 if let Some((params, body)) = self.bindings.get(sym).and_then(|b| b.as_lambda(2)) {
                     return lower_lambda_map_indexed(&params[0], &params[1], body);
@@ -6301,7 +6309,7 @@ impl<'a> Compiler<'a> {
         match expr {
             Expr::Lambda { params, body } if params.len() == 2 => {
                 lower_lambda_pred_indexed(&params[0], &params[1], body)
-            },
+            }
             Expr::Symbol(sym) => {
                 if let Some((params, body)) = self.bindings.get(sym).and_then(|b| b.as_lambda(2)) {
                     return lower_lambda_pred_indexed(&params[0], &params[1], body);
@@ -6358,7 +6366,7 @@ impl<'a> Compiler<'a> {
                     Some(binding) if binding.as_lambda(2).is_some() => {
                         let (params, body) = binding.as_lambda(2).expect("checked above");
                         lower_lambda_reduce(&params[0], &params[1], body)
-                    },
+                    }
                     _ => Err(BackendError {
                         message: format!("reduce unsupported op: {}", sym),
                     }),
@@ -6366,7 +6374,7 @@ impl<'a> Compiler<'a> {
             },
             Expr::Lambda { params, body } if params.len() == 2 => {
                 lower_lambda_reduce(&params[0], &params[1], body)
-            },
+            }
             _ => Err(BackendError {
                 message: "reduce expects symbol op".to_string(),
             }),
@@ -6380,14 +6388,14 @@ impl<'a> Compiler<'a> {
                 Some(binding) if binding.as_lambda(3).is_some() => {
                     let (params, body) = binding.as_lambda(3).expect("checked above");
                     lower_lambda_reduce_kv(&params[0], &params[2], body)
-                },
+                }
                 _ => Err(BackendError {
                     message: format!("reduce-kv unsupported reducer: {}", sym),
                 }),
             },
             Expr::Lambda { params, body } if params.len() == 3 => {
                 lower_lambda_reduce_kv(&params[0], &params[2], body)
-            },
+            }
             _ => Err(BackendError {
                 message: "reduce-kv expects reducer symbol or lambda3".to_string(),
             }),

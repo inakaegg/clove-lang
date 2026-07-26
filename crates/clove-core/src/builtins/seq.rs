@@ -2078,7 +2078,10 @@ fn range(start: f64, end: f64, step: f64, force_float: bool) -> Result<Value, Cl
     // impossible range up front and keep checking as it materializes.
     let span = ((end - start) / step).ceil();
     if span.is_finite() && span > 0.0 {
-        guard::reserve((span as u64).saturating_mul(guard::VALUE_SIZE_ESTIMATE), None)?;
+        guard::reserve(
+            (span as u64).saturating_mul(guard::VALUE_SIZE_ESTIMATE),
+            None,
+        )?;
     }
     let mut items = Vector::new();
     let mut cur = start;
