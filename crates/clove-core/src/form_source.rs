@@ -27,6 +27,9 @@ pub fn form_to_source(form: &Form) -> String {
         },
         FormKind::InterpolatedRegex { parts, delim } => format_interpolated_regex(parts, delim),
         FormKind::List(items) => {
+            // コンパイラは通常の呼び出しを `(__apply f args..)` へ下ろす。ソースとして
+            // 見せるときは元の `(f args..)` に戻す。内部形式を利用者へ出さない。
+            let items = strip_internal_apply(items);
             let parts: Vec<String> = items.iter().map(form_to_source).collect();
             format!("({})", parts.join(" "))
         }
@@ -59,6 +62,19 @@ pub fn form_to_source(form: &Form) -> String {
             Some(t) if !t.is_empty() => format!("${}:{}", t, path),
             _ => format!("${}", path),
         },
+    }
+}
+
+/// `(__apply f args..)` から `__apply` を落とす。それ以外はそのまま。
+fn strip_internal_apply(items: &[Form]) -> &[Form] {
+    match items.split_first() {
+        Some((head, rest))
+            if !rest.is_empty()
+                && matches!(&head.kind, FormKind::Symbol(name) if name == crate::compiler::APPLY_SYM) =>
+        {
+            rest
+        }
+        _ => items,
     }
 }
 
