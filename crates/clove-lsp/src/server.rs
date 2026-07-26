@@ -5610,7 +5610,7 @@ fn oop_to_sexp(form: &Form, text: &str, doc: &DocumentData) -> Option<String> {
     Some(current)
 }
 
-fn parse_oop_index_stage<'a>(stage: &'a Form) -> Option<&'a Form> {
+fn parse_oop_index_stage(stage: &Form) -> Option<&Form> {
     let FormKind::List(items) = &stage.kind else {
         return None;
     };
@@ -5624,7 +5624,7 @@ fn parse_oop_index_stage<'a>(stage: &'a Form) -> Option<&'a Form> {
     items.get(1)
 }
 
-fn parse_oop_call_stage<'a>(stage: &'a Form) -> Option<(&'a Form, &'a str, Vec<&'a Form>)> {
+fn parse_oop_call_stage(stage: &Form) -> Option<(&Form, &str, Vec<&Form>)> {
     let FormKind::List(items) = &stage.kind else {
         return None;
     };
@@ -5818,7 +5818,7 @@ fn build_require_edit(doc: &DocumentData, target_ns: &str, sym: &str) -> Option<
     })
 }
 
-fn find_ns_form<'a>(doc: &'a DocumentData) -> Option<&'a Form> {
+fn find_ns_form(doc: &DocumentData) -> Option<&Form> {
     let forms = doc.ast.as_ref()?;
     for form in forms {
         if let FormKind::List(items) = &form.kind {
@@ -5836,7 +5836,7 @@ fn find_ns_form<'a>(doc: &'a DocumentData) -> Option<&'a Form> {
     None
 }
 
-fn find_require_option_form<'a>(ns_form: &'a Form) -> Option<&'a Form> {
+fn find_require_option_form(ns_form: &Form) -> Option<&Form> {
     let items = match &ns_form.kind {
         FormKind::List(items) => items,
         _ => return None,

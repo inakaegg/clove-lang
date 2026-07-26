@@ -3412,6 +3412,64 @@ fn parse_duration_literal(token: &str) -> Result<Option<DurationValue>, CloveErr
     Ok(None)
 }
 
+fn is_label_style_key(sym: &str) -> bool {
+    let bytes = sym.as_bytes();
+    if bytes.len() < 2 {
+        return false;
+    }
+    if bytes[bytes.len() - 1] != b':' {
+        return false;
+    }
+    let body = &bytes[..bytes.len() - 1];
+    if body.is_empty() {
+        return false;
+    }
+    let first = body[0] as char;
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    for b in &body[1..] {
+        let c = *b as char;
+        if !(c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            return false;
+        }
+    }
+    true
+}
+
+fn split_symbol_type_annotation(symbol: &str) -> Option<(&str, &str)> {
+    let start_idx = symbol.find('<')?;
+    if start_idx == 0 {
+        return None;
+    }
+    let mut depth = 1usize;
+    let mut end_idx = None;
+    let type_start = start_idx + 1;
+    for (offset, ch) in symbol[type_start..].char_indices() {
+        match ch {
+            '<' => depth += 1,
+            '>' => {
+                depth -= 1;
+                if depth == 0 {
+                    end_idx = Some(type_start + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let end_idx = end_idx?;
+    if end_idx + 1 != symbol.len() {
+        return None;
+    }
+    let name = &symbol[..start_idx];
+    let annotation = &symbol[start_idx + 1..end_idx];
+    if name.is_empty() || annotation.is_empty() {
+        return None;
+    }
+    Some((name, annotation))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4612,62 +4670,4 @@ mod tests {
             TypeKind::Int
         );
     }
-}
-
-fn is_label_style_key(sym: &str) -> bool {
-    let bytes = sym.as_bytes();
-    if bytes.len() < 2 {
-        return false;
-    }
-    if bytes[bytes.len() - 1] != b':' {
-        return false;
-    }
-    let body = &bytes[..bytes.len() - 1];
-    if body.is_empty() {
-        return false;
-    }
-    let first = body[0] as char;
-    if !(first.is_ascii_alphabetic() || first == '_') {
-        return false;
-    }
-    for b in &body[1..] {
-        let c = *b as char;
-        if !(c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-            return false;
-        }
-    }
-    true
-}
-
-fn split_symbol_type_annotation(symbol: &str) -> Option<(&str, &str)> {
-    let start_idx = symbol.find('<')?;
-    if start_idx == 0 {
-        return None;
-    }
-    let mut depth = 1usize;
-    let mut end_idx = None;
-    let type_start = start_idx + 1;
-    for (offset, ch) in symbol[type_start..].char_indices() {
-        match ch {
-            '<' => depth += 1,
-            '>' => {
-                depth -= 1;
-                if depth == 0 {
-                    end_idx = Some(type_start + offset);
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let end_idx = end_idx?;
-    if end_idx + 1 != symbol.len() {
-        return None;
-    }
-    let name = &symbol[..start_idx];
-    let annotation = &symbol[start_idx + 1..end_idx];
-    if name.is_empty() || annotation.is_empty() {
-        return None;
-    }
-    Some((name, annotation))
 }

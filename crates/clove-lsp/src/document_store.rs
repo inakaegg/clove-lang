@@ -1585,7 +1585,7 @@ fn extract_deftype_list_fields(entries: &[Form]) -> Option<Vec<TypeField>> {
     if let Some(fields) = extract_deftype_typed_fields(entries) {
         return Some(fields);
     }
-    if entries.len() % 2 != 0 {
+    if !entries.len().is_multiple_of(2) {
         return None;
     }
     let mut fields = Vec::new();

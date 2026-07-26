@@ -376,7 +376,7 @@ pub(crate) fn install(env: &mut Env) {
                 let (n, _) = as_number(n)?;
                 let n = n.max(0.0) as usize;
                 let seq = seq_items(coll)?;
-                let first: Vector<Value> = seq.iter().cloned().take(n).collect();
+                let first: Vector<Value> = seq.iter().take(n).cloned().collect();
                 let second: Vector<Value> = seq.into_iter().skip(n).collect();
                 Ok(Value::Vector(Vector::from(vec![
                     Value::Vector(first),

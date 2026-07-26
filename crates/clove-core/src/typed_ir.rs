@@ -258,7 +258,7 @@ fn synthetic_span(base: Span, tag: usize) -> Span {
     }
 }
 
-fn unwrap_oop_stage_items<'a>(items: &'a [Form]) -> &'a [Form] {
+fn unwrap_oop_stage_items(items: &[Form]) -> &[Form] {
     if items.len() >= 2 {
         if let FormKind::Symbol(sym) = &items[0].kind {
             if sym == APPLY_SYM {

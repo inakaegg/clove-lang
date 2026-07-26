@@ -482,7 +482,7 @@ fn format_source_snippet(file: &str, span: Span) -> Option<Vec<String>> {
     lines.push(format!("  | {}", line));
     let mut marker = String::from("  | ");
     let col = span.col.saturating_sub(1);
-    marker.extend(std::iter::repeat(' ').take(col));
+    marker.extend(std::iter::repeat_n(' ', col));
     marker.push('^');
     lines.push(marker);
     Some(lines)

@@ -2085,7 +2085,7 @@ fn infer_cond(items: &[Form], st: &mut InferState) -> Result<Type, TypeError> {
     if items.len() < 3 {
         return Ok(Type::Prim(PrimType::Nil));
     }
-    if (items.len() - 1) % 2 != 0 {
+    if !(items.len() - 1).is_multiple_of(2) {
         let message = "cond expects even number of test/expr pairs".to_string();
         if st.best_effort {
             st.record_diag(items[0].span, message);
@@ -2139,7 +2139,7 @@ fn infer_cond_thread(
     if items.len() == 2 {
         return infer_form(&items[1], st);
     }
-    if (items.len() - 2) % 2 != 0 {
+    if !(items.len() - 2).is_multiple_of(2) {
         let message = "cond-> expects pairs of test and form".to_string();
         if st.best_effort {
             st.record_diag(items[0].span, message);
@@ -2365,7 +2365,7 @@ fn synthetic_span(base: Span, tag: usize) -> Span {
     }
 }
 
-fn unwrap_oop_stage_items<'a>(items: &'a [Form]) -> &'a [Form] {
+fn unwrap_oop_stage_items(items: &[Form]) -> &[Form] {
     if items.len() >= 2 {
         if let FormKind::Symbol(sym) = &items[0].kind {
             if sym == APPLY_SYM {
@@ -3670,7 +3670,7 @@ fn keyword_shorthand_fields(items: &[Form]) -> Option<Vec<(String, Span)>> {
 }
 
 fn keyword_pair_fields(items: &[Form]) -> Option<Vec<(String, Form)>> {
-    if items.is_empty() || items.len() % 2 != 0 {
+    if items.is_empty() || !items.len().is_multiple_of(2) {
         return None;
     }
     let mut out = Vec::with_capacity(items.len() / 2);

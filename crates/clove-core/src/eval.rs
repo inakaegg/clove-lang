@@ -67,12 +67,12 @@ use once_cell::sync::Lazy;
 pub const CURRENT_NS_KEY: &str = "__clove_current_ns";
 
 thread_local! {
-    static CURRENT_FILE: RefCell<Option<String>> = RefCell::new(None);
-    static STACK: RefCell<Vec<StackFrame>> = RefCell::new(Vec::new());
-    static PENDING_FRAME: RefCell<Option<(String, Option<Span>)>> = RefCell::new(None);
-    static PENDING_CALL_FORM: RefCell<Option<String>> = RefCell::new(None);
-    static RECUR_STACK: RefCell<Vec<RecurContext>> = RefCell::new(Vec::new());
-    static MAP_REF_STACK: RefCell<Vec<MapRefFrame>> = RefCell::new(Vec::new());
+    static CURRENT_FILE: RefCell<Option<String>> = const { RefCell::new(None) };
+    static STACK: RefCell<Vec<StackFrame>> = const { RefCell::new(Vec::new()) };
+    static PENDING_FRAME: RefCell<Option<(String, Option<Span>)>> = const { RefCell::new(None) };
+    static PENDING_CALL_FORM: RefCell<Option<String>> = const { RefCell::new(None) };
+    static RECUR_STACK: RefCell<Vec<RecurContext>> = const { RefCell::new(Vec::new()) };
+    static MAP_REF_STACK: RefCell<Vec<MapRefFrame>> = const { RefCell::new(Vec::new()) };
 }
 
 static LOOP_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -4944,7 +4944,7 @@ impl Evaluator {
     }
 
     fn eval_cond(&self, args: &[Form], env: EnvRef, form_span: Span) -> Result<Value, CloveError> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(span_runtime_error(
                 form_span,
                 "cond expects even number of test/expr pairs",
@@ -5200,7 +5200,7 @@ impl Evaluator {
                 "cond-> expects initial value and clauses",
             ));
         }
-        if (args.len() - 1) % 2 != 0 {
+        if !(args.len() - 1).is_multiple_of(2) {
             return Err(span_runtime_error(
                 form_span,
                 "cond-> expects pairs of test and form",
@@ -11084,7 +11084,7 @@ fn collect_field_pairs(items: &[Form]) -> Result<Vec<(Form, Form)>, CloveError> 
     if items.is_empty() {
         return Ok(Vec::new());
     }
-    if items.len() % 2 != 0 {
+    if !items.len().is_multiple_of(2) {
         let span = items.last().unwrap().span;
         return Err(span_runtime_error(
             span,
@@ -14025,15 +14025,10 @@ fn async_scope_strict_enabled() -> bool {
     match std::env::var("ASYNC_SCOPE_STRICT") {
         Ok(val) => {
             let trimmed = val.trim();
-            if trimmed.is_empty()
+            !(trimmed.is_empty()
                 || trimmed == "0"
                 || trimmed.eq_ignore_ascii_case("false")
-                || trimmed.eq_ignore_ascii_case("no")
-            {
-                false
-            } else {
-                true
-            }
+                || trimmed.eq_ignore_ascii_case("no"))
         }
         Err(_) => false,
     }

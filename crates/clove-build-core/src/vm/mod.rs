@@ -2249,7 +2249,7 @@ fn run_code_fast(
                         &func,
                         acc.take().unwrap(),
                         item,
-                        &mut vec![None],
+                        &mut [None],
                         0,
                     )?;
                     acc = Some(value);
@@ -3549,7 +3549,7 @@ fn call_builtin(state: &mut VmState, name: &str, args: Vec<Value>) -> Result<Val
             }
         }
         "hash-map" => {
-            if args.len() % 2 != 0 {
+            if !args.len().is_multiple_of(2) {
                 return Err(Clove2Error::new(
                     "vm: hash-map expects even number of arguments",
                 ));
@@ -4432,7 +4432,7 @@ fn vm_get(args: Vec<Value>) -> Result<Value, Clove2Error> {
 }
 
 fn vm_assoc(args: Vec<Value>) -> Result<Value, Clove2Error> {
-    if args.len() < 3 || args.len() % 2 == 0 {
+    if args.len() < 3 || args.len().is_multiple_of(2) {
         return Err(Clove2Error::new("vm: assoc expects key/value pairs"));
     }
     match &args[0] {

@@ -1488,7 +1488,7 @@ fn escape_regex_slash(pattern: &str) -> String {
             out.push(ch);
             continue;
         }
-        if ch == '/' && backslash_run % 2 == 0 {
+        if ch == '/' && backslash_run.is_multiple_of(2) {
             out.push('\\');
         }
         out.push(ch);

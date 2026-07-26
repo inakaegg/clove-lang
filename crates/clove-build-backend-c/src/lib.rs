@@ -2994,7 +2994,7 @@ impl<'a> Compiler<'a> {
                 })
             }
             "hash-map" => {
-                if args.len() % 2 != 0 {
+                if !args.len().is_multiple_of(2) {
                     return Err(BackendError {
                         message: "hash-map expects even number of args".to_string(),
                     });

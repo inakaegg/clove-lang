@@ -625,7 +625,7 @@ impl Compiler {
     }
 
     fn infer_cond_type(&self, forms: &[Form], scope: &mut TypeScope) -> LocalType {
-        if forms.len() % 2 != 0 {
+        if !forms.len().is_multiple_of(2) {
             return LocalType::Unknown;
         }
         let mut types = Vec::new();
@@ -1239,7 +1239,7 @@ impl Compiler {
         span: Span,
         tail: TailContext,
     ) -> Result<(), VmError> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(VmError::unsupported(
                 span,
                 "cond expects even number of test/expr pairs",

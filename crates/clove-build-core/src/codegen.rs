@@ -4740,7 +4740,7 @@ fn emit_typed_hash_map(
     locals: &HashMap<String, TypedKind>,
     args: &[AstExpr],
 ) -> Option<TypedExpr> {
-    if args.is_empty() || args.len() % 2 != 0 {
+    if args.is_empty() || !args.len().is_multiple_of(2) {
         return None;
     }
     let mut key_kind: Option<TypedKind> = None;
@@ -6380,7 +6380,7 @@ fn emit_typed_assoc(
     locals: &HashMap<String, TypedKind>,
     args: &[AstExpr],
 ) -> Option<TypedExpr> {
-    if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
         return None;
     }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[0])?;

@@ -4067,7 +4067,7 @@ impl Evaluator {
     }
 
     fn eval_hash_map(&mut self, args: &[AstExpr], env: EnvRef) -> Result<Value, Clove2Error> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(Clove2Error::new("hash-map expects even arguments"));
         }
         let mut out = BTreeMap::new();
@@ -4210,7 +4210,7 @@ impl Evaluator {
     }
 
     fn eval_assoc(&mut self, args: &[AstExpr], env: EnvRef) -> Result<Value, Clove2Error> {
-        if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+        if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
             return Err(Clove2Error::new("assoc expects map and key/value pairs"));
         }
         if matches!(self.mut_mode(), MutMode::Mut) {
@@ -4606,7 +4606,7 @@ impl Evaluator {
         let mut schema = None;
         let mut validate = false;
         if args.len() > 1 {
-            if (args.len() - 1) % 2 != 0 {
+            if !(args.len() - 1).is_multiple_of(2) {
                 return Err(Clove2Error::new("json::read-file expects keyword options"));
             }
             for pair in args[1..].chunks(2) {
@@ -4669,7 +4669,7 @@ impl Evaluator {
         let mut schema = None;
         let mut validate = false;
         if args.len() > 1 {
-            if (args.len() - 1) % 2 != 0 {
+            if !(args.len() - 1).is_multiple_of(2) {
                 return Err(Clove2Error::new(
                     "json::read-string expects keyword options",
                 ));
@@ -5444,7 +5444,7 @@ impl Evaluator {
             }
             "iterate" => self.eval_iterate_values(args),
             "assoc" => {
-                if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+                if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
                     return Err(Clove2Error::new("assoc expects map and key/value pairs"));
                 }
                 let mut iter = args.into_iter();
@@ -5878,7 +5878,7 @@ impl Evaluator {
         let Value::Int(shift) = args[1] else {
             return Err(Clove2Error::new(format!("{} expects int arguments", name)));
         };
-        if shift < 0 || shift > 63 {
+        if !(0..=63).contains(&shift) {
             return Err(Clove2Error::new(format!("{} expects shift in 0..63", name)));
         }
         let shift = shift as u32;
@@ -6328,7 +6328,7 @@ impl Evaluator {
     }
 
     fn eval_hash_map_values(&self, args: Vec<Value>) -> Result<Value, Clove2Error> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(Clove2Error::new("hash-map expects even arguments"));
         }
         let mut out = BTreeMap::new();
@@ -7930,7 +7930,7 @@ impl Evaluator {
         let mut schema = None;
         let mut validate = false;
         if args.len() > 1 {
-            if (args.len() - 1) % 2 != 0 {
+            if !(args.len() - 1).is_multiple_of(2) {
                 return Err(Clove2Error::new("json::read-file expects keyword options"));
             }
             for pair in args[1..].chunks(2) {
@@ -7979,7 +7979,7 @@ impl Evaluator {
         let mut schema = None;
         let mut validate = false;
         if args.len() > 1 {
-            if (args.len() - 1) % 2 != 0 {
+            if !(args.len() - 1).is_multiple_of(2) {
                 return Err(Clove2Error::new(
                     "json::read-string expects keyword options",
                 ));

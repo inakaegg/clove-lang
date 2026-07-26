@@ -464,7 +464,7 @@ pub(crate) fn install(env: &mut Env) {
         Ok(Value::Vector(Vector::from(args.to_vec())))
     });
     def_builtin!(env, "hash-map", FnArity::at_least(0), |args| {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return err("hash-map expects even number of key/value args");
         }
         let mut map = HashMap::new();

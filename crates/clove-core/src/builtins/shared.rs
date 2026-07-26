@@ -243,7 +243,7 @@ pub(crate) fn sorted_map_from_pairs(
     op: &str,
     arg_offset: usize,
 ) -> Result<SortedMap, CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return super::err(format!("{} expects even number of key/value arguments", op));
     }
     let mut out = SortedMap {
@@ -613,7 +613,7 @@ pub(crate) fn conj_on_value(coll: Value, item: Value) -> Result<Value, CloveErro
 }
 
 pub(crate) fn assoc_map(base: &HashMap<Key, Value>, pairs: &[Value]) -> Result<Value, CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return super::err("assoc expects even number of key/value arguments");
     }
     let mut new_map = base.clone();

@@ -654,7 +654,7 @@ fn rewrite_cond(items: &[Expr]) -> Result<Expr, Clove2Error> {
         return Err(Clove2Error::new("cond expects test and expr pairs"));
     }
     let clauses = &items[1..];
-    if clauses.len() % 2 != 0 {
+    if !clauses.len().is_multiple_of(2) {
         return Err(Clove2Error::new("cond expects even number of forms"));
     }
     let mut out = Expr::literal(Literal::Nil);
@@ -789,7 +789,7 @@ fn rewrite_cond_thread(items: &[Expr], insert_last: bool, name: &str) -> Result<
         )));
     }
     let clauses = &items[2..];
-    if clauses.len() % 2 != 0 {
+    if !clauses.len().is_multiple_of(2) {
         return Err(Clove2Error::new(format!(
             "{} expects even number of forms",
             name

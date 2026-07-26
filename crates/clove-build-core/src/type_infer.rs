@@ -8406,7 +8406,7 @@ fn infer_hash_map_call(
     if args.is_empty() {
         return Type::Map(Box::new(Type::Any), Box::new(Type::Any));
     }
-    if args.len() % 2 != 0 {
+    if !args.len().is_multiple_of(2) {
         diags.push(error_diag("hash-map expects even arguments".to_string()));
         return Type::Map(Box::new(Type::Any), Box::new(Type::Any));
     }
@@ -8700,7 +8700,7 @@ fn infer_assoc_call(
     diags: &mut Vec<Diagnostic>,
     level: NativeLevel,
 ) -> Type {
-    if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
         diags.push(error_diag(
             "assoc expects map and key/value pairs".to_string(),
         ));

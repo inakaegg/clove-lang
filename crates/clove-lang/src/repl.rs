@@ -705,13 +705,9 @@ impl ReplCompleter {
 
     fn build_suggestion(&self, choice: &SymbolChoice, span: Span) -> Suggestion {
         let display = choice.display.clone();
-        let description = self.describe_symbol(&display).and_then(|info| {
-            Some(format_description(
-                &info,
-                &choice.aliases,
-                choice.alias_of.as_deref(),
-            ))
-        });
+        let description = self
+            .describe_symbol(&display)
+            .map(|info| format_description(&info, &choice.aliases, choice.alias_of.as_deref()));
         Suggestion {
             value: display,
             description,
@@ -2164,7 +2160,7 @@ fn render_nav_result(value: &Value) -> Vec<String> {
     lines
 }
 
-fn nav_collect_entries<'a>(value: Option<&'a Value>) -> Vec<&'a Value> {
+fn nav_collect_entries(value: Option<&Value>) -> Vec<&Value> {
     let Some(Value::Vector(items)) = value else {
         return Vec::new();
     };
@@ -2207,7 +2203,7 @@ fn escape_regex_slash(pattern: &str) -> String {
             out.push(ch);
             continue;
         }
-        if ch == '/' && backslash_run % 2 == 0 {
+        if ch == '/' && backslash_run.is_multiple_of(2) {
             out.push('\\');
         }
         out.push(ch);
@@ -3001,6 +2997,46 @@ fn home_dir() -> Option<PathBuf> {
 fn is_path_separator(ch: char) -> bool {
     ch == '/' || ch == '\\'
 }
+fn print_doc_full(info: &DocInfo) {
+    let mut lines = Vec::new();
+    if let Some(sig) = &info.signature {
+        lines.push(sig.to_string());
+    } else {
+        lines.push(info.name.clone());
+    }
+    let alias_line = doc_aliases(info, &[]);
+    if !alias_line.is_empty() {
+        lines.push(format!("alias: {}", alias_line.join(", ")));
+    }
+    if let Some(origin) = &info.origin {
+        lines.push(format!("source: {}", origin));
+    }
+    match &info.doc {
+        Some(text) => lines.push(text.to_string()),
+        None => lines.push("(no documentation available)".to_string()),
+    }
+    if let Some(examples) =
+        doc::doc_examples_for(&info.canonical).or_else(|| doc::doc_examples_for(&info.name))
+    {
+        if !examples.is_empty() {
+            lines.push("examples:".to_string());
+            for ex in examples {
+                lines.push(format!("  {}", ex));
+            }
+        }
+    }
+    if let Some(examples) =
+        doc::doc_oop_examples_for(&info.canonical).or_else(|| doc::doc_oop_examples_for(&info.name))
+    {
+        if !examples.is_empty() {
+            lines.push("oop examples:".to_string());
+            for ex in examples {
+                lines.push(format!("  {}", ex));
+            }
+        }
+    }
+    print_lines_with_optional_pager(lines);
+}
 
 #[cfg(test)]
 mod tests {
@@ -3618,44 +3654,4 @@ mod tests {
     fn print_lines_with_optional_pager_does_not_panic() {
         super::print_lines_with_optional_pager(vec!["a".to_string(), "b".to_string()]);
     }
-}
-fn print_doc_full(info: &DocInfo) {
-    let mut lines = Vec::new();
-    if let Some(sig) = &info.signature {
-        lines.push(sig.to_string());
-    } else {
-        lines.push(info.name.clone());
-    }
-    let alias_line = doc_aliases(info, &[]);
-    if !alias_line.is_empty() {
-        lines.push(format!("alias: {}", alias_line.join(", ")));
-    }
-    if let Some(origin) = &info.origin {
-        lines.push(format!("source: {}", origin));
-    }
-    match &info.doc {
-        Some(text) => lines.push(text.to_string()),
-        None => lines.push("(no documentation available)".to_string()),
-    }
-    if let Some(examples) =
-        doc::doc_examples_for(&info.canonical).or_else(|| doc::doc_examples_for(&info.name))
-    {
-        if !examples.is_empty() {
-            lines.push("examples:".to_string());
-            for ex in examples {
-                lines.push(format!("  {}", ex));
-            }
-        }
-    }
-    if let Some(examples) =
-        doc::doc_oop_examples_for(&info.canonical).or_else(|| doc::doc_oop_examples_for(&info.name))
-    {
-        if !examples.is_empty() {
-            lines.push("oop examples:".to_string());
-            for ex in examples {
-                lines.push(format!("  {}", ex));
-            }
-        }
-    }
-    print_lines_with_optional_pager(lines);
 }

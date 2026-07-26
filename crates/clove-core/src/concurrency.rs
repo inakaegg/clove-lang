@@ -407,7 +407,7 @@ impl CancelContext {
 }
 
 thread_local! {
-    static CURRENT_CANCEL_CTX: RefCell<Option<Arc<CancelContext>>> = RefCell::new(None);
+    static CURRENT_CANCEL_CTX: RefCell<Option<Arc<CancelContext>>> = const { RefCell::new(None) };
 }
 
 struct CancelCtxGuard {

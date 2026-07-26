@@ -614,7 +614,7 @@ fn infer_match_call(
     if callee != Some("match") {
         return None;
     }
-    if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
         return None;
     }
     let target_sym = match &args[0].kind {

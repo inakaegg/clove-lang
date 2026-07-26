@@ -3775,7 +3775,7 @@ fn assoc_indexed(
     pairs: &[Value],
     as_list: bool,
 ) -> Result<Value, CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return err("assoc expects even number of key/value arguments");
     }
     let mut out = items.clone();
@@ -3804,7 +3804,7 @@ fn assoc_indexed(
 }
 
 fn assoc_indexed_mut(items: &mut Vector<Value>, pairs: &[Value]) -> Result<(), CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return err("assoc! expects even number of key/value arguments");
     }
     let mut iter = pairs.iter();
@@ -3828,7 +3828,7 @@ fn assoc_indexed_mut(items: &mut Vector<Value>, pairs: &[Value]) -> Result<(), C
 }
 
 fn assoc_indexed_mut_shallow(items: &mut Vector<Value>, pairs: &[Value]) -> Result<(), CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return err("assoc! expects even number of key/value arguments");
     }
     let mut iter = pairs.iter();

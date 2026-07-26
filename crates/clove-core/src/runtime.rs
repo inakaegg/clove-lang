@@ -165,10 +165,10 @@ const USER_CLV_FILE: &str = "user.clv";
 const BUILTIN_PACKAGE_ID: &str = "<builtin>";
 
 thread_local! {
-    static NO_USER_CONFIG_LOCAL: Cell<bool> = Cell::new(false);
-    static CURRENT_RUNTIME: RefCell<Option<Arc<RuntimeCtx>>> = RefCell::new(None);
-    static CURRENT_DEBUG_STASH_ENABLED: Cell<bool> = Cell::new(false);
-    static REQUIRE_RUNTIME_CONTEXT: Cell<bool> = Cell::new(false);
+    static NO_USER_CONFIG_LOCAL: Cell<bool> = const { Cell::new(false) };
+    static CURRENT_RUNTIME: RefCell<Option<Arc<RuntimeCtx>>> = const { RefCell::new(None) };
+    static CURRENT_DEBUG_STASH_ENABLED: Cell<bool> = const { Cell::new(false) };
+    static REQUIRE_RUNTIME_CONTEXT: Cell<bool> = const { Cell::new(false) };
 }
 
 static NEXT_RUNTIME_ID: AtomicUsize = AtomicUsize::new(1);
@@ -1716,11 +1716,10 @@ impl RuntimeCtx {
     fn error_namespace(&self, err: &CloveError) -> Option<String> {
         let stack = err.stack();
         stack.last().and_then(|frame| {
-            if let Some(idx) = frame.function.rfind("::") {
-                Some(frame.function[..idx].to_string())
-            } else {
-                None
-            }
+            frame
+                .function
+                .rfind("::")
+                .map(|idx| frame.function[..idx].to_string())
         })
     }
 
@@ -3549,7 +3548,7 @@ fn is_refer_all_literal(name: &str) -> bool {
     matches!(name, "all" | ":all" | "*" | ":*")
 }
 
-fn unwrap_quote<'a>(form: &'a Form) -> &'a Form {
+fn unwrap_quote(form: &Form) -> &Form {
     if let FormKind::List(items) = &form.kind {
         if items.len() == 2 {
             if let FormKind::Symbol(sym) = &items[0].kind {
@@ -3664,7 +3663,7 @@ fn build_refer_pairs(
     Ok(pairs)
 }
 
-fn namespace_segments<'a>(name: &'a str) -> impl Iterator<Item = &'a str> {
+fn namespace_segments(name: &str) -> impl Iterator<Item = &str> {
     name.split("::")
         .flat_map(|part| part.split('.'))
         .filter(|s| !s.is_empty())
