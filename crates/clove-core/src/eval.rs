@@ -9351,6 +9351,12 @@ impl Evaluator {
         let with_span = err.with_span(span);
         let with_file = with_span.with_file(current_file_name());
         let with_env = with_file.with_env(env);
+        if !with_env.stack().is_empty() {
+            // Unwinding calls this at every level, and `capture_stack` copies the whole
+            // call stack each time. Capturing again once the error carries a stack made a
+            // deep failure quadratic: a recursion-limit error at ~90k frames took minutes.
+            return with_env;
+        }
         let stack = capture_stack();
         with_env.with_stack(stack)
     }

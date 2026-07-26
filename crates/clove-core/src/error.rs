@@ -8,6 +8,9 @@ use thiserror::Error;
 pub const ERROR_TAG: &str = "\x1b[31m[ERROR]\x1b[0m";
 pub const WARN_TAG: &str = "\x1b[33m[WARN]\x1b[0m";
 
+/// Stack frames printed with an error before the rest are summarized as a count.
+const MAX_PRINTED_FRAMES: usize = 30;
+
 #[derive(Clone, Debug, Default)]
 pub struct StackFrame {
     pub function: String,
@@ -356,7 +359,10 @@ pub fn format_error(err: &CloveError) -> Vec<String> {
             }
         }
         let mut is_top = true;
-        for frame in stack.iter().rev() {
+        // Deep recursion produces tens of thousands of frames, and printing all of them
+        // buries the error itself. The innermost frames are the useful ones.
+        let shown = stack.len().min(MAX_PRINTED_FRAMES);
+        for frame in stack.iter().rev().take(shown) {
             let location = format_error_location(frame.file.as_deref(), frame.span)
                 .unwrap_or_else(|| "unknown".into());
             if frame.function.is_empty() {
@@ -371,6 +377,9 @@ pub fn format_error(err: &CloveError) -> Vec<String> {
                 insert_snippet_after_top = false;
             }
             is_top = false;
+        }
+        if stack.len() > shown {
+            lines.push(format!("  ... {} more frame(s)", stack.len() - shown));
         }
     }
     lines
