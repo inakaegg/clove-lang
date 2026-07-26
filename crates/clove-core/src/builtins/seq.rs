@@ -1968,24 +1968,26 @@ impl TreeSeqEngine {
 }
 
 impl SeqEngine for TreeSeqEngine {
+    /// 1回の `next` でスタックから1ノード取り出し、その子を積んでから自分を返す。
+    /// 子は逆順に積むので、全体としては前順（pre-order）の深さ優先になる。
     fn next(&mut self) -> Result<Option<Value>, CloveError> {
-        while let Some(node) = self.stack.pop() {
-            let should_branch = call_callable(self.branch_fn.clone(), vec![node.clone()])?;
-            if truthy_value(&should_branch) {
-                let children_val = call_callable(self.children_fn.clone(), vec![node.clone()])?;
-                if let Some(handle) = seq_handle_from_value(children_val)? {
-                    let mut collected = Vec::new();
-                    while let Some(child) = handle.next()? {
-                        collected.push(child);
-                    }
-                    for child in collected.into_iter().rev() {
-                        self.stack.push(child);
-                    }
+        let Some(node) = self.stack.pop() else {
+            return Ok(None);
+        };
+        let should_branch = call_callable(self.branch_fn.clone(), vec![node.clone()])?;
+        if truthy_value(&should_branch) {
+            let children_val = call_callable(self.children_fn.clone(), vec![node.clone()])?;
+            if let Some(handle) = seq_handle_from_value(children_val)? {
+                let mut collected = Vec::new();
+                while let Some(child) = handle.next()? {
+                    collected.push(child);
+                }
+                for child in collected.into_iter().rev() {
+                    self.stack.push(child);
                 }
             }
-            return Ok(Some(node));
         }
-        Ok(None)
+        Ok(Some(node))
     }
 }
 
