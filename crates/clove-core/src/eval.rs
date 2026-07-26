@@ -12034,7 +12034,8 @@ pub fn to_key_value(val: Value) -> Key {
         Value::Int(n) => Key::Number(n),
         Value::Float(n) => Key::Number(n as i64),
         Value::Bool(b) => Key::Bool(b),
-        _ => Key::String(format!("{:?}", val)),
+        // to_key_value_checked と同じ正規化を使う。
+        _ => Key::String(crate::ast::canonical_key_repr(&val)),
     }
 }
 
@@ -12054,7 +12055,9 @@ pub fn to_key_value_checked(val: &Value) -> Result<Key, CloveError> {
         Value::MutVector(_) | Value::MutMap(_) | Value::MutSet(_) => Err(CloveError::runtime(
             "cannot use mutable collection as map key; use (imut x)",
         )),
-        other => Ok(Key::String(format!("{:?}", other))),
+        // Key で表せない複合値。Clove の表記へ正規化する（Rust の Debug 表記を
+        // 値として見せないため、また等しいマップが同じキーになるため）。
+        other => Ok(Key::String(crate::ast::canonical_key_repr(other))),
     }
 }
 

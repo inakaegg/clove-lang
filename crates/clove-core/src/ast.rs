@@ -1939,6 +1939,55 @@ fn format_key(k: &Key) -> String {
     }
 }
 
+/// [`Key`] で表せない複合値をマップのキーにするときの文字列表現。
+///
+/// `Key` は keyword / symbol / string / number / bool しか持たないため、マップや
+/// ベクタをキーにすると文字列へ落ちる。その表現に `format!("{:?}")` を使うと
+///
+/// - Rust の Debug 表記（`{Keyword("a"): 1}`）が値として利用者に見える
+/// - 等しいマップでも書いた順で別のキーになり、引けなくなる
+///
+/// の2つが起きる。ここでは Clove の表記で、かつ順序に依存しない形へ正規化する。
+/// 複合キーを `Key` 自体で表せるようにするのが本来の直し方。
+pub(crate) fn canonical_key_repr(value: &Value) -> String {
+    match value {
+        Value::Map(map) => {
+            let mut parts: Vec<String> = map
+                .iter()
+                .map(|(k, v)| format!("{} {}", format_key(k), canonical_key_repr(v)))
+                .collect();
+            parts.sort();
+            format!("{{{}}}", parts.join(" "))
+        }
+        Value::SortedMap(map) => {
+            let parts: Vec<String> = map
+                .entries
+                .iter()
+                .map(|(k, v)| format!("{} {}", format_key(k), canonical_key_repr(v)))
+                .collect();
+            format!("{{{}}}", parts.join(" "))
+        }
+        Value::Set(items) => {
+            let mut parts: Vec<String> = items.iter().map(canonical_key_repr).collect();
+            parts.sort();
+            format!("#{{{}}}", parts.join(" "))
+        }
+        Value::SortedSet(set) => {
+            let parts: Vec<String> = set.entries.iter().map(canonical_key_repr).collect();
+            format!("#{{{}}}", parts.join(" "))
+        }
+        Value::Vector(items) => {
+            let parts: Vec<String> = items.iter().map(canonical_key_repr).collect();
+            format!("[{}]", parts.join(" "))
+        }
+        Value::List(items) => {
+            let parts: Vec<String> = items.iter().map(canonical_key_repr).collect();
+            format!("({})", parts.join(" "))
+        }
+        other => other.to_string(),
+    }
+}
+
 fn format_float(n: f64) -> String {
     if n.fract() == 0.0 {
         format!("{:.1}", n)
