@@ -55,6 +55,26 @@ Clove は Clojure 風の Lisp を土台にしつつ、
 
 - [SDL2 examples](../examples/sdl2/README.md)
 
+## 設計ノート
+
+Clove が「なぜこうなっているのか」。仕様を選んだ理由と、選ばなかった案。
+
+- [設計ノート一覧](design-notes/README.ja.md)
+- [マクロを持たない](design-notes/no-macros.ja.md)
+- [名前空間区切りに `/` を使わない](design-notes/namespace-separator.ja.md)
+- [Clojure から採らなかったもの](design-notes/differences-from-clojure.ja.md)
+- [インタプリタとネイティブビルドの2経路](design-notes/two-phase-implementation.ja.md)
+- [型は任意注釈にとどめる](design-notes/gradual-typing.ja.md)
+- [`mut` と `imut`](design-notes/mutability.ja.md)
+- [他言語から借りた記法](design-notes/borrowed-syntax.ja.md)
+
+## ネイティブビルド経路（Phase2）
+
+- [Phase2 の設計と現状](phase2/README.ja.md)
+- [Phase2 の決定事項](phase2/DECISIONS.ja.md)
+- [既知の制限と不具合](tooling/build.ja.md#4-既知の制限と不具合)
+- [ベンチのソースと測定方法](phase2/bench/README.ja.md)
+
 ## 応用トピック
 
 - [名前空間設計ノート](advanced/namespaces_design.ja.md)

@@ -48,6 +48,10 @@ This distinction is part of the Phase2 compiler design and is implemented in `cl
 - In the current C backend, `upper-case`, `lower-case`, and `capitalize` accept ASCII strings only. A native executable reports an explicit runtime error for non-ASCII input instead of producing invalid UTF-8.
 - The C backend is experimental. Not every example accepted by the interpreter is buildable yet.
 
+For the measured list of what builds, what does not, and the currently known
+defects, see
+[Known limitations and defects](../tooling/build.md#4-known-limitations-and-defects).
+
 ## Build example
 
 Install the CLI from a clone:
@@ -91,6 +95,7 @@ These measurements predate the integrated C backend and are retained as a histor
 
 ## Related documentation
 
+- [Phase2 decisions](DECISIONS.md)
 - [Build command](../tooling/build.md)
 - [Benchmark sources and methodology](bench/README.md)
 - [Repository overview](../../README.md)
