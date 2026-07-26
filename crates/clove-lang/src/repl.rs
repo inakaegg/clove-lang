@@ -2666,7 +2666,7 @@ fn ends_with_dangling_nil_safe_marker(src: &str, forms: &[clove_core::ast::Form]
         prev = last_non_ws.map(|(last_idx, last_len, _)| (last_idx, last_len));
         last_non_ws = Some((idx, len, ch));
     }
-    let Some((last_idx, last_len, last_ch)) = last_non_ws else {
+    let Some((last_idx, _last_len, last_ch)) = last_non_ws else {
         return false;
     };
     if last_ch != '?' {

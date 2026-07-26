@@ -5,7 +5,6 @@ use clove_core::{
     options::EvalOptions,
 };
 use std::fs;
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn eval(src: &str) -> Value {

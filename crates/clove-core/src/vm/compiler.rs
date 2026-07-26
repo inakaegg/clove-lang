@@ -2267,7 +2267,7 @@ impl Compiler {
                 nil_safe_stages.push(stage.clone());
                 continue;
             }
-            current = self.build_oop_stage_call(stage, current, form.span)?;
+            current = self.build_oop_stage_call(stage, current)?;
             processed_stages += 1;
         }
         if nil_safe_active {
@@ -2556,12 +2556,7 @@ impl Compiler {
         Ok((base, true))
     }
 
-    fn build_oop_stage_call(
-        &self,
-        stage: &Form,
-        base: Form,
-        form_span: Span,
-    ) -> Result<Form, VmError> {
+    fn build_oop_stage_call(&self, stage: &Form, base: Form) -> Result<Form, VmError> {
         if let Some((placeholder, body)) = self.parse_oop_dot_stage(stage)? {
             return self.build_oop_dot_call(stage.span, placeholder, body, base);
         }
@@ -2618,7 +2613,7 @@ impl Compiler {
         };
         let tmp_name = format!("__oop_nil_safe{}_{}", form_span.index, idx);
         let tmp_sym = Form::new(FormKind::Symbol(tmp_name.clone()), stage.span);
-        let stage_form = self.build_oop_stage_call(stage, tmp_sym.clone(), form_span)?;
+        let stage_form = self.build_oop_stage_call(stage, tmp_sym.clone())?;
         let next_form = if rest.is_empty() {
             stage_form
         } else {

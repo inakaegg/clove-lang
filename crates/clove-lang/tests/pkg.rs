@@ -585,7 +585,7 @@ fn deps_sync_adds_native_plugin_dirs_from_lock() {
         exe_dir: None,
     });
 
-    let mut ctx = create_runtime(EvalOptions::default(), &default_engines());
+    let ctx = create_runtime(EvalOptions::default(), &default_engines());
     let err = ctx
         .eval_source("(require-native \"dummy\")")
         .expect_err("require-native should fail");

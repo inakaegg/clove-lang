@@ -28,19 +28,18 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionContext, CodeActionKind, CodeActionOrCommand, CodeActionParams,
+    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CompletionItem, CompletionItemKind,
     CompletionOptions, CompletionResponse, CompletionTextEdit, Diagnostic, DiagnosticSeverity,
     DidChangeConfigurationParams, DidCloseTextDocumentParams, DidSaveTextDocumentParams,
     DocumentSymbolParams, DocumentSymbolResponse, Documentation, GotoDefinitionParams,
     GotoDefinitionResponse, Hover, HoverContents, HoverProviderCapability, InitializeParams,
     InitializeResult, InlayHint, InlayHintKind, InlayHintParams, Location, MarkedString,
-    MarkupContent, MarkupKind, MessageType, OneOf, ParameterInformation, ParameterLabel,
-    PartialResultParams, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
-    RenameParams, ServerCapabilities, ServerInfo, SignatureHelp, SignatureHelpOptions,
-    SignatureHelpParams, SignatureInformation, TextDocumentContentChangeEvent,
-    TextDocumentIdentifier, TextDocumentPositionParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressParams, WorkspaceEdit,
+    MarkupContent, MarkupKind, MessageType, OneOf, ParameterInformation, ParameterLabel, Position,
+    PrepareRenameResponse, Range, ReferenceParams, RenameOptions, RenameParams, ServerCapabilities,
+    ServerInfo, SignatureHelp, SignatureHelpOptions, SignatureHelpParams, SignatureInformation,
+    TextDocumentContentChangeEvent, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
 use tower_lsp::{Client, LanguageServer};
 
@@ -7795,6 +7794,10 @@ fn global_plugin_dirs() -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // テストだけが組み立てるリクエスト型。
+    use tower_lsp::lsp_types::{
+        CodeActionContext, PartialResultParams, TextDocumentIdentifier, WorkDoneProgressParams,
+    };
 
     fn code_action_params_for_range(uri: &Url, range: Range) -> CodeActionParams {
         CodeActionParams {

@@ -4,7 +4,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clove_core::package_registry::{
-    clove_home, load_registry, save_registry, Install, PackageEntry, PackageId, Registry,
+    clove_home, load_registry, save_registry, Install, PackageId, Registry,
 };
 use serde_json::{Map, Value};
 

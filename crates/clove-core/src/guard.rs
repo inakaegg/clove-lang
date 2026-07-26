@@ -2,7 +2,7 @@ use crate::ast::Span;
 use crate::error::CloveError;
 use crate::interrupt;
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GuardConfig {
@@ -55,7 +55,9 @@ mod guard_impl {
     use super::*;
     use crate::error::WARN_TAG;
     use std::cell::RefCell;
+    // Instant はこのモジュールだけが使う。repl_guard を切ると外側では未使用になる。
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::time::Instant;
 
     static ENABLED: AtomicBool = AtomicBool::new(false);
     static SOFT_BYTES: AtomicU64 = AtomicU64::new(0);

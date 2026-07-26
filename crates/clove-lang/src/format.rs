@@ -451,7 +451,7 @@ fn extract_rubocop_output(output: &str) -> Option<String> {
 
 #[cfg(feature = "ruby")]
 fn strip_frozen_comment(s: &str) -> String {
-    let mut lines = s.lines();
+    let lines = s.lines();
     let mut dropped = false;
     let mut out = Vec::new();
     for line in lines {

@@ -7006,7 +7006,7 @@ mod tests {
         let src = "[{:keys [dir] :as state} events]";
         let mut reader = Reader::new(src);
         let forms = reader.read_all().expect("parse args vector");
-        let mut comments = CommentTable::from_source(
+        let comments = CommentTable::from_source(
             &forms,
             reader.take_comments(),
             reader.take_string_escapes(),

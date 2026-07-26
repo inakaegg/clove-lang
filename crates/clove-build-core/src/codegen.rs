@@ -2483,7 +2483,7 @@ fn emit_typed_pipeline(
         return None;
     }
     let range_spec = range_spec_from_ast(ctx, env, fns, locals, source);
-    let (coll, mut elem_kind) = if range_spec.is_some() {
+    let (coll, elem_kind) = if range_spec.is_some() {
         (None, TypedKind::Int)
     } else {
         let coll = emit_typed_expr(ctx, env, fns, locals, source)?;

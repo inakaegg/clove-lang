@@ -76,7 +76,7 @@ impl<T: 'static> NativeBufScopedGuard<T> {
         op: &str,
         f: impl FnOnce(&Vec<T>) -> Result<R, CloveError>,
     ) -> Result<R, CloveError> {
-        let mut guard = self
+        let guard = self
             .guard
             .take()
             .ok_or_else(|| CloveError::runtime(format!("{op} native buffer already borrowed")))?;
