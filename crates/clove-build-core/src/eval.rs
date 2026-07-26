@@ -1077,10 +1077,8 @@ impl Evaluator {
             values.push(self.eval_expr(arg, env.clone())?);
         }
         let has_float = values.iter().any(|v| matches!(v, Value::Float(_)));
-        if name == "inc" || name == "dec" {
-            if values.len() != 1 {
-                return Err(Clove2Error::new("inc/dec expects 1 argument"));
-            }
+        if (name == "inc" || name == "dec") && values.len() != 1 {
+            return Err(Clove2Error::new("inc/dec expects 1 argument"));
         }
         let mut acc = match values.first().unwrap() {
             Value::Int(v) => *v as f64,
@@ -1769,14 +1767,17 @@ impl Evaluator {
         }
         let mut on_error: Option<AstExpr> = None;
         let mut on_finally: Option<AstExpr> = None;
-        if catches.is_empty() && err_clause.is_none() && finally_body.is_none() {
-            if body.len() >= 2 && is_try_handler_expr(body.last().unwrap()) {
-                if is_try_handler_expr(&body[body.len() - 2]) {
-                    on_finally = body.pop();
-                    on_error = body.pop();
-                } else {
-                    on_error = body.pop();
-                }
+        if catches.is_empty()
+            && err_clause.is_none()
+            && finally_body.is_none()
+            && body.len() >= 2
+            && is_try_handler_expr(body.last().unwrap())
+        {
+            if is_try_handler_expr(&body[body.len() - 2]) {
+                on_finally = body.pop();
+                on_error = body.pop();
+            } else {
+                on_error = body.pop();
             }
         }
         if body.is_empty() {
@@ -5735,10 +5736,8 @@ impl Evaluator {
             };
         }
         let has_float = args.iter().any(|v| matches!(v, Value::Float(_)));
-        if name == "inc" || name == "dec" {
-            if args.len() != 1 {
-                return Err(Clove2Error::new("inc/dec expects 1 argument"));
-            }
+        if (name == "inc" || name == "dec") && args.len() != 1 {
+            return Err(Clove2Error::new("inc/dec expects 1 argument"));
         }
         let mut acc = match args.first().unwrap() {
             Value::Int(v) => *v as f64,

@@ -9896,7 +9896,7 @@ fn infer_call_with_signature(
     diags: &mut Vec<Diagnostic>,
     level: NativeLevel,
 ) -> Type {
-    if let Some(_) = rest {
+    if rest.is_some() {
         if args.len() < params.len() {
             diags.push(error_diag(format!(
                 "{} expects at least {} arguments",
@@ -10386,12 +10386,10 @@ fn infer_get_call(
     if args.len() == 3 {
         let default_ty = infer_expr(&args[2], env, diags, level);
         merge_types(value_ty, default_ty)
+    } else if missing_possible {
+        merge_types(value_ty, Type::Nil)
     } else {
-        if missing_possible {
-            merge_types(value_ty, Type::Nil)
-        } else {
-            value_ty
-        }
+        value_ty
     }
 }
 
@@ -11028,10 +11026,8 @@ fn is_assignable(value: &Type, expected: &Type) -> bool {
                     }
                     return value_shape.fields == expected_shape.fields;
                 }
-                if value_shape.open {
-                    if value_shape.fields.len() < expected_shape.fields.len() {
-                        return false;
-                    }
+                if value_shape.open && value_shape.fields.len() < expected_shape.fields.len() {
+                    return false;
                 }
                 expected_shape.fields.iter().all(|(key, exp_ty)| {
                     value_shape

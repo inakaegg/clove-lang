@@ -266,15 +266,14 @@ fn merge_lock_entries(
 ) -> Result<(), String> {
     for (pkg_key, dep) in updates {
         if let Some(existing) = lock.deps.get(&pkg_key) {
-            if existing.commit != dep.commit
-                || !origin_url_equivalent(&existing.origin_url, &dep.origin_url)
+            if (existing.commit != dep.commit
+                || !origin_url_equivalent(&existing.origin_url, &dep.origin_url))
+                && !force
             {
-                if !force {
-                    return Err(format!(
-                        "lock entry conflict for {} ({} @ {}) vs ({} @ {})",
-                        pkg_key, existing.commit, existing.origin_url, dep.commit, dep.origin_url
-                    ));
-                }
+                return Err(format!(
+                    "lock entry conflict for {} ({} @ {}) vs ({} @ {})",
+                    pkg_key, existing.commit, existing.origin_url, dep.commit, dep.origin_url
+                ));
             }
         }
         lock.deps.insert(pkg_key, dep);

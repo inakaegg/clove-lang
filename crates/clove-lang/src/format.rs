@@ -454,7 +454,7 @@ fn strip_frozen_comment(s: &str) -> String {
     let mut lines = s.lines();
     let mut dropped = false;
     let mut out = Vec::new();
-    while let Some(line) = lines.next() {
+    for line in lines {
         if !dropped && line.trim() == "# frozen_string_literal: true" {
             dropped = true;
             continue;

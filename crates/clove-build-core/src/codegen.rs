@@ -4000,11 +4000,7 @@ fn emit_typed_apply(
             let fixed_len = fixed_codes.len();
             let mut call_args = Vec::new();
             let mut extras = Vec::new();
-            let needed = if fixed_len >= params_len {
-                0
-            } else {
-                params_len - fixed_len
-            };
+            let needed = params_len.saturating_sub(fixed_len);
             out.push_str(&format!(
                 "        if {tail}.len() < {needed} {{\n            panic!(\"apply expects at least {params_len} arguments\");\n        }}\n",
                 tail = tail_ref,
@@ -5004,12 +5000,12 @@ fn emit_typed_sort(
                 chars_var = chars_var,
                 out_var = out_var
             );
-            return Some(TypedExpr {
+            Some(TypedExpr {
                 code,
                 kind: TypedKind::Str,
                 is_symbol: false,
                 can_move: true,
-            });
+            })
         }
         TypedKind::Vec(elem_kind) => {
             let elem_kind = *elem_kind;
@@ -5108,12 +5104,12 @@ fn emit_typed_sort(
                 coll_init = coll_init,
                 sort_body = sort_body
             );
-            return Some(TypedExpr {
+            Some(TypedExpr {
                 code,
                 kind: TypedKind::Vec(Box::new(elem_kind)),
                 is_symbol: false,
                 can_move: true,
-            });
+            })
         }
         _ => None,
     }
@@ -8554,14 +8550,16 @@ fn emit_native_try(
     }
     let mut on_error: Option<AstExpr> = None;
     let mut on_finally: Option<AstExpr> = None;
-    if catches.is_empty() && finally_body.is_none() {
-        if body.len() >= 2 && is_try_handler_expr(body.last().unwrap()) {
-            if is_try_handler_expr(&body[body.len() - 2]) {
-                on_finally = body.pop();
-                on_error = body.pop();
-            } else {
-                on_error = body.pop();
-            }
+    if catches.is_empty()
+        && finally_body.is_none()
+        && body.len() >= 2
+        && is_try_handler_expr(body.last().unwrap())
+    {
+        if is_try_handler_expr(&body[body.len() - 2]) {
+            on_finally = body.pop();
+            on_error = body.pop();
+        } else {
+            on_error = body.pop();
         }
     }
     if body.is_empty() {

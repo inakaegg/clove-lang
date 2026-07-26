@@ -868,10 +868,7 @@ impl ReplCompleter {
             MatchKind::Subsequence => {
                 let mut indices = Vec::new();
                 let mut frag_chars = fragment.chars();
-                let mut current = match frag_chars.next() {
-                    Some(ch) => ch,
-                    None => return None,
-                };
+                let mut current = frag_chars.next()?;
                 for (idx, ch) in name.chars().enumerate() {
                     if ch == current {
                         indices.push(idx);
@@ -2404,7 +2401,7 @@ fn visible_len(line: &str) -> usize {
         if ch == '\x1b' {
             if let Some('[') = chars.peek().copied() {
                 chars.next();
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if next == 'm' {
                         break;
                     }

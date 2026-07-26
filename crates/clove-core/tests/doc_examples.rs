@@ -507,12 +507,10 @@ fn find_skip_symbol(expr_src: &str, skip_symbols: &'static [&'static str]) -> Op
         })
         .filter(|s| !s.is_empty())
         .collect();
-    for sym in skip_symbols {
-        if tokens.iter().any(|tok| tok == sym) {
-            return Some(sym);
-        }
-    }
-    None
+    skip_symbols
+        .iter()
+        .copied()
+        .find(|sym| tokens.iter().any(|tok| tok == sym))
 }
 
 struct EnvVarGuard {

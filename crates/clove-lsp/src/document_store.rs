@@ -1253,25 +1253,23 @@ fn index_forms(
                     }
                 }
             }
-            if head == "defenum" {
-                if !qualified_only {
-                    for (member, fields) in enum_member_fields {
-                        let canonical = canonical_symbol_name(&member.name).into_owned();
-                        index.insert(SymbolInfo {
-                            name: member.name.clone(),
-                            canonical,
-                            kind: SymbolKind::Deftype,
-                            range: member.range,
-                            docstring: None,
-                            params: None,
-                            fields,
-                            enum_members: Vec::new(),
-                            namespace: namespace.map(|s| s.to_string()),
-                            namespace_aliases: namespace_aliases.to_vec(),
-                            arities: Vec::new(),
-                            is_private: false,
-                        });
-                    }
+            if head == "defenum" && !qualified_only {
+                for (member, fields) in enum_member_fields {
+                    let canonical = canonical_symbol_name(&member.name).into_owned();
+                    index.insert(SymbolInfo {
+                        name: member.name.clone(),
+                        canonical,
+                        kind: SymbolKind::Deftype,
+                        range: member.range,
+                        docstring: None,
+                        params: None,
+                        fields,
+                        enum_members: Vec::new(),
+                        namespace: namespace.map(|s| s.to_string()),
+                        namespace_aliases: namespace_aliases.to_vec(),
+                        arities: Vec::new(),
+                        is_private: false,
+                    });
                 }
             }
         }
