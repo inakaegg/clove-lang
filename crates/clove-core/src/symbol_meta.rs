@@ -132,43 +132,37 @@ pub fn clear_runtime(runtime_id: usize) {
 }
 
 #[cfg(test)]
-pub fn clear_for_tests() {
-    let mut guard = REGISTRY.write().unwrap();
-    guard.global.entries.clear();
-    guard.global.name_index.clear();
-    guard.per_runtime.clear();
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
+    // REGISTRY はプロセス全体で共有され、同じテストバイナリの他のテストも登録する。
+    // レジストリを空にすると他のテストの登録まで消えるので、このテスト専用の名前を使う。
+    const PROBE: &str = "symbol-meta-bare-name-probe";
+
     #[test]
     fn bare_name_lookup_is_ambiguous_when_colliding() {
-        clear_for_tests();
         register(
-            "ns-a::foo",
+            &format!("symbol-meta-probe-a::{PROBE}"),
             SymbolMeta {
                 doc: Some("a".into()),
                 meta: None,
                 source: None,
             },
         );
-        assert!(get("foo").is_some(), "single candidate should resolve");
+        assert!(get(PROBE).is_some(), "single candidate should resolve");
         register(
-            "ns-b::foo",
+            &format!("symbol-meta-probe-b::{PROBE}"),
             SymbolMeta {
                 doc: Some("b".into()),
                 meta: None,
                 source: None,
             },
         );
-        assert!(get("ns-a::foo").is_some());
-        assert!(get("ns-b::foo").is_some());
+        assert!(get(&format!("symbol-meta-probe-a::{PROBE}")).is_some());
+        assert!(get(&format!("symbol-meta-probe-b::{PROBE}")).is_some());
         assert!(
-            get("foo").is_none(),
+            get(PROBE).is_none(),
             "ambiguous bare name should not resolve"
         );
-        clear_for_tests();
     }
 }

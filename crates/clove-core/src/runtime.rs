@@ -4603,7 +4603,6 @@ mod tests {
     #[test]
     fn std_registers_metadata() {
         let _guard = EnvVarGuard::remove("CLOVE_NO_USER_CONFIG");
-        crate::fn_meta::clear_for_tests();
         let ctx = RuntimeCtx::new(EvalOptions::default(), &[]);
         let meta = ctx.with_current_ctx(|ctx| {
             let _ = ctx

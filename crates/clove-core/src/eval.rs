@@ -15494,7 +15494,6 @@ mod tests {
 
     #[test]
     fn defn_registers_fn_meta() {
-        fn_meta::clear_for_tests();
         eval_src("(do (defn sum [x: Int y: Int] -> Int (+ x y)) sum)");
         let meta = fn_meta::get("user::sum").expect("meta");
         assert_eq!(meta.ns, "user");
