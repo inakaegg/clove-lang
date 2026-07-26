@@ -346,9 +346,15 @@ pub(crate) fn install(env: &mut Env) {
         | [Value::String(ns), Value::Symbol(name)]
         | [Value::Symbol(ns), Value::String(name)]
         | [Value::String(ns), Value::String(name)] => {
+            // 区切りは `::`。`/` 区切りは言語から削除済みで、作ってもリーダーが
+            // 読み戻せない。phase2 の評価器も `::` を使う。
             let ns_part = ns.trim_start_matches(':');
             let name_part = name.trim_start_matches(':');
-            let sep = if name_part.starts_with('/') { "" } else { "/" };
+            let sep = if name_part.starts_with("::") {
+                ""
+            } else {
+                "::"
+            };
             Ok(Value::Symbol(format!(":{}{}{}", ns_part, sep, name_part)))
         }
         [_, _] => Err(CloveError::type_mismatch(

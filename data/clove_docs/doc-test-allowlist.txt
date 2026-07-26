@@ -49,11 +49,11 @@ ns
 #
 #
 # [F] 実装側の不具合・精度不足（docの期待値のほうが正しい）
-#  set::index: 出力のマップキーに Rust の Debug 表記 `{Keyword("a"): 1}` が混ざる
+#  set::index: doc は `{{:a 1} #{..}}`（マップをキーにする）を期待するが、Key が
+#  keyword/symbol/string/number/bool しか表せないため文字列キー `"{:a 1}"` になる。
+#  Rust の Debug 表記の漏れと順序依存は修正済み（tests/composite_map_keys.rs）。
+#  複合キーを Key で表せるようにするのが本来の直し
 set::index
-#  keyword: (keyword "ns" "name") が :ns/name を作る。`/` 区切りは言語から削除済みで、
-#  リーダーが読み戻せない
-keyword
 #  source: 出力に内部形式が漏れる（(defn f [x] (__apply + x 1))）
 source
 #  partial: 表示が #<lambda> になり、部分適用の情報が出ない
