@@ -103,7 +103,7 @@ fn debug_repl_stash_subject_is_first_arg() {
     match snapshot.args {
         Value::Vector(vec) => {
             assert_eq!(vec.len(), 2);
-            assert_eq!(vec.get(0).cloned(), Some(Value::Int(1)));
+            assert_eq!(vec.front().cloned(), Some(Value::Int(1)));
             assert_eq!(vec.get(1).cloned(), Some(Value::Int(0)));
         }
         other => panic!("*args is not vector: {}", other.type_name()),

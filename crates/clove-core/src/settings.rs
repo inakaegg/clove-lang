@@ -239,10 +239,7 @@ impl RuntimeSettings {
 
     pub fn assign_feature_toggle(&self, feature: FeatureToggle, pkg_id: &str, enabled: bool) {
         let mut guard = self.inner.write().unwrap();
-        let entry = guard
-            .pkg_flags
-            .entry(pkg_id.to_string())
-            .or_insert_with(PackageFlags::default);
+        let entry = guard.pkg_flags.entry(pkg_id.to_string()).or_default();
         match feature {
             FeatureToggle::Syntax(id) => entry.set_syntax(id, enabled),
             FeatureToggle::Runtime(RuntimeFeatureId::ReplOnError) => {

@@ -2994,7 +2994,7 @@ impl<'a> Compiler<'a> {
                 })
             }
             "hash-map" => {
-                if args.len() % 2 != 0 {
+                if !args.len().is_multiple_of(2) {
                     return Err(BackendError {
                         message: "hash-map expects even number of args".to_string(),
                     });
@@ -9674,6 +9674,18 @@ static bool clv_includes_str(const char* s, const char* needle) {
   return strstr(s, needle) != NULL;
 }
 
+/* 先頭 bytes バイトに含まれる文字数。index-of の戻り値は subs と同じ文字単位。 */
+static int64_t clv_utf8_char_count_n(const char* s, size_t bytes) {
+  int64_t count = 0;
+  const char* cursor = s;
+  const char* limit = s + bytes;
+  while (cursor < limit && *cursor != '\0') {
+    clv_utf8_next(&cursor);
+    ++count;
+  }
+  return count;
+}
+
 static int64_t clv_index_of_str(const char* s, const char* needle) {
   if (needle[0] == '\0') {
     return 0;
@@ -9682,21 +9694,21 @@ static int64_t clv_index_of_str(const char* s, const char* needle) {
   if (!pos) {
     return -1;
   }
-  return (int64_t)(pos - s);
+  return clv_utf8_char_count_n(s, (size_t)(pos - s));
 }
 
 static int64_t clv_last_index_of_str(const char* s, const char* needle) {
   size_t needle_len = strlen(needle);
   size_t s_len = strlen(s);
   if (needle_len == 0) {
-    return (int64_t)s_len;
+    return clv_utf8_char_count_n(s, s_len);
   }
   if (needle_len > s_len) {
     return -1;
   }
   for (size_t i = s_len - needle_len + 1; i-- > 0;) {
     if (memcmp(s + i, needle, needle_len) == 0) {
-      return (int64_t)i;
+      return clv_utf8_char_count_n(s, i);
     }
   }
   return -1;
@@ -9773,6 +9785,43 @@ mod tests {
             ],
         };
         assert_eq!(compile_and_run(&program), "sentinel\n");
+    }
+
+    #[test]
+    fn index_of_returns_char_index_like_subs() {
+        // subs / count は文字単位。index-of が byte offset を返すと
+        // (subs s (index-of s x)) が壊れる。
+        fn print(expr: Expr) -> TopLevel {
+            TopLevel::Expr(Expr::Call {
+                callee: "println".to_string(),
+                args: vec![expr],
+            })
+        }
+        fn call(callee: &str, args: Vec<Expr>) -> Expr {
+            Expr::Call {
+                callee: callee.to_string(),
+                args,
+            }
+        }
+        let text = || Expr::Str("aéb".to_string());
+        let program = FrontProgram {
+            top_levels: vec![
+                print(call("index-of", vec![text(), Expr::Str("b".to_string())])),
+                print(call(
+                    "last-index-of",
+                    vec![text(), Expr::Str("b".to_string())],
+                )),
+                print(call(
+                    "subs",
+                    vec![
+                        text(),
+                        call("index-of", vec![text(), Expr::Str("b".to_string())]),
+                    ],
+                )),
+                print(call("index-of", vec![text(), Expr::Str("z".to_string())])),
+            ],
+        };
+        assert_eq!(compile_and_run(&program), "2\n2\nb\n-1\n");
     }
 
     #[test]

@@ -29,12 +29,12 @@ pub(crate) fn install_primitives(env: &mut Env) {
     // --- Sequence Ops (Primitives) ---
     def_builtin!(env, "first", FnArity::exact(1), |args| {
         match args {
-            [Value::List(vs)] => Ok(vs.get(0).cloned().unwrap_or(Value::Nil)),
-            [Value::Vector(vs)] => Ok(vs.get(0).cloned().unwrap_or(Value::Nil)),
+            [Value::List(vs)] => Ok(vs.front().cloned().unwrap_or(Value::Nil)),
+            [Value::Vector(vs)] => Ok(vs.front().cloned().unwrap_or(Value::Nil)),
             [Value::MutVector(handle)] => Ok(handle
                 .lock()
                 .map_err(|_| CloveError::runtime("mutable vector lock poisoned"))?
-                .get(0)
+                .front()
                 .cloned()
                 .unwrap_or(Value::Nil)),
             [Value::Seq(handle)] => Ok(handle.peek()?.unwrap_or(Value::Nil)),
@@ -1362,7 +1362,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                     .unwrap_or(Value::Nil);
                 let mut call_args = Vec::with_capacity(1 + extra.len());
                 call_args.push(current);
-                call_args.extend_from_slice(&extra);
+                call_args.extend_from_slice(extra);
                 let new_val = call_callable(f.clone(), call_args)?;
                 new_map.insert(to_key_value_checked(key)?, to_imut_deep(&new_val)?);
                 Ok(Value::Map(new_map))
@@ -1373,7 +1373,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                 let current = sorted_map_get(&base, &lookup_key)?.unwrap_or(Value::Nil);
                 let mut call_args = Vec::with_capacity(1 + extra.len());
                 call_args.push(current);
-                call_args.extend_from_slice(&extra);
+                call_args.extend_from_slice(extra);
                 let new_val = call_callable(f.clone(), call_args)?;
                 let mut new_map = base;
                 sorted_map_insert_mut(&mut new_map, lookup_key, to_imut_deep(&new_val)?)?;
@@ -1389,7 +1389,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                             .unwrap_or(Value::Nil);
                         let mut call_args = Vec::with_capacity(1 + extra.len());
                         call_args.push(current);
-                        call_args.extend_from_slice(&extra);
+                        call_args.extend_from_slice(extra);
                         let new_val = call_callable(f.clone(), call_args)?;
                         let mut new_map = map;
                         new_map.insert(to_key_value_checked(key)?, to_imut_deep(&new_val)?);
@@ -1402,7 +1402,7 @@ pub(crate) fn install_primitives(env: &mut Env) {
                 let mut new_map = HashMap::new();
                 let mut call_args = Vec::with_capacity(1 + extra.len());
                 call_args.push(Value::Nil);
-                call_args.extend_from_slice(&extra);
+                call_args.extend_from_slice(extra);
                 let new_val = call_callable(f.clone(), call_args)?;
                 new_map.insert(to_key_value_checked(key)?, to_imut_deep(&new_val)?);
                 Ok(Value::Map(new_map))
@@ -1894,8 +1894,7 @@ fn flatten_into_vector(
         if matches!(value, Value::Nil) {
             continue;
         }
-        let can_flatten =
-            is_sequential_value(&value) && entry.depth.map_or(true, |depth| depth > 0);
+        let can_flatten = is_sequential_value(&value) && entry.depth.is_none_or(|depth| depth > 0);
         if can_flatten {
             let next_depth = entry.depth.map(|depth| depth.saturating_sub(1));
             push_sequential_items(&mut stack, value, next_depth)?;
@@ -1968,24 +1967,26 @@ impl TreeSeqEngine {
 }
 
 impl SeqEngine for TreeSeqEngine {
+    /// 1回の `next` でスタックから1ノード取り出し、その子を積んでから自分を返す。
+    /// 子は逆順に積むので、全体としては前順（pre-order）の深さ優先になる。
     fn next(&mut self) -> Result<Option<Value>, CloveError> {
-        while let Some(node) = self.stack.pop() {
-            let should_branch = call_callable(self.branch_fn.clone(), vec![node.clone()])?;
-            if truthy_value(&should_branch) {
-                let children_val = call_callable(self.children_fn.clone(), vec![node.clone()])?;
-                if let Some(handle) = seq_handle_from_value(children_val)? {
-                    let mut collected = Vec::new();
-                    while let Some(child) = handle.next()? {
-                        collected.push(child);
-                    }
-                    for child in collected.into_iter().rev() {
-                        self.stack.push(child);
-                    }
+        let Some(node) = self.stack.pop() else {
+            return Ok(None);
+        };
+        let should_branch = call_callable(self.branch_fn.clone(), vec![node.clone()])?;
+        if truthy_value(&should_branch) {
+            let children_val = call_callable(self.children_fn.clone(), vec![node.clone()])?;
+            if let Some(handle) = seq_handle_from_value(children_val)? {
+                let mut collected = Vec::new();
+                while let Some(child) = handle.next()? {
+                    collected.push(child);
+                }
+                for child in collected.into_iter().rev() {
+                    self.stack.push(child);
                 }
             }
-            return Ok(Some(node));
         }
-        Ok(None)
+        Ok(Some(node))
     }
 }
 
@@ -3774,7 +3775,7 @@ fn assoc_indexed(
     pairs: &[Value],
     as_list: bool,
 ) -> Result<Value, CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return err("assoc expects even number of key/value arguments");
     }
     let mut out = items.clone();
@@ -3803,7 +3804,7 @@ fn assoc_indexed(
 }
 
 fn assoc_indexed_mut(items: &mut Vector<Value>, pairs: &[Value]) -> Result<(), CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return err("assoc! expects even number of key/value arguments");
     }
     let mut iter = pairs.iter();
@@ -3827,7 +3828,7 @@ fn assoc_indexed_mut(items: &mut Vector<Value>, pairs: &[Value]) -> Result<(), C
 }
 
 fn assoc_indexed_mut_shallow(items: &mut Vector<Value>, pairs: &[Value]) -> Result<(), CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return err("assoc! expects even number of key/value arguments");
     }
     let mut iter = pairs.iter();
@@ -3968,9 +3969,10 @@ mod tests {
     #[test]
     fn subvec_defaults_end_and_works_on_seq() {
         let env = default_env();
-        let seq = Value::Seq(SeqHandle::from_iter(
-            vec![Value::String("a".into()), Value::String("b".into())].into_iter(),
-        ));
+        let seq = Value::Seq(SeqHandle::from_iter(vec![
+            Value::String("a".into()),
+            Value::String("b".into()),
+        ]));
         let res = call(&env, "subvec", vec![seq, Value::Int(1)]);
         assert_eq!(
             res,

@@ -28,19 +28,18 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    CodeAction, CodeActionContext, CodeActionKind, CodeActionOrCommand, CodeActionParams,
+    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams,
     CodeActionProviderCapability, CodeActionResponse, CompletionItem, CompletionItemKind,
     CompletionOptions, CompletionResponse, CompletionTextEdit, Diagnostic, DiagnosticSeverity,
     DidChangeConfigurationParams, DidCloseTextDocumentParams, DidSaveTextDocumentParams,
     DocumentSymbolParams, DocumentSymbolResponse, Documentation, GotoDefinitionParams,
     GotoDefinitionResponse, Hover, HoverContents, HoverProviderCapability, InitializeParams,
     InitializeResult, InlayHint, InlayHintKind, InlayHintParams, Location, MarkedString,
-    MarkupContent, MarkupKind, MessageType, OneOf, ParameterInformation, ParameterLabel,
-    PartialResultParams, Position, PrepareRenameResponse, Range, ReferenceParams, RenameOptions,
-    RenameParams, ServerCapabilities, ServerInfo, SignatureHelp, SignatureHelpOptions,
-    SignatureHelpParams, SignatureInformation, TextDocumentContentChangeEvent,
-    TextDocumentIdentifier, TextDocumentPositionParams, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextEdit, Url, WorkDoneProgressParams, WorkspaceEdit,
+    MarkupContent, MarkupKind, MessageType, OneOf, ParameterInformation, ParameterLabel, Position,
+    PrepareRenameResponse, Range, ReferenceParams, RenameOptions, RenameParams, ServerCapabilities,
+    ServerInfo, SignatureHelp, SignatureHelpOptions, SignatureHelpParams, SignatureInformation,
+    TextDocumentContentChangeEvent, TextDocumentPositionParams, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextEdit, Url, WorkspaceEdit,
 };
 use tower_lsp::{Client, LanguageServer};
 
@@ -1619,7 +1618,7 @@ fn type_field_completion_items(
             item.detail = Some(field.schema.clone());
         }
         item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-            range: replace_range.clone(),
+            range: *replace_range,
             new_text: field.name.clone(),
         }));
         items.push(item);
@@ -1650,7 +1649,7 @@ fn indexer_completion_items(
             item.detail = Some("map".to_string());
         }
         item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-            range: context.range.clone(),
+            range: context.range,
             new_text: field.name.clone(),
         }));
         items.push(item);
@@ -1754,7 +1753,7 @@ fn build_type_completion_item(
     item.kind = Some(kind);
     item.detail = detail;
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: label.to_string(),
     }));
     if let Some(symbol) = canonical {
@@ -2405,7 +2404,7 @@ fn fnmeta_completion_items(
         item.kind = Some(CompletionItemKind::FUNCTION);
         item.detail = fnmeta_signature_label(&label, &meta);
         item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-            range: replace_range.clone(),
+            range: *replace_range,
             new_text: label,
         }));
         items.push(item);
@@ -2443,7 +2442,7 @@ fn build_completion_item(entry: &DocEntry, replace_range: &Range) -> CompletionI
     item.detail = completion_detail(entry);
     item.documentation = documentation_for_entry(entry);
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: entry.name.clone(),
     }));
     item.data = Some(json!({ "symbol": entry.canonical.clone() }));
@@ -2461,7 +2460,7 @@ fn build_alias_completion_item(
     item.detail = completion_detail(entry);
     item.documentation = documentation_for_entry(entry);
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: alias.to_string(),
     }));
     item.data = Some(json!({ "symbol": entry.canonical.clone() }));
@@ -4212,7 +4211,7 @@ impl<'a> ReferenceAnalyzer<'a> {
                 if info.arities.is_empty() {
                     continue;
                 }
-                if info.arities.iter().any(|a| *a == arg_count) {
+                if info.arities.contains(&arg_count) {
                     return;
                 }
                 let expected = format_expected_arities(&info.arities);
@@ -5610,7 +5609,7 @@ fn oop_to_sexp(form: &Form, text: &str, doc: &DocumentData) -> Option<String> {
     Some(current)
 }
 
-fn parse_oop_index_stage<'a>(stage: &'a Form) -> Option<&'a Form> {
+fn parse_oop_index_stage(stage: &Form) -> Option<&Form> {
     let FormKind::List(items) = &stage.kind else {
         return None;
     };
@@ -5624,7 +5623,7 @@ fn parse_oop_index_stage<'a>(stage: &'a Form) -> Option<&'a Form> {
     items.get(1)
 }
 
-fn parse_oop_call_stage<'a>(stage: &'a Form) -> Option<(&'a Form, &'a str, Vec<&'a Form>)> {
+fn parse_oop_call_stage(stage: &Form) -> Option<(&Form, &str, Vec<&Form>)> {
     let FormKind::List(items) = &stage.kind else {
         return None;
     };
@@ -5800,11 +5799,7 @@ fn build_require_edit(doc: &DocumentData, target_ns: &str, sym: &str) -> Option<
             new_text: snippet,
         });
     }
-    let insertion = if text.is_empty() {
-        format!("(require {} refer [{}])\n", target_ns, sym)
-    } else {
-        format!("(require {} refer [{}])\n", target_ns, sym)
-    };
+    let insertion = format!("(require {} refer [{}])\n", target_ns, sym);
     let position = Position {
         line: 0,
         character: 0,
@@ -5818,7 +5813,7 @@ fn build_require_edit(doc: &DocumentData, target_ns: &str, sym: &str) -> Option<
     })
 }
 
-fn find_ns_form<'a>(doc: &'a DocumentData) -> Option<&'a Form> {
+fn find_ns_form(doc: &DocumentData) -> Option<&Form> {
     let forms = doc.ast.as_ref()?;
     for form in forms {
         if let FormKind::List(items) = &form.kind {
@@ -5836,7 +5831,7 @@ fn find_ns_form<'a>(doc: &'a DocumentData) -> Option<&'a Form> {
     None
 }
 
-fn find_require_option_form<'a>(ns_form: &'a Form) -> Option<&'a Form> {
+fn find_require_option_form(ns_form: &Form) -> Option<&Form> {
     let items = match &ns_form.kind {
         FormKind::List(items) => items,
         _ => return None,
@@ -6004,10 +5999,7 @@ fn symbol_token_range_from(line: &str, col: usize) -> (usize, usize) {
         if ch == ':' && angle_depth == 0 {
             let prev_is_colon = idx > start && chars[idx - 1] == ':';
             let next_is_colon = next == Some(':');
-            if idx > start
-                && !prev_is_colon
-                && !next_is_colon
-                && next.map_or(false, is_kw_seg_start)
+            if idx > start && !prev_is_colon && !next_is_colon && next.is_some_and(is_kw_seg_start)
             {
                 break;
             }
@@ -6018,13 +6010,13 @@ fn symbol_token_range_from(line: &str, col: usize) -> (usize, usize) {
                 if next == Some('(') {
                     break;
                 }
-                if next.map_or(false, is_oop_method_start) {
+                if next.is_some_and(is_oop_method_start) {
                     break;
                 }
                 if next == Some('"') {
                     break;
                 }
-                if next.map_or(false, |c| c.is_ascii_digit()) {
+                if next.is_some_and(|c| c.is_ascii_digit()) {
                     let numeric_prefix = chars[start..idx]
                         .iter()
                         .all(|c| c.is_ascii_digit() || *c == '_' || *c == '-');
@@ -6077,8 +6069,7 @@ fn find_word_occurrences(text: &str, word: &str) -> Vec<Range> {
             let abs = start + pos;
             let before = abs.checked_sub(1).and_then(|i| line.chars().nth(i));
             let after = line.chars().nth(abs + word.len());
-            if before.map_or(true, |c| !is_word_char(c)) && after.map_or(true, |c| !is_word_char(c))
-            {
+            if before.is_none_or(|c| !is_word_char(c)) && after.is_none_or(|c| !is_word_char(c)) {
                 ranges.push(Range {
                     start: Position {
                         line: line_idx as u32,
@@ -6931,7 +6922,7 @@ fn enum_variant_completion_items(
                 item.label = label.clone();
                 item.kind = Some(CompletionItemKind::ENUM_MEMBER);
                 item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-                    range: replace_range.clone(),
+                    range: *replace_range,
                     new_text: label,
                 }));
                 items.push(item);
@@ -7330,7 +7321,7 @@ fn scan_doseq_bindings(
                 .get(idx + 2)
                 .map(|f| span_offset(&f.span, text))
                 .or_else(|| items.get(2).map(|f| span_offset(&f.span, text)))
-                .unwrap_or_else(|| text.len());
+                .unwrap_or(text.len());
             if !(target_offset >= val_start && target_offset < val_end) {
                 scan_pattern(pat, text, target_offset, name, best);
             }
@@ -7373,7 +7364,7 @@ fn scan_for_bindings(
                                 .get(j + 2)
                                 .map(|f| span_offset(&f.span, text))
                                 .or_else(|| items.get(2).map(|f| span_offset(&f.span, text)))
-                                .unwrap_or_else(|| text.len());
+                                .unwrap_or(text.len());
                             if !(target_offset >= val_start && target_offset < val_end) {
                                 scan_pattern(&inner[j], text, target_offset, name, best);
                             }
@@ -7799,6 +7790,10 @@ fn global_plugin_dirs() -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // テストだけが組み立てるリクエスト型。
+    use tower_lsp::lsp_types::{
+        CodeActionContext, PartialResultParams, TextDocumentIdentifier, WorkDoneProgressParams,
+    };
 
     fn code_action_params_for_range(uri: &Url, range: Range) -> CodeActionParams {
         CodeActionParams {

@@ -17,8 +17,8 @@ use crate::eval::{call_callable, to_key_value_checked};
 use crate::io_reader::{reader_value, ReaderHandle};
 
 thread_local! {
-    static HANDLE_POOL: RefCell<Vec<Vec<ValueHandle>>> = RefCell::new(Vec::new());
-    static NATIVE_I32BUF_GUARDS: RefCell<Vec<Vec<NativeI32BufGuard>>> = RefCell::new(Vec::new());
+    static HANDLE_POOL: RefCell<Vec<Vec<ValueHandle>>> = const { RefCell::new(Vec::new()) };
+    static NATIVE_I32BUF_GUARDS: RefCell<Vec<Vec<NativeI32BufGuard>>> = const { RefCell::new(Vec::new()) };
 }
 
 pub struct EnvHandleBox {

@@ -154,11 +154,7 @@ fn lookup_unit(text: &str) -> Option<DurationUnit> {
         .unwrap_or(without_colon)
         .to_ascii_lowercase();
     for spec in UNIT_SPECS {
-        if spec
-            .keyword_aliases
-            .iter()
-            .any(|alias| *alias == tail.as_str())
-        {
+        if spec.keyword_aliases.contains(&tail.as_str()) {
             return Some(spec.unit);
         }
     }

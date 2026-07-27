@@ -654,7 +654,7 @@ fn rewrite_cond(items: &[Expr]) -> Result<Expr, Clove2Error> {
         return Err(Clove2Error::new("cond expects test and expr pairs"));
     }
     let clauses = &items[1..];
-    if clauses.len() % 2 != 0 {
+    if !clauses.len().is_multiple_of(2) {
         return Err(Clove2Error::new("cond expects even number of forms"));
     }
     let mut out = Expr::literal(Literal::Nil);
@@ -789,7 +789,7 @@ fn rewrite_cond_thread(items: &[Expr], insert_last: bool, name: &str) -> Result<
         )));
     }
     let clauses = &items[2..];
-    if clauses.len() % 2 != 0 {
+    if !clauses.len().is_multiple_of(2) {
         return Err(Clove2Error::new(format!(
             "{} expects even number of forms",
             name
@@ -1165,7 +1165,7 @@ fn rewrite_dotimes(items: &[Expr]) -> Result<Expr, Clove2Error> {
         return Err(Clove2Error::new("dotimes expects [name count]"));
     }
     let name_expr = bindings
-        .get(0)
+        .first()
         .ok_or_else(|| Clove2Error::new("dotimes expects name"))?;
     let ExprKind::Symbol(_) = &name_expr.kind else {
         return Err(Clove2Error::new("dotimes expects symbol name"));
@@ -1196,7 +1196,7 @@ fn rewrite_each(items: &[Expr]) -> Result<Expr, Clove2Error> {
                 return Err(Clove2Error::new("each expects [name coll]"));
             }
             let name_expr = items_vec
-                .get(0)
+                .first()
                 .ok_or_else(|| Clove2Error::new("each expects name"))?;
             let ExprKind::Symbol(_) = &name_expr.kind else {
                 return Err(Clove2Error::new("each expects symbol name"));

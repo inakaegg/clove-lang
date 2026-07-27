@@ -4,7 +4,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clove_core::package_registry::{
-    clove_home, load_registry, save_registry, Install, PackageEntry, PackageId, Registry,
+    clove_home, load_registry, save_registry, Install, PackageId, Registry,
 };
 use serde_json::{Map, Value};
 
@@ -754,10 +754,7 @@ pub(crate) fn ensure_origin_for_install(
     origin_url: &str,
     force: bool,
 ) -> Result<(), String> {
-    let entry = registry
-        .packages
-        .entry(pkg_id.key())
-        .or_insert_with(PackageEntry::default);
+    let entry = registry.packages.entry(pkg_id.key()).or_default();
     match entry.origin_url.as_ref() {
         None => {
             entry.origin_url = Some(origin_url.to_string());
@@ -787,10 +784,7 @@ fn update_registry(
     rev_spec: Option<&str>,
     installed_at: i64,
 ) -> Result<(), String> {
-    let entry = registry
-        .packages
-        .entry(pkg_id.key())
-        .or_insert_with(PackageEntry::default);
+    let entry = registry.packages.entry(pkg_id.key()).or_default();
     entry.installs.insert(
         commit.to_string(),
         Install {

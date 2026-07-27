@@ -420,7 +420,7 @@ fn infer_vector_with_tuple_hint(
     }
     for (item, (actual, expected)) in items.iter().zip(inferred.iter().zip(expected.iter())) {
         let expected_applied = st.subst.apply(expected);
-        st.try_unify(&actual, &expected_applied, item.span, true)?;
+        st.try_unify(actual, &expected_applied, item.span, true)?;
     }
     let applied = expected.iter().map(|t| st.subst.apply(t)).collect();
     Ok(Type::Tuple(applied))
@@ -2085,7 +2085,7 @@ fn infer_cond(items: &[Form], st: &mut InferState) -> Result<Type, TypeError> {
     if items.len() < 3 {
         return Ok(Type::Prim(PrimType::Nil));
     }
-    if (items.len() - 1) % 2 != 0 {
+    if !(items.len() - 1).is_multiple_of(2) {
         let message = "cond expects even number of test/expr pairs".to_string();
         if st.best_effort {
             st.record_diag(items[0].span, message);
@@ -2139,7 +2139,7 @@ fn infer_cond_thread(
     if items.len() == 2 {
         return infer_form(&items[1], st);
     }
-    if (items.len() - 2) % 2 != 0 {
+    if !(items.len() - 2).is_multiple_of(2) {
         let message = "cond-> expects pairs of test and form".to_string();
         if st.best_effort {
             st.record_diag(items[0].span, message);
@@ -2365,7 +2365,7 @@ fn synthetic_span(base: Span, tag: usize) -> Span {
     }
 }
 
-fn unwrap_oop_stage_items<'a>(items: &'a [Form]) -> &'a [Form] {
+fn unwrap_oop_stage_items(items: &[Form]) -> &[Form] {
     if items.len() >= 2 {
         if let FormKind::Symbol(sym) = &items[0].kind {
             if sym == APPLY_SYM {
@@ -3217,7 +3217,7 @@ fn infer_dotimes(items: &[Form], st: &mut InferState) -> Result<Type, TypeError>
     let saved = st.env.snapshot_bindings();
     let result = (|| {
         let pairs = parse_binding_pairs(bindings_form);
-        if let Some((binding, count_form)) = pairs.get(0) {
+        if let Some((binding, count_form)) = pairs.first() {
             let count_ty = infer_form(count_form, st)?;
             st.try_unify(&count_ty, &Type::Prim(PrimType::Int), count_form.span, true)?;
             if let Some((name, hint)) = binding_symbol(binding, st) {
@@ -3670,7 +3670,7 @@ fn keyword_shorthand_fields(items: &[Form]) -> Option<Vec<(String, Span)>> {
 }
 
 fn keyword_pair_fields(items: &[Form]) -> Option<Vec<(String, Form)>> {
-    if items.is_empty() || items.len() % 2 != 0 {
+    if items.is_empty() || !items.len().is_multiple_of(2) {
         return None;
     }
     let mut out = Vec::with_capacity(items.len() / 2);
@@ -4639,13 +4639,13 @@ fn infer_contains(items: &[Form], st: &mut InferState) -> Result<Type, TypeError
     let key_ty = infer_form(&items[2], st)?;
     match coll_ty.clone() {
         Type::Map(k, _) => {
-            st.try_unify(&*k, &key_ty, items[2].span, true)?;
+            st.try_unify(&k, &key_ty, items[2].span, true)?;
         }
         Type::Vector(inner) => {
-            st.try_unify(&*inner, &key_ty, items[2].span, true)?;
+            st.try_unify(&inner, &key_ty, items[2].span, true)?;
         }
         Type::Set(inner) => {
-            st.try_unify(&*inner, &key_ty, items[2].span, true)?;
+            st.try_unify(&inner, &key_ty, items[2].span, true)?;
         }
         _ => {}
     }

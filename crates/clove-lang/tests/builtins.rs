@@ -5,7 +5,6 @@ use clove_core::{
     options::EvalOptions,
 };
 use std::fs;
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn eval(src: &str) -> Value {
@@ -222,7 +221,7 @@ fn new_core_like_helpers() {
         other => panic!("expected map, got {:?}", other),
     }
     // spit / slurp roundtrip
-    let mut path = PathBuf::from(std::env::temp_dir());
+    let mut path = std::env::temp_dir();
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

@@ -48,7 +48,7 @@ impl ReaderHandle {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "io reader lock poisoned"))?;
+            .map_err(|_| io::Error::other("io reader lock poisoned"))?;
         if guard.reader.is_some() {
             guard.reader = None;
         }
@@ -61,11 +61,11 @@ impl Read for ReaderHandle {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "io reader lock poisoned"))?;
+            .map_err(|_| io::Error::other("io reader lock poisoned"))?;
         let reader = guard
             .reader
             .as_mut()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "io reader is already closed"))?;
+            .ok_or_else(|| io::Error::other("io reader is already closed"))?;
         reader.read(buf)
     }
 }
@@ -140,10 +140,7 @@ impl CallbackReader {
 impl Read for CallbackReader {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.closed {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "io reader is already closed",
-            ));
+            return Err(io::Error::other("io reader is already closed"));
         }
         let result = unsafe { (self.read_fn)(self.ctx, buf.as_mut_ptr(), buf.len()) };
         if result >= 0 {
@@ -152,7 +149,7 @@ impl Read for CallbackReader {
             let msg = self
                 .error_message()
                 .unwrap_or_else(|| "io reader read failed".to_string());
-            Err(io::Error::new(io::ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         }
     }
 }

@@ -1,10 +1,18 @@
 use crate::ast::{Form, FormKind, InterpolatedPart, MapItem, RegexDelim};
+
 pub fn form_to_source(form: &Form) -> String {
+    form_to_source_inner(form, false)
+}
+
+/// `in_quote` は「このフォームが quote の内側にあるか」。内側では `__apply` は
+/// コンパイラが入れたものではなくユーザーが書いたデータなので、落としてはいけない。
+fn form_to_source_inner(form: &Form, in_quote: bool) -> String {
+    let form_to_source = |f: &Form| form_to_source_inner(f, in_quote);
     match &form.kind {
         FormKind::Int(n) => n.to_string(),
         FormKind::Float(n) => format_float(*n),
         FormKind::String(s) => format!("\"{}\"", escape_string_fragment(s)),
-        FormKind::InterpolatedString(parts) => format_interpolated_string(parts),
+        FormKind::InterpolatedString(parts) => format_interpolated_string(parts, in_quote),
         FormKind::Bool(b) => {
             if *b {
                 "true".into()
@@ -25,9 +33,25 @@ pub fn form_to_source(form: &Form) -> String {
             RegexDelim::Hash => format!("#\"{}\"", escape_regex_fragment(pattern)),
             RegexDelim::HashSlash => format!("#/{}/", escape_regex_fragment(pattern)),
         },
-        FormKind::InterpolatedRegex { parts, delim } => format_interpolated_regex(parts, delim),
+        FormKind::InterpolatedRegex { parts, delim } => {
+            format_interpolated_regex(parts, delim, in_quote)
+        }
         FormKind::List(items) => {
-            let parts: Vec<String> = items.iter().map(form_to_source).collect();
+            // コンパイラは通常の呼び出しを `(__apply f args..)` へ下ろす。ソースとして
+            // 見せるときは元の `(f args..)` に戻す。内部形式を利用者へ出さない。
+            // quote の内側は下ろされていないので触らない。
+            let items = if in_quote {
+                items.as_slice()
+            } else {
+                strip_internal_apply(items)
+            };
+            // quote の中身はデータ。ここから先は書き換えない。
+            let inner_quote = in_quote
+                || matches!(items.first().map(|f| &f.kind), Some(FormKind::Symbol(s)) if s == "quote");
+            let parts: Vec<String> = items
+                .iter()
+                .map(|item| form_to_source_inner(item, inner_quote))
+                .collect();
             format!("({})", parts.join(" "))
         }
         FormKind::Vector(items) => {
@@ -62,7 +86,20 @@ pub fn form_to_source(form: &Form) -> String {
     }
 }
 
-fn format_interpolated_string(parts: &[InterpolatedPart]) -> String {
+/// `(__apply f args..)` から `__apply` を落とす。それ以外はそのまま。
+fn strip_internal_apply(items: &[Form]) -> &[Form] {
+    match items.split_first() {
+        Some((head, rest))
+            if !rest.is_empty()
+                && matches!(&head.kind, FormKind::Symbol(name) if name == crate::compiler::APPLY_SYM) =>
+        {
+            rest
+        }
+        _ => items,
+    }
+}
+
+fn format_interpolated_string(parts: &[InterpolatedPart], in_quote: bool) -> String {
     let mut buf = String::new();
     buf.push('"');
     for part in parts {
@@ -70,7 +107,7 @@ fn format_interpolated_string(parts: &[InterpolatedPart]) -> String {
             InterpolatedPart::Text(text) => buf.push_str(&escape_string_fragment(text)),
             InterpolatedPart::Expr(expr) => {
                 buf.push_str("#{");
-                buf.push_str(&form_to_source(expr));
+                buf.push_str(&form_to_source_inner(expr, in_quote));
                 buf.push('}');
             }
         }
@@ -79,7 +116,11 @@ fn format_interpolated_string(parts: &[InterpolatedPart]) -> String {
     buf
 }
 
-fn format_interpolated_regex(parts: &[InterpolatedPart], delim: &RegexDelim) -> String {
+fn format_interpolated_regex(
+    parts: &[InterpolatedPart],
+    delim: &RegexDelim,
+    in_quote: bool,
+) -> String {
     let (prefix, suffix) = match delim {
         RegexDelim::Slash => ("/", "/"),
         RegexDelim::Hash => ("#\"", "\""),
@@ -92,7 +133,7 @@ fn format_interpolated_regex(parts: &[InterpolatedPart], delim: &RegexDelim) -> 
             InterpolatedPart::Text(text) => buf.push_str(&escape_regex_fragment(text)),
             InterpolatedPart::Expr(expr) => {
                 buf.push_str("#{");
-                buf.push_str(&form_to_source(expr));
+                buf.push_str(&form_to_source_inner(expr, in_quote));
                 buf.push('}');
             }
         }

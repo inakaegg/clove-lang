@@ -666,7 +666,7 @@ fn install_atom_builtins(env: &mut Env) {
         FnArity::at_least(2),
         |args| match args {
             [Value::Atom(handle), func, rest @ ..] => {
-                let extras = rest.iter().cloned().collect::<Vec<_>>();
+                let extras = rest.to_vec();
                 handle.update_with_callable(func.clone(), extras)
             }
             [other, ..] => Err(type_mismatch_arg("atom", "atom-update!", 1, other)),
@@ -1211,7 +1211,7 @@ fn install_agent_builtins(env: &mut Env) {
                 for item in rest {
                     reject_mut_boundary("agent-send!", item)?;
                 }
-                let payload = rest.iter().cloned().collect::<Vec<_>>();
+                let payload = rest.to_vec();
                 handle.send(func.clone(), payload);
                 Ok(Value::Agent(handle.clone()))
             }
@@ -1228,7 +1228,7 @@ fn install_agent_builtins(env: &mut Env) {
                 for item in rest {
                     reject_mut_boundary("agent-send-io!", item)?;
                 }
-                let payload = rest.iter().cloned().collect::<Vec<_>>();
+                let payload = rest.to_vec();
                 handle.send(func.clone(), payload);
                 Ok(Value::Agent(handle.clone()))
             }

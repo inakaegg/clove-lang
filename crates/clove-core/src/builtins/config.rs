@@ -142,6 +142,7 @@ fn generate_ini(v: &Value) -> Result<Value, CloveError> {
             crate::ast::Key::Symbol(s) => Some(s.clone()),
             crate::ast::Key::Number(n) => Some(n.to_string()),
             crate::ast::Key::Bool(b) => Some(b.to_string()),
+            crate::ast::Key::Composite(k) => Some(k.repr().to_string()),
         };
         let props = map_like_to_hashmap(&v, "ini::generate", 1)?;
         for (pk, pv) in props {
@@ -159,6 +160,7 @@ fn generate_ini(v: &Value) -> Result<Value, CloveError> {
                 crate::ast::Key::Symbol(s) => s.clone(),
                 crate::ast::Key::Number(n) => n.to_string(),
                 crate::ast::Key::Bool(b) => b.to_string(),
+                crate::ast::Key::Composite(k) => k.repr().to_string(),
             };
             if let Some(section_name) = section.as_deref() {
                 if section_name.is_empty() {

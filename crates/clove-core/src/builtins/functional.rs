@@ -376,7 +376,7 @@ pub(crate) fn install(env: &mut Env) {
                 let (n, _) = as_number(n)?;
                 let n = n.max(0.0) as usize;
                 let seq = seq_items(coll)?;
-                let first: Vector<Value> = seq.iter().cloned().take(n).collect();
+                let first: Vector<Value> = seq.iter().take(n).cloned().collect();
                 let second: Vector<Value> = seq.into_iter().skip(n).collect();
                 Ok(Value::Vector(Vector::from(vec![
                     Value::Vector(first),
@@ -1096,9 +1096,7 @@ mod tests {
     #[test]
     fn take_last_handles_seq_and_shorter_length() {
         let env = default_env();
-        let seq = Value::Seq(SeqHandle::from_iter(
-            vec![Value::Int(5), Value::Int(6)].into_iter(),
-        ));
+        let seq = Value::Seq(SeqHandle::from_iter(vec![Value::Int(5), Value::Int(6)]));
         let res = call(&env, "take-last", vec![Value::Int(5), seq]);
         assert_eq!(
             res,

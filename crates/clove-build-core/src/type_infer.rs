@@ -81,7 +81,7 @@ pub fn infer_program_with_expr_spans(
         if spans.len() == trace.len() {
             summary.expr_types = spans
                 .into_iter()
-                .zip(trace.into_iter())
+                .zip(trace)
                 .map(|(span, entry)| ExprTypeEntry {
                     span,
                     kind: entry.kind,
@@ -837,13 +837,8 @@ fn narrow_type(value: &Type, target: &Type, env: &TypeEnv) -> Type {
                 Type::union(keep)
             }
         }
-        _ => {
-            if is_assignable_with_env(value, target, env) {
-                value.clone()
-            } else {
-                value.clone()
-            }
-        }
+        // union 以外は絞り込まない。単一型の narrowing は未実装。
+        _ => value.clone(),
     }
 }
 
@@ -862,13 +857,8 @@ fn exclude_type(value: &Type, target: &Type, env: &TypeEnv) -> Type {
                 Type::union(keep)
             }
         }
-        _ => {
-            if is_assignable_with_env(value, target, env) {
-                value.clone()
-            } else {
-                value.clone()
-            }
-        }
+        // union 以外は除外しない。単一型を除いた結果を表す型がまだない。
+        _ => value.clone(),
     }
 }
 
@@ -3308,7 +3298,7 @@ fn seq_head_type_for_elem(name: &str, elem_ty: &Type) -> Option<Type> {
     match elem_ty {
         Type::Vec(inner) => Some((**inner).clone()),
         Type::Tuple(items) => match name {
-            "first" | "peek" => items.get(0).cloned(),
+            "first" | "peek" => items.first().cloned(),
             "second" => items.get(1).cloned(),
             "last" => items.last().cloned(),
             _ => None,
@@ -4543,7 +4533,7 @@ fn infer_reduce_call(
                 let mut elem_opt = None;
                 if let Some(init_ty) = &init_ty {
                     if let Type::Vec(inner) = init_ty {
-                        let init_is_empty = args.get(1).map_or(false, is_empty_collection_literal);
+                        let init_is_empty = args.get(1).is_some_and(is_empty_collection_literal);
                         if **inner != Type::Any || !init_is_empty {
                             elem_opt = Some((**inner).clone());
                         }
@@ -5198,7 +5188,7 @@ fn infer_juxt_call(
             return Type::Any;
         }
 
-        let other_rest_elem = other_rest.as_deref().and_then(|ty| rest_elem_type(ty));
+        let other_rest_elem = other_rest.as_deref().and_then(rest_elem_type);
         for (idx, base) in params.iter().enumerate() {
             let expected = if idx < other_params.len() {
                 other_params[idx].clone()
@@ -5222,7 +5212,7 @@ fn infer_juxt_call(
             }
         }
         if other_params.len() > params.len() {
-            let rest_elem = match rest.as_deref().and_then(|ty| rest_elem_type(ty)) {
+            let rest_elem = match rest.as_deref().and_then(rest_elem_type) {
                 Some(rest_elem) => rest_elem,
                 None => {
                     diags.push(error_diag(
@@ -6189,7 +6179,7 @@ fn resolve_literal_path_type(raw_ty: &Type, path_expr: &AstExpr, env: &TypeEnv) 
                     _ => None,
                 };
                 if let Some(field) = field {
-                    shape.fields.get(&field).cloned().unwrap_or_else(|| {
+                    shape.fields.get(&field).cloned().unwrap_or({
                         if shape.open {
                             Type::Any
                         } else {
@@ -8406,7 +8396,7 @@ fn infer_hash_map_call(
     if args.is_empty() {
         return Type::Map(Box::new(Type::Any), Box::new(Type::Any));
     }
-    if args.len() % 2 != 0 {
+    if !args.len().is_multiple_of(2) {
         diags.push(error_diag("hash-map expects even arguments".to_string()));
         return Type::Map(Box::new(Type::Any), Box::new(Type::Any));
     }
@@ -8700,7 +8690,7 @@ fn infer_assoc_call(
     diags: &mut Vec<Diagnostic>,
     level: NativeLevel,
 ) -> Type {
-    if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
         diags.push(error_diag(
             "assoc expects map and key/value pairs".to_string(),
         ));
@@ -9896,7 +9886,7 @@ fn infer_call_with_signature(
     diags: &mut Vec<Diagnostic>,
     level: NativeLevel,
 ) -> Type {
-    if let Some(_) = rest {
+    if rest.is_some() {
         if args.len() < params.len() {
             diags.push(error_diag(format!(
                 "{} expects at least {} arguments",
@@ -10386,12 +10376,10 @@ fn infer_get_call(
     if args.len() == 3 {
         let default_ty = infer_expr(&args[2], env, diags, level);
         merge_types(value_ty, default_ty)
+    } else if missing_possible {
+        merge_types(value_ty, Type::Nil)
     } else {
-        if missing_possible {
-            merge_types(value_ty, Type::Nil)
-        } else {
-            value_ty
-        }
+        value_ty
     }
 }
 
@@ -10493,7 +10481,7 @@ fn infer_try_call(
     }
     env.push();
     let mut idx = 0;
-    if let Some(AstExpr::Vector(items)) = args.get(0) {
+    if let Some(AstExpr::Vector(items)) = args.first() {
         let mut i = 0;
         while i < items.len() {
             let (name, consumed) = parse_try_binding_name(items, i, diags);
@@ -10538,7 +10526,7 @@ fn infer_try_call(
         && body_refs.len() >= 2
         && is_try_handler_expr(body_refs.last().unwrap())
     {
-        if is_try_handler_expr(&body_refs[body_refs.len() - 2]) {
+        if is_try_handler_expr(body_refs[body_refs.len() - 2]) {
             on_finally = body_refs.pop();
             on_error = body_refs.pop();
         } else {
@@ -11028,10 +11016,8 @@ fn is_assignable(value: &Type, expected: &Type) -> bool {
                     }
                     return value_shape.fields == expected_shape.fields;
                 }
-                if value_shape.open {
-                    if value_shape.fields.len() < expected_shape.fields.len() {
-                        return false;
-                    }
+                if value_shape.open && value_shape.fields.len() < expected_shape.fields.len() {
+                    return false;
                 }
                 expected_shape.fields.iter().all(|(key, exp_ty)| {
                     value_shape
@@ -12105,7 +12091,7 @@ fn contains_any(ty: &Type) -> bool {
         Type::Union(items) => items.iter().any(contains_any),
         Type::Function { params, rest, ret } => {
             params.iter().any(contains_any)
-                || rest.as_deref().map_or(false, contains_any)
+                || rest.as_deref().is_some_and(contains_any)
                 || contains_any(ret)
         }
         _ => false,
@@ -12123,7 +12109,7 @@ fn contains_dyn(ty: &Type) -> bool {
         Type::Union(items) => items.iter().any(contains_dyn),
         Type::Function { params, rest, ret } => {
             params.iter().any(contains_dyn)
-                || rest.as_deref().map_or(false, contains_dyn)
+                || rest.as_deref().is_some_and(contains_dyn)
                 || contains_dyn(ret)
         }
         _ => false,
@@ -12141,7 +12127,7 @@ fn contains_nil(ty: &Type) -> bool {
         Type::Tuple(items) => items.iter().any(contains_nil),
         Type::Function { params, rest, ret } => {
             params.iter().any(contains_nil)
-                || rest.as_deref().map_or(false, contains_nil)
+                || rest.as_deref().is_some_and(contains_nil)
                 || contains_nil(ret)
         }
         _ => false,

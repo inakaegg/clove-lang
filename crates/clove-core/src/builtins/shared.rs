@@ -243,7 +243,7 @@ pub(crate) fn sorted_map_from_pairs(
     op: &str,
     arg_offset: usize,
 ) -> Result<SortedMap, CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return super::err(format!("{} expects even number of key/value arguments", op));
     }
     let mut out = SortedMap {
@@ -364,7 +364,13 @@ pub(crate) fn map_like_to_hashmap(
 }
 
 fn compare_keys(comparator: &Value, left: &Key, right: &Key) -> Result<Ordering, CloveError> {
-    compare_values(comparator, &key_to_value(left), &key_to_value(right))
+    // 複合キーは正規化した表記で比べる。compare はベクタ同士やマップ同士を
+    // 比べられないので、元の値を渡すと sorted-map が作れなくなる。
+    let to_comparable = |key: &Key| match key {
+        Key::Composite(k) => Value::String(k.repr().to_string()),
+        other => key_to_value(other),
+    };
+    compare_values(comparator, &to_comparable(left), &to_comparable(right))
 }
 
 fn compare_values(comparator: &Value, left: &Value, right: &Value) -> Result<Ordering, CloveError> {
@@ -408,10 +414,10 @@ pub(crate) fn seq_handle_from_value(v: Value) -> Result<Option<SeqHandle>, Clove
     let handle = match v {
         Value::Nil => return Ok(None),
         Value::Seq(handle) => handle,
-        Value::List(items) => SeqHandle::from_iter(items.into_iter()),
-        Value::Vector(items) => SeqHandle::from_iter(items.into_iter()),
-        Value::Set(items) => SeqHandle::from_iter(items.into_iter()),
-        Value::SortedSet(items) => SeqHandle::from_iter(items.entries.into_iter()),
+        Value::List(items) => SeqHandle::from_iter(items),
+        Value::Vector(items) => SeqHandle::from_iter(items),
+        Value::Set(items) => SeqHandle::from_iter(items),
+        Value::SortedSet(items) => SeqHandle::from_iter(items.entries),
         Value::MutVector(handle) => {
             let items: Vec<Value> = handle
                 .lock()
@@ -613,7 +619,7 @@ pub(crate) fn conj_on_value(coll: Value, item: Value) -> Result<Value, CloveErro
 }
 
 pub(crate) fn assoc_map(base: &HashMap<Key, Value>, pairs: &[Value]) -> Result<Value, CloveError> {
-    if pairs.len() % 2 != 0 {
+    if !pairs.len().is_multiple_of(2) {
         return super::err("assoc expects even number of key/value arguments");
     }
     let mut new_map = base.clone();
@@ -1300,6 +1306,7 @@ pub(crate) fn key_to_string(key: &Key) -> String {
         Key::String(s) => s.clone(),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 

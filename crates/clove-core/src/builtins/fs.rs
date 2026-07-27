@@ -471,9 +471,9 @@ fn parse_glob_only(op: &str, arg_index: usize, value: &Value) -> Result<GlobOnly
         "file" => Ok(GlobOnly::File),
         "dir" => Ok(GlobOnly::Dir),
         "any" => Ok(GlobOnly::Any),
-        _ => Err(CloveError::runtime(format!(
-            "glob :only must be :file, :dir, or :any"
-        ))),
+        _ => Err(CloveError::runtime(
+            "glob :only must be :file, :dir, or :any".to_string(),
+        )),
     }
 }
 
@@ -489,9 +489,9 @@ fn parse_glob_on_error(
     match raw {
         "skip" => Ok(GlobOnError::Skip),
         "throw" => Ok(GlobOnError::Throw),
-        _ => Err(CloveError::runtime(format!(
-            "glob :on-error must be :skip or :throw"
-        ))),
+        _ => Err(CloveError::runtime(
+            "glob :on-error must be :skip or :throw".to_string(),
+        )),
     }
 }
 

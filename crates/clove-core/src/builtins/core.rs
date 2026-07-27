@@ -346,9 +346,15 @@ pub(crate) fn install(env: &mut Env) {
         | [Value::String(ns), Value::Symbol(name)]
         | [Value::Symbol(ns), Value::String(name)]
         | [Value::String(ns), Value::String(name)] => {
+            // 区切りは `::`。`/` 区切りは言語から削除済みで、作ってもリーダーが
+            // 読み戻せない。phase2 の評価器も `::` を使う。
             let ns_part = ns.trim_start_matches(':');
             let name_part = name.trim_start_matches(':');
-            let sep = if name_part.starts_with('/') { "" } else { "/" };
+            let sep = if name_part.starts_with("::") {
+                ""
+            } else {
+                "::"
+            };
             Ok(Value::Symbol(format!(":{}{}{}", ns_part, sep, name_part)))
         }
         [_, _] => Err(CloveError::type_mismatch(
@@ -464,7 +470,7 @@ pub(crate) fn install(env: &mut Env) {
         Ok(Value::Vector(Vector::from(args.to_vec())))
     });
     def_builtin!(env, "hash-map", FnArity::at_least(0), |args| {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return err("hash-map expects even number of key/value args");
         }
         let mut map = HashMap::new();
@@ -784,8 +790,8 @@ pub(crate) fn install(env: &mut Env) {
                     let mut new_map = HashMap::new();
                     for (k, v) in map_coll {
                         let new_key = mapping
-                            .get(&k)
-                            .map(|repl| to_key_value_checked(repl))
+                            .get(k)
+                            .map(to_key_value_checked)
                             .transpose()?
                             .unwrap_or_else(|| k.clone());
                         new_map.insert(new_key, v.clone());
@@ -800,7 +806,7 @@ pub(crate) fn install(env: &mut Env) {
                     for (k, v) in &map_coll.entries {
                         let new_key = mapping
                             .get(k)
-                            .map(|repl| to_key_value_checked(repl))
+                            .map(to_key_value_checked)
                             .transpose()?
                             .unwrap_or_else(|| k.clone());
                         sorted_map_insert_mut(&mut out, new_key, v.clone())?;
@@ -827,7 +833,7 @@ pub(crate) fn install(env: &mut Env) {
                 Value::Map(map_coll) => {
                     let mut new_map = HashMap::new();
                     for (k, v) in map_coll {
-                        let new_key = if let Some(repl) = sorted_map_get(mapping, &k)? {
+                        let new_key = if let Some(repl) = sorted_map_get(mapping, k)? {
                             to_key_value_checked(&repl)?
                         } else {
                             k.clone()
@@ -1229,6 +1235,8 @@ fn format_key(k: &Key) -> String {
         Key::String(s) => format!("\"{}\"", escape_string_fragment(s)),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        // 既に Clove 構文なのでそのまま出す。
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 
@@ -1374,7 +1382,7 @@ fn doc_from_name(name: &str) -> Option<String> {
             return Some(doc);
         }
     }
-    docs::find_doc_entry(name).and_then(|entry| docs::format_doc_entry(entry))
+    docs::find_doc_entry(name).and_then(docs::format_doc_entry)
 }
 
 fn source_from_name(name: &str) -> Option<String> {

@@ -142,6 +142,8 @@ fn format_key(k: &Key) -> String {
         Key::String(s) => format!("\"{}\"", escape_string_fragment(s)),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        // 既に Clove 構文なのでそのまま出す。
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 

@@ -220,6 +220,7 @@ fn key_to_string(key: &Key) -> String {
         Key::Symbol(s) => s.clone(),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 

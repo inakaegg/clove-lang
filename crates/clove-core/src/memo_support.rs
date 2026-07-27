@@ -1,5 +1,6 @@
 use crate::ast::{
-    DurationValue, Form, FormKind, HashMap, Key, LocalDefn, MapItem, RegexValue, Value, Vector,
+    CompositeKey, DurationValue, Form, FormKind, HashMap, Key, LocalDefn, MapItem, RegexValue,
+    Value, Vector,
 };
 use crate::error::CloveError;
 use im::HashSet as ImHashSet;
@@ -56,6 +57,11 @@ enum SerializableKey {
     String(String),
     Number(i64),
     Bool(bool),
+    /// 複合キー。正規化した表記（同一性はこれで決まる）と元の値の両方を残す。
+    Composite {
+        repr: String,
+        value: Box<SerializableValue>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -264,7 +270,7 @@ fn serialize_value(value: &Value) -> Result<SerializableValue, SerializationErro
             let mut pairs: Vec<(SerializableKey, SerializableValue)> = map
                 .entries
                 .iter()
-                .map(|(k, v)| Ok((SerializableKey::from_key(k), serialize_value(v)?)))
+                .map(|(k, v)| Ok((SerializableKey::from_key(k)?, serialize_value(v)?)))
                 .collect::<Result<_, SerializationError>>()?;
             pairs.sort_by(|(left, _), (right, _)| left.sort_key().cmp(&right.sort_key()));
             Ok(SerializableValue::Map(pairs))
@@ -272,7 +278,7 @@ fn serialize_value(value: &Value) -> Result<SerializableValue, SerializationErro
         Value::Map(map) => {
             let mut pairs: Vec<(SerializableKey, SerializableValue)> = map
                 .iter()
-                .map(|(k, v)| Ok((SerializableKey::from_key(k), serialize_value(v)?)))
+                .map(|(k, v)| Ok((SerializableKey::from_key(k)?, serialize_value(v)?)))
                 .collect::<Result<_, SerializationError>>()?;
             pairs.sort_by(|(left, _), (right, _)| left.sort_key().cmp(&right.sort_key()));
             Ok(SerializableValue::Map(pairs))
@@ -283,7 +289,7 @@ fn serialize_value(value: &Value) -> Result<SerializableValue, SerializationErro
                 .iter()
                 .map(serialize_value)
                 .collect::<Result<Vec<_>, _>>()?;
-            items.sort_by(|a, b| canonical_json(a).cmp(&canonical_json(b)));
+            items.sort_by_key(canonical_json);
             Ok(SerializableValue::Set(items))
         }
         Value::Set(set) => {
@@ -291,7 +297,7 @@ fn serialize_value(value: &Value) -> Result<SerializableValue, SerializationErro
                 .iter()
                 .map(serialize_value)
                 .collect::<Result<Vec<_>, _>>()?;
-            items.sort_by(|a, b| canonical_json(a).cmp(&canonical_json(b)));
+            items.sort_by_key(canonical_json);
             Ok(SerializableValue::Set(items))
         }
         Value::Symbol(s) => Ok(SerializableValue::Symbol(s.clone())),
@@ -358,7 +364,7 @@ impl SerializableValue {
             SerializableValue::Map(entries) => {
                 let mut map = HashMap::new();
                 for (k, v) in entries {
-                    map.insert(k.into_key(), v.into_value()?);
+                    map.insert(k.into_key()?, v.into_value()?);
                 }
                 Ok(Value::Map(map))
             }
@@ -429,7 +435,7 @@ fn base64_encode(bytes: &[u8]) -> String {
     if bytes.is_empty() {
         return String::new();
     }
-    let mut out = String::with_capacity(((bytes.len() + 2) / 3) * 4);
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     let mut i = 0;
     while i < bytes.len() {
         let b0 = bytes[i];
@@ -507,24 +513,33 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
 }
 
 impl SerializableKey {
-    fn from_key(key: &Key) -> Self {
-        match key {
+    fn from_key(key: &Key) -> Result<Self, SerializationError> {
+        Ok(match key {
             Key::Keyword(s) => SerializableKey::Keyword(s.clone()),
             Key::Symbol(s) => SerializableKey::Symbol(s.clone()),
             Key::String(s) => SerializableKey::String(s.clone()),
             Key::Number(n) => SerializableKey::Number(*n),
             Key::Bool(b) => SerializableKey::Bool(*b),
-        }
+            Key::Composite(k) => SerializableKey::Composite {
+                repr: k.repr().to_string(),
+                value: Box::new(serialize_value(k.value())?),
+            },
+        })
     }
 
-    fn into_key(self) -> Key {
-        match self {
+    fn into_key(self) -> Result<Key, String> {
+        Ok(match self {
             SerializableKey::Keyword(s) => Key::Keyword(s),
             SerializableKey::Symbol(s) => Key::Symbol(s),
             SerializableKey::String(s) => Key::String(s),
             SerializableKey::Number(n) => Key::Number(n),
             SerializableKey::Bool(b) => Key::Bool(b),
-        }
+            // 表記からではなく元の値から作り直す。表記だけだと文字列キーと
+            // 区別が付かなくなる。
+            SerializableKey::Composite { value, .. } => {
+                Key::Composite(CompositeKey::new(&value.into_value()?))
+            }
+        })
     }
 
     fn sort_key(&self) -> String {
@@ -534,6 +549,7 @@ impl SerializableKey {
             SerializableKey::String(s) => format!("\"{}\"", s),
             SerializableKey::Number(n) => format!("{}", n),
             SerializableKey::Bool(b) => format!("{}", b),
+            SerializableKey::Composite { repr, .. } => format!("#{}", repr),
         }
     }
 }

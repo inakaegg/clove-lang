@@ -247,7 +247,8 @@ fn rewrite_list(
         _ => None,
     };
     if let Some(sym) = head_symbol {
-        if sym == "quote" || sym == "comment" {
+        // doto は評価前のフォームを順に適用するので、中を書き換えると別物になる。
+        if sym == "quote" || sym == "comment" || sym == "doto" {
             return RewriteResult {
                 src: form_to_source(form),
                 converted: false,
@@ -263,7 +264,13 @@ fn rewrite_list(
     let mut converted = false;
     let parts: Vec<String> = items
         .iter()
-        .map(|item| {
+        .enumerate()
+        .map(|(idx, item)| {
+            // 呼び出しの先頭が式のとき（`((constantly 42) :ignored)`）、そこを
+            // OOPチェーンへ書き換えると呼び出し全体の読まれ方が変わる。触らない。
+            if idx == 0 && head_symbol.is_none() {
+                return form_to_source(item);
+            }
             let rewritten = rewrite_form(item, config, next_in_quote);
             converted |= rewritten.converted;
             rewritten.src
@@ -284,6 +291,15 @@ fn rewrite_call(sym: &str, args: &[Form], config: RewriteConfig<'_>) -> Option<R
     if receiver_index == 0 || receiver_index > args.len() {
         return None;
     }
+    if !can_be_oop_receiver(&args[receiver_index - 1]) {
+        return None;
+    }
+    // `[pat coll]` 糖衣を含む呼び出しは、主語を動かすと束縛の外へ出てしまう。
+    // 例: (filter [x [1 2 3 4]] (odd? x)) の主語は (odd? x) だが、
+    //     (odd? x).filter([x [1 2 3 4]]) では x が束縛されていない。
+    if args.iter().any(is_pattern_coll_sugar) {
+        return None;
+    }
     let mut converted = true;
     let mut args_vec: Vec<Form> = args.to_vec();
     let receiver = args_vec.remove(receiver_index - 1);
@@ -302,6 +318,32 @@ fn rewrite_call(sym: &str, args: &[Form], config: RewriteConfig<'_>) -> Option<R
         format!("{}.{}({})", receiver_src.src, sym, args_joined)
     };
     Some(RewriteResult { src, converted })
+}
+
+/// 主語（`x.f(..)` の `x`）にできる形か。
+///
+/// できない形を主語へ持ち上げると、成立しないOOP例が生成される。
+///
+/// - キーワードを主語にすると `:a.hash-map(1 :b 2)` のように読まれ、メソッド呼び出しでは
+///   なく索引適用になる（`cannot apply index to symbol`）
+/// - `[pat coll]` 糖衣（`(filter [x xs] (odd? x))` の第1引数）は束縛を含む特殊な形で、
+///   主語へ動かすと `x` が未束縛になる
+fn can_be_oop_receiver(form: &Form) -> bool {
+    match &form.kind {
+        FormKind::Keyword(_) => false,
+        FormKind::Symbol(sym) if sym.starts_with(':') => false,
+        _ => !is_pattern_coll_sugar(form),
+    }
+}
+
+/// `[pat coll]` 糖衣か（先頭がシンボルの2要素ベクタ）。
+fn is_pattern_coll_sugar(form: &Form) -> bool {
+    match &form.kind {
+        FormKind::Vector(items) => {
+            items.len() == 2 && matches!(&items[0].kind, FormKind::Symbol(_))
+        }
+        _ => false,
+    }
 }
 
 fn resolve_subject_pos(sym: &str, origin: &str) -> Option<SubjectPos> {

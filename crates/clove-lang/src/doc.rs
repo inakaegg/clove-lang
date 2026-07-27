@@ -155,7 +155,7 @@ fn overload_is_generic_any(overload: &fn_meta::FnOverload) -> bool {
         && overload
             .rest
             .as_ref()
-            .map_or(true, |ty| matches!(ty, TypeKind::Any))
+            .is_none_or(|ty| matches!(ty, TypeKind::Any))
         && matches!(overload.ret_type, TypeKind::Any)
 }
 

@@ -444,7 +444,7 @@ impl ReplCompleter {
             push_entry(name, value, source);
         }
 
-        for name in SPECIAL_FORMS.iter().copied() {
+        for name in SPECIAL_FORMS {
             push_entry(name.to_string(), None, SymbolSource::SpecialForm);
         }
         if include_docs {
@@ -452,7 +452,7 @@ impl ReplCompleter {
                 push_entry(name, None, SymbolSource::Docs);
             }
         }
-        for lit in LITERAL_CANDIDATES.iter().copied() {
+        for lit in LITERAL_CANDIDATES {
             push_entry(lit.to_string(), None, SymbolSource::Literal);
         }
         entries
@@ -479,17 +479,17 @@ impl ReplCompleter {
             group_names.dedup();
             for entry in group_entries {
                 let display_name = canonical_symbol_name(&entry.name).into_owned();
-                let match_kind = if Self::symbol_starts_with(&display_name, fragment) {
-                    MatchKind::Prefix
-                } else if fragment.is_empty() {
-                    MatchKind::Prefix
-                } else if Self::symbol_contains(&display_name, fragment) {
-                    MatchKind::Contains
-                } else if Self::symbol_subsequence(&display_name, fragment) {
-                    MatchKind::Subsequence
-                } else {
-                    continue;
-                };
+                // 空のフラグメントは全件が前方一致。
+                let match_kind =
+                    if fragment.is_empty() || Self::symbol_starts_with(&display_name, fragment) {
+                        MatchKind::Prefix
+                    } else if Self::symbol_contains(&display_name, fragment) {
+                        MatchKind::Contains
+                    } else if Self::symbol_subsequence(&display_name, fragment) {
+                        MatchKind::Subsequence
+                    } else {
+                        continue;
+                    };
                 let aliases: Vec<String> = group_names
                     .iter()
                     .filter(|name| *name != &display_name)
@@ -705,13 +705,9 @@ impl ReplCompleter {
 
     fn build_suggestion(&self, choice: &SymbolChoice, span: Span) -> Suggestion {
         let display = choice.display.clone();
-        let description = self.describe_symbol(&display).and_then(|info| {
-            Some(format_description(
-                &info,
-                &choice.aliases,
-                choice.alias_of.as_deref(),
-            ))
-        });
+        let description = self
+            .describe_symbol(&display)
+            .map(|info| format_description(&info, &choice.aliases, choice.alias_of.as_deref()));
         Suggestion {
             value: display,
             description,
@@ -868,10 +864,7 @@ impl ReplCompleter {
             MatchKind::Subsequence => {
                 let mut indices = Vec::new();
                 let mut frag_chars = fragment.chars();
-                let mut current = match frag_chars.next() {
-                    Some(ch) => ch,
-                    None => return None,
-                };
+                let mut current = frag_chars.next()?;
                 for (idx, ch) in name.chars().enumerate() {
                     if ch == current {
                         indices.push(idx);
@@ -1250,7 +1243,7 @@ pub fn interactive_repl_with_context(ctx: Arc<RuntimeCtx>) {
 }
 
 fn start_repl_loop(ctx: Arc<RuntimeCtx>) {
-    ctx.with_current_ctx(|ctx| start_repl_loop_inner(ctx));
+    ctx.with_current_ctx(start_repl_loop_inner);
 }
 
 fn start_repl_loop_inner(ctx: Arc<RuntimeCtx>) {
@@ -1300,7 +1293,7 @@ fn start_repl_loop_inner(ctx: Arc<RuntimeCtx>) {
     let mut rl = Reedline::create()
         .with_quick_completions(false)
         .with_validator(Box::new(ReplValidator))
-        .with_highlighter(Box::new(ReplHighlighter::default()))
+        .with_highlighter(Box::new(ReplHighlighter))
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(create_completion_menu()))
         .with_edit_mode(edit_mode)
@@ -1660,7 +1653,7 @@ impl<'a> InlineReplSession<'a> {
         let mut rl = Reedline::create()
             .with_quick_completions(false)
             .with_validator(Box::new(ReplValidator))
-            .with_highlighter(Box::new(ReplHighlighter::default()))
+            .with_highlighter(Box::new(ReplHighlighter))
             .with_completer(completer)
             .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
             .with_edit_mode(edit_mode)
@@ -1986,7 +1979,7 @@ enum MetaResult {
 }
 
 fn normalize_command(line: &str) -> Option<String> {
-    let mut parts = line.trim().split_whitespace();
+    let mut parts = line.split_whitespace();
     let cmd = parts.next()?;
     if parts.next().is_some() {
         return None;
@@ -2167,7 +2160,7 @@ fn render_nav_result(value: &Value) -> Vec<String> {
     lines
 }
 
-fn nav_collect_entries<'a>(value: Option<&'a Value>) -> Vec<&'a Value> {
+fn nav_collect_entries(value: Option<&Value>) -> Vec<&Value> {
     let Some(Value::Vector(items)) = value else {
         return Vec::new();
     };
@@ -2210,7 +2203,7 @@ fn escape_regex_slash(pattern: &str) -> String {
             out.push(ch);
             continue;
         }
-        if ch == '/' && backslash_run % 2 == 0 {
+        if ch == '/' && backslash_run.is_multiple_of(2) {
             out.push('\\');
         }
         out.push(ch);
@@ -2388,7 +2381,7 @@ fn should_page(content: &str) -> bool {
     let mut total_lines = 0usize;
     for line in content.split('\n') {
         let visible = visible_len(line);
-        let wrapped = ((visible + columns - 1) / columns).max(1);
+        let wrapped = visible.div_ceil(columns).max(1);
         total_lines = total_lines.saturating_add(wrapped);
         if total_lines > max_lines {
             return true;
@@ -2404,7 +2397,7 @@ fn visible_len(line: &str) -> usize {
         if ch == '\x1b' {
             if let Some('[') = chars.peek().copied() {
                 chars.next();
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if next == 'm' {
                         break;
                     }
@@ -2673,7 +2666,7 @@ fn ends_with_dangling_nil_safe_marker(src: &str, forms: &[clove_core::ast::Form]
         prev = last_non_ws.map(|(last_idx, last_len, _)| (last_idx, last_len));
         last_non_ws = Some((idx, len, ch));
     }
-    let Some((last_idx, last_len, last_ch)) = last_non_ws else {
+    let Some((last_idx, _last_len, last_ch)) = last_non_ws else {
         return false;
     };
     if last_ch != '?' {
@@ -3003,6 +2996,46 @@ fn home_dir() -> Option<PathBuf> {
 
 fn is_path_separator(ch: char) -> bool {
     ch == '/' || ch == '\\'
+}
+fn print_doc_full(info: &DocInfo) {
+    let mut lines = Vec::new();
+    if let Some(sig) = &info.signature {
+        lines.push(sig.to_string());
+    } else {
+        lines.push(info.name.clone());
+    }
+    let alias_line = doc_aliases(info, &[]);
+    if !alias_line.is_empty() {
+        lines.push(format!("alias: {}", alias_line.join(", ")));
+    }
+    if let Some(origin) = &info.origin {
+        lines.push(format!("source: {}", origin));
+    }
+    match &info.doc {
+        Some(text) => lines.push(text.to_string()),
+        None => lines.push("(no documentation available)".to_string()),
+    }
+    if let Some(examples) =
+        doc::doc_examples_for(&info.canonical).or_else(|| doc::doc_examples_for(&info.name))
+    {
+        if !examples.is_empty() {
+            lines.push("examples:".to_string());
+            for ex in examples {
+                lines.push(format!("  {}", ex));
+            }
+        }
+    }
+    if let Some(examples) =
+        doc::doc_oop_examples_for(&info.canonical).or_else(|| doc::doc_oop_examples_for(&info.name))
+    {
+        if !examples.is_empty() {
+            lines.push("oop examples:".to_string());
+            for ex in examples {
+                lines.push(format!("  {}", ex));
+            }
+        }
+    }
+    print_lines_with_optional_pager(lines);
 }
 
 #[cfg(test)]
@@ -3621,44 +3654,4 @@ mod tests {
     fn print_lines_with_optional_pager_does_not_panic() {
         super::print_lines_with_optional_pager(vec!["a".to_string(), "b".to_string()]);
     }
-}
-fn print_doc_full(info: &DocInfo) {
-    let mut lines = Vec::new();
-    if let Some(sig) = &info.signature {
-        lines.push(sig.to_string());
-    } else {
-        lines.push(info.name.clone());
-    }
-    let alias_line = doc_aliases(info, &[]);
-    if !alias_line.is_empty() {
-        lines.push(format!("alias: {}", alias_line.join(", ")));
-    }
-    if let Some(origin) = &info.origin {
-        lines.push(format!("source: {}", origin));
-    }
-    match &info.doc {
-        Some(text) => lines.push(text.to_string()),
-        None => lines.push("(no documentation available)".to_string()),
-    }
-    if let Some(examples) =
-        doc::doc_examples_for(&info.canonical).or_else(|| doc::doc_examples_for(&info.name))
-    {
-        if !examples.is_empty() {
-            lines.push("examples:".to_string());
-            for ex in examples {
-                lines.push(format!("  {}", ex));
-            }
-        }
-    }
-    if let Some(examples) =
-        doc::doc_oop_examples_for(&info.canonical).or_else(|| doc::doc_oop_examples_for(&info.name))
-    {
-        if !examples.is_empty() {
-            lines.push("oop examples:".to_string());
-            for ex in examples {
-                lines.push(format!("  {}", ex));
-            }
-        }
-    }
-    print_lines_with_optional_pager(lines);
 }

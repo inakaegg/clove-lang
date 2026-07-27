@@ -30,3 +30,27 @@ fn puts_alias_resolves() {
     let value = run_str("(puts \"alias\")").expect("puts should evaluate");
     assert_eq!(value, Value::Nil);
 }
+
+#[test]
+fn index_of_uses_char_indices() {
+    // clove-core / Cバックエンド と同じ文字単位の添字であること。
+    // ここは以前から文字単位だが、3実装が揃っていることを固定しておく。
+    let value = run_str(
+        "[(index-of \"aéb\" \"b\")
+          (last-index-of \"aéb\" \"b\")
+          (subs \"aéb\" (index-of \"aéb\" \"b\"))
+          (index-of \"aéba\" \"a\" 1)
+          (last-index-of \"banana\" \"na\" 4)]",
+    )
+    .expect("index-of should evaluate");
+    assert_eq!(
+        value,
+        Value::vec(vec![
+            Value::Int(2),
+            Value::Int(2),
+            Value::Str("b".to_string()),
+            Value::Int(3),
+            Value::Int(2),
+        ])
+    );
+}

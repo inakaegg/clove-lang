@@ -51,7 +51,7 @@ fn assoc_on_mut_returns_immutable_and_does_not_mutate() {
         Value::Vector(vec) => vec,
         other => panic!("expected vector, got {}", other.type_name()),
     };
-    let m = items.get(0).expect("missing m");
+    let m = items.front().expect("missing m");
     let r = items.get(1).expect("missing r");
     match m {
         Value::MutMap(handle) => {
@@ -276,6 +276,6 @@ fn merge_bang_mut_map_merges_entries() {
         Value::Vector(vec) => vec,
         other => panic!("expected vector, got {}", other.type_name()),
     };
-    assert_eq!(items.get(0), Some(&Value::Int(3)));
+    assert_eq!(items.front(), Some(&Value::Int(3)));
     assert_eq!(items.get(1), Some(&Value::Int(2)));
 }

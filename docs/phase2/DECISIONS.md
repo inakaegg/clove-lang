@@ -161,6 +161,30 @@ which is a different thing.
 
 ---
 
+## Calls in the C backend (2026-07-27)
+
+The C backend has no notion of a C function: a call is compiled by expanding the
+callee's body at the call site. That is why a recursive function cannot be built
+([known limitations](../tooling/build.md#4-known-limitations-and-defects)).
+
+Two ways out were considered. **Emitting C functions** solves recursion, mutual
+recursion, and passing functions as values in one move, but rewrites the backend's
+value model and scoping. **Generalising arity and reporting recursion as an explicit
+error** is small and leaves recursion unsupported.
+
+**Decision: keep the explicit-error approach for now.** Emitting C functions stays a
+later task, not a commitment.
+
+The reason is ordering, not preference. The backend still decides its own `CType`,
+which cannot express a function type or a type variable, so it cannot type the C
+functions it would emit. Receiving the **typed IR** (already decided above) is the
+step that removes that obstacle, and it is needed either way. Doing it first also
+means the work is not wasted if emitting C functions is never taken up.
+
+Revisit once the backend receives the typed IR, and measure the remaining work then.
+
+---
+
 ## Design review (2026-03-07)
 
 - The root problem is not the backend's implementation language but the **split

@@ -109,11 +109,13 @@ fn check_doc_examples() {
         }
         for (idx, example) in entry.examples.iter().enumerate() {
             if start_time.elapsed() > Duration::from_secs(EXAMPLE_BUDGET_SECS) {
-                eprintln!(
-                    "stop doc examples after {:?} (executed {})",
+                // 打ち切って成功扱いにすると「検査したふり」になる。失敗として残す。
+                failures.push(format!(
+                    "doc examples exceeded the {}s budget after {:?} (executed {}); the corpus was not fully checked",
+                    EXAMPLE_BUDGET_SECS,
                     start_time.elapsed(),
                     executed
-                );
+                ));
                 break 'entry_loop;
             }
             let trimmed = example.trim();
@@ -193,11 +195,13 @@ fn check_oop_doc_examples() {
         }
         for (idx, example) in entry.examples.iter().enumerate() {
             if start_time.elapsed() > Duration::from_secs(EXAMPLE_BUDGET_SECS) {
-                eprintln!(
-                    "stop oop doc examples after {:?} (executed {})",
+                // 打ち切って成功扱いにすると「検査したふり」になる。失敗として残す。
+                failures.push(format!(
+                    "oop doc examples exceeded the {}s budget after {:?} (executed {}); the corpus was not fully checked",
+                    EXAMPLE_BUDGET_SECS,
                     start_time.elapsed(),
                     executed
-                );
+                ));
                 break 'entry_loop;
             }
             let trimmed = example.trim();
@@ -264,7 +268,7 @@ fn check_oop_doc_examples() {
             }
             let original_ctx = runtime_ctx(&repo_root);
             let original = match original_ctx.eval_source(&parts.expr_src) {
-                Ok(value) => value,
+                Ok(value) => realize_value(value),
                 Err(err) => {
                     failures.push(format!(
                         "{} example #{} original error: {}",
@@ -278,7 +282,7 @@ fn check_oop_doc_examples() {
             let oop_src = format!("(use oop-syntax true)\n{}", oop_parts.expr_src);
             let oop_ctx = runtime_ctx(&repo_root);
             let oop_value = match oop_ctx.eval_source(&oop_src) {
-                Ok(value) => value,
+                Ok(value) => realize_value(value),
                 Err(err) => {
                     failures.push(format!(
                         "{} example #{} oop error: {} (oop: {})",
@@ -292,7 +296,7 @@ fn check_oop_doc_examples() {
             };
             let original_rendered = render_value(&original);
             let oop_rendered = render_value(&oop_value);
-            if oop_rendered != expected {
+            if !matches_expected(&oop_ctx, &oop_value, &parts.expected_src) {
                 failures.push(format!(
                     "{} example #{} expected mismatch (expected {}, got {})\n  oop: {}",
                     entry.name,
@@ -303,7 +307,7 @@ fn check_oop_doc_examples() {
                 ));
                 continue;
             }
-            if oop_rendered != original_rendered {
+            if shape_of(&oop_value) != shape_of(&original) {
                 failures.push(format!(
                     "{} example #{} value mismatch (orig {}, oop {})\n  expr: {}\n  oop: {}",
                     entry.name,
@@ -350,18 +354,161 @@ fn run_example(
     expected_src: &str,
 ) -> Result<(), String> {
     let actual = match actual_ctx.eval_source(expr_src) {
-        Ok(value) => value,
+        Ok(value) => realize_value(value),
         Err(err) => return Err(format!("expr error: {}", err)),
     };
-    let actual_rendered = render_value(&actual);
-    let expected = clean_expected(expected_src);
-    if actual_rendered == expected {
+    if matches_expected(actual_ctx, &actual, expected_src) {
         Ok(())
     } else {
         Err(format!(
             "mismatch (expected {}, got {})",
-            expected, actual_rendered
+            clean_expected(expected_src),
+            render_value(&actual)
         ))
+    }
+}
+
+/// lazy seq を実体化する。
+///
+/// `SeqHandle::collect_all` は seq を消費するので、同じ値を2回レンダリングすると
+/// 2回目は空になる。比較とエラーメッセージで同じ値を何度も見るため、先に潰しておく。
+/// doc では seq もリストも `(..)` 表記なので `Value::List` へ落として構わない。
+fn realize_value(value: Value) -> Value {
+    match value {
+        Value::Seq(handle) => match handle.collect_all() {
+            Ok(items) => Value::List(items.into_iter().map(realize_value).collect()),
+            Err(_) => Value::Seq(handle),
+        },
+        Value::List(items) => Value::List(items.into_iter().map(realize_value).collect()),
+        Value::Vector(items) => Value::Vector(items.into_iter().map(realize_value).collect()),
+        Value::Map(map) => Value::Map(
+            map.into_iter()
+                .map(|(k, v)| (k, realize_value(v)))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+/// doc の期待値と実際の値が一致するか。
+///
+/// 期待値を Clove の値として読み直して**値として**比べる。文字列比較だけだと、
+/// 文字列中の `"` のエスケープ、複数行文字列、マップのキー順という
+/// 「値としては同じもの」で落ちる。
+///
+/// `#<lambda>` のように読み戻せない期待値は Clove 値にできないので、
+/// 従来どおりレンダリング結果の文字列で比べる。
+fn matches_expected(ctx: &Arc<RuntimeCtx>, actual: &Value, expected_src: &str) -> bool {
+    let expected = clean_expected(expected_src);
+    if render_value(actual) == expected {
+        return true;
+    }
+    match parse_expected_value(ctx, &expected) {
+        Some(expected_value) => shape_of(actual) == shape_of(&expected_value),
+        None => false,
+    }
+}
+
+/// 期待値の式を評価せずに値へ変換する。`(1 2 3)` は呼び出しではなくリストなので
+/// `quote` を通す。読めない表記（`#<lambda>` など）は `None`。
+fn parse_expected_value(ctx: &Arc<RuntimeCtx>, expected: &str) -> Option<Value> {
+    if expected.is_empty() {
+        return None;
+    }
+    ctx.eval_source(&format!("(quote {})", expected))
+        .ok()
+        .map(realize_value)
+}
+
+/// 値の比較用の正規形。
+///
+/// - 数値は従来のレンダリングに合わせて文字列で持つ（`3` と `3.0` を区別しない）
+/// - list と lazy seq は doc ではどちらも `(..)` なので同じものとして扱う
+/// - set とマップはキーで並べ替えるので、要素順・キー順に依存しない
+/// - 比較できない値（関数・atom・chan など）はレンダリング文字列で持つ
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Shape {
+    Nil,
+    Bool(bool),
+    Num(String),
+    Str(String),
+    /// シンボルとキーワード（Cloveのキーワードは `:` 付きのシンボル）
+    Sym(String),
+    /// Key で直接表せない複合値のキー。文字列キーと区別する。
+    CompositeKey(Box<Shape>),
+    Seq(Vec<Shape>),
+    Vector(Vec<Shape>),
+    Set(Vec<Shape>),
+    Map(Vec<(Shape, Shape)>),
+    Opaque(String),
+}
+
+fn shape_of(value: &Value) -> Shape {
+    match value {
+        Value::Nil => Shape::Nil,
+        Value::Bool(b) => Shape::Bool(*b),
+        Value::Int(_) | Value::Float(_) => Shape::Num(value.to_string()),
+        Value::String(s) => Shape::Str(s.clone()),
+        Value::Symbol(s) => Shape::Sym(s.clone()),
+        Value::List(items) => Shape::Seq(items.iter().map(shape_of).collect()),
+        Value::Vector(items) => Shape::Vector(items.iter().map(shape_of).collect()),
+        Value::Seq(handle) => match handle.collect_all() {
+            Ok(items) => Shape::Seq(items.iter().map(shape_of).collect()),
+            Err(err) => Shape::Opaque(format!("<seq error: {}>", err)),
+        },
+        Value::Set(items) => {
+            let mut shapes: Vec<Shape> = items.iter().map(shape_of).collect();
+            shapes.sort();
+            Shape::Set(shapes)
+        }
+        Value::Map(map) => {
+            let mut entries: Vec<(Shape, Shape)> = map
+                .iter()
+                .map(|(k, v)| (shape_of_key(k), shape_of(v)))
+                .collect();
+            entries.sort();
+            Shape::Map(entries)
+        }
+        // sorted-map もキー順に正規化する。doc の期待値はマップリテラルで書くしかなく、
+        // 「順序付きであること」を普通のマップと区別して書けない。順序は keys / vals /
+        // seq の例で確かめる。
+        Value::SortedMap(_) | Value::SortedSet(_) => match sorted_collection_shape(value) {
+            Some(shape) => shape,
+            None => Shape::Opaque(render_value(value)),
+        },
+        _ => Shape::Opaque(render_value(value)),
+    }
+}
+
+fn sorted_collection_shape(value: &Value) -> Option<Shape> {
+    match value {
+        Value::SortedMap(map) => {
+            let mut entries: Vec<(Shape, Shape)> = map
+                .entries
+                .iter()
+                .map(|(k, v)| (shape_of_key(k), shape_of(v)))
+                .collect();
+            entries.sort();
+            Some(Shape::Map(entries))
+        }
+        Value::SortedSet(set) => {
+            let mut shapes: Vec<Shape> = set.entries.iter().map(shape_of).collect();
+            shapes.sort();
+            Some(Shape::Set(shapes))
+        }
+        _ => None,
+    }
+}
+
+fn shape_of_key(key: &Key) -> Shape {
+    match key {
+        Key::Keyword(s) => Shape::Sym(format!(":{}", s)),
+        Key::Symbol(s) => Shape::Sym(s.clone()),
+        Key::String(s) => Shape::Str(s.clone()),
+        Key::Number(n) => Shape::Num(n.to_string()),
+        Key::Bool(b) => Shape::Bool(*b),
+        // 複合キーは元の値の形で比べる。文字列キーとは別物。
+        Key::Composite(k) => Shape::CompositeKey(Box::new(shape_of(k.value()))),
     }
 }
 
@@ -406,7 +553,7 @@ fn render_value(value: &Value) -> String {
         Value::List(items) => render_seq_like(items.iter(), "(", ")"),
         Value::Vector(items) => render_seq_like(items.iter(), "[", "]"),
         Value::Set(set) => {
-            let mut items: Vec<String> = set.iter().map(|v| render_value(v)).collect();
+            let mut items: Vec<String> = set.iter().map(render_value).collect();
             items.sort();
             format!("#{{{}}}", items.join(" "))
         }
@@ -425,7 +572,7 @@ fn render_value(value: &Value) -> String {
 }
 
 fn render_seq_like<'a>(iter: impl Iterator<Item = &'a Value>, start: &str, end: &str) -> String {
-    let parts: Vec<String> = iter.map(|v| render_value(v)).collect();
+    let parts: Vec<String> = iter.map(render_value).collect();
     format!("{}{}{}", start, parts.join(" "), end)
 }
 
@@ -435,6 +582,8 @@ fn render_key(key: &Key) -> String {
         Key::String(s) => format!("\"{}\"", s),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        // 既に Clove 構文なのでそのまま出す。
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 
@@ -507,12 +656,10 @@ fn find_skip_symbol(expr_src: &str, skip_symbols: &'static [&'static str]) -> Op
         })
         .filter(|s| !s.is_empty())
         .collect();
-    for sym in skip_symbols {
-        if tokens.iter().any(|tok| tok == sym) {
-            return Some(sym);
-        }
-    }
-    None
+    skip_symbols
+        .iter()
+        .copied()
+        .find(|sym| tokens.iter().any(|tok| tok == sym))
 }
 
 struct EnvVarGuard {

@@ -332,43 +332,40 @@ impl VmIter {
         F: FnMut(&mut VmState, Value) -> Result<(), Clove2Error>,
     {
         if self.ops.len() == 1 {
-            match &self.ops[0] {
-                IterOp::Map(func) => {
-                    let mut native_cache: Vec<Option<NativeCacheEntry>> = Vec::with_capacity(1);
-                    native_cache.push(None);
-                    match &self.base {
-                        IterBase::Vec(items) => {
-                            for item in items.iter() {
-                                let vm_value = call_vm_arity1_cached(
-                                    state,
-                                    func,
-                                    value_to_vmvalue(item.clone()),
-                                    &mut native_cache,
-                                    0,
-                                )?;
-                                let value = vmvalue_into_value(state, vm_value)?;
-                                f(state, value)?;
-                            }
-                        }
-                        IterBase::Range { start, end, .. } => {
-                            let mut cur = *start;
-                            while cur < *end {
-                                let vm_value = call_vm_arity1_cached(
-                                    state,
-                                    func,
-                                    VmValue::Int(cur),
-                                    &mut native_cache,
-                                    0,
-                                )?;
-                                let value = vmvalue_into_value(state, vm_value)?;
-                                f(state, value)?;
-                                cur += 1;
-                            }
+            if let IterOp::Map(func) = &self.ops[0] {
+                let mut native_cache: Vec<Option<NativeCacheEntry>> = Vec::with_capacity(1);
+                native_cache.push(None);
+                match &self.base {
+                    IterBase::Vec(items) => {
+                        for item in items.iter() {
+                            let vm_value = call_vm_arity1_cached(
+                                state,
+                                func,
+                                value_to_vmvalue(item.clone()),
+                                &mut native_cache,
+                                0,
+                            )?;
+                            let value = vmvalue_into_value(state, vm_value)?;
+                            f(state, value)?;
                         }
                     }
-                    return Ok(());
+                    IterBase::Range { start, end, .. } => {
+                        let mut cur = *start;
+                        while cur < *end {
+                            let vm_value = call_vm_arity1_cached(
+                                state,
+                                func,
+                                VmValue::Int(cur),
+                                &mut native_cache,
+                                0,
+                            )?;
+                            let value = vmvalue_into_value(state, vm_value)?;
+                            f(state, value)?;
+                            cur += 1;
+                        }
+                    }
                 }
-                _ => {}
+                return Ok(());
             }
         }
         let mut native_cache: Vec<Option<NativeCacheEntry>> =
@@ -416,41 +413,38 @@ impl VmIter {
         F: FnMut(&mut VmState, VmValue) -> Result<(), Clove2Error>,
     {
         if self.ops.len() == 1 {
-            match &self.ops[0] {
-                IterOp::Map(func) => {
-                    let mut native_cache: Vec<Option<NativeCacheEntry>> = Vec::with_capacity(1);
-                    native_cache.push(None);
-                    match &self.base {
-                        IterBase::Vec(items) => {
-                            for item in items.iter() {
-                                let vm_value = call_vm_arity1_cached(
-                                    state,
-                                    func,
-                                    value_to_vmvalue(item.clone()),
-                                    &mut native_cache,
-                                    0,
-                                )?;
-                                f(state, vm_value)?;
-                            }
-                        }
-                        IterBase::Range { start, end, .. } => {
-                            let mut cur = *start;
-                            while cur < *end {
-                                let vm_value = call_vm_arity1_cached(
-                                    state,
-                                    func,
-                                    VmValue::Int(cur),
-                                    &mut native_cache,
-                                    0,
-                                )?;
-                                f(state, vm_value)?;
-                                cur += 1;
-                            }
+            if let IterOp::Map(func) = &self.ops[0] {
+                let mut native_cache: Vec<Option<NativeCacheEntry>> = Vec::with_capacity(1);
+                native_cache.push(None);
+                match &self.base {
+                    IterBase::Vec(items) => {
+                        for item in items.iter() {
+                            let vm_value = call_vm_arity1_cached(
+                                state,
+                                func,
+                                value_to_vmvalue(item.clone()),
+                                &mut native_cache,
+                                0,
+                            )?;
+                            f(state, vm_value)?;
                         }
                     }
-                    return Ok(());
+                    IterBase::Range { start, end, .. } => {
+                        let mut cur = *start;
+                        while cur < *end {
+                            let vm_value = call_vm_arity1_cached(
+                                state,
+                                func,
+                                VmValue::Int(cur),
+                                &mut native_cache,
+                                0,
+                            )?;
+                            f(state, vm_value)?;
+                            cur += 1;
+                        }
+                    }
                 }
-                _ => {}
+                return Ok(());
             }
         }
         let mut native_cache: Vec<Option<NativeCacheEntry>> =
@@ -2255,7 +2249,7 @@ fn run_code_fast(
                         &func,
                         acc.take().unwrap(),
                         item,
-                        &mut vec![None],
+                        &mut [None],
                         0,
                     )?;
                     acc = Some(value);
@@ -3555,7 +3549,7 @@ fn call_builtin(state: &mut VmState, name: &str, args: Vec<Value>) -> Result<Val
             }
         }
         "hash-map" => {
-            if args.len() % 2 != 0 {
+            if !args.len().is_multiple_of(2) {
                 return Err(Clove2Error::new(
                     "vm: hash-map expects even number of arguments",
                 ));
@@ -4438,7 +4432,7 @@ fn vm_get(args: Vec<Value>) -> Result<Value, Clove2Error> {
 }
 
 fn vm_assoc(args: Vec<Value>) -> Result<Value, Clove2Error> {
-    if args.len() < 3 || args.len() % 2 == 0 {
+    if args.len() < 3 || args.len().is_multiple_of(2) {
         return Err(Clove2Error::new("vm: assoc expects key/value pairs"));
     }
     match &args[0] {

@@ -908,6 +908,54 @@ pub enum Key {
     String(String),
     Number(i64),
     Bool(bool),
+    /// `Key` で直接表せない複合値（マップ・ベクタ・集合・リスト）をキーにしたもの。
+    Composite(CompositeKey),
+}
+
+/// 複合値のマップキー。
+///
+/// 同一性は正規化した表記 `repr` だけで決める。等しいマップは書いた順に関わらず
+/// 同じキーになり、`Key::String` とは別の variant なので、文字列 `"{:a 1}"` と
+/// マップ `{:a 1}` が同じキーへ潰れることもない。
+///
+/// `value` は元の値。`keys` や外部言語境界でキーを値として取り出すときに使う。
+/// 表記だけを持つと、表記の等しい文字列キーと区別が付かなくなる。
+#[derive(Clone, Debug)]
+pub struct CompositeKey {
+    repr: String,
+    value: Box<Value>,
+}
+
+impl CompositeKey {
+    pub fn new(value: &Value) -> Self {
+        Self {
+            repr: canonical_key_repr(value),
+            value: Box::new(value.clone()),
+        }
+    }
+
+    /// 正規化した Clove 表記。既に Clove 構文なので、表示で引用符を付けない。
+    pub fn repr(&self) -> &str {
+        &self.repr
+    }
+
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+}
+
+impl PartialEq for CompositeKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.repr == other.repr
+    }
+}
+
+impl Eq for CompositeKey {}
+
+impl std::hash::Hash for CompositeKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.repr.hash(state);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1488,7 +1536,7 @@ fn escape_regex_slash(pattern: &str) -> String {
             out.push(ch);
             continue;
         }
-        if ch == '/' && backslash_run % 2 == 0 {
+        if ch == '/' && backslash_run.is_multiple_of(2) {
             out.push('\\');
         }
         out.push(ch);
@@ -1721,13 +1769,7 @@ impl fmt::Display for Value {
                 write!(f, "{}", crate::native_buf::format_native_buf_handle(handle))
             }
             Value::Seq(_) => write!(f, "<seq>"),
-            Value::Symbol(s) => {
-                if s.starts_with(':') || s.contains("::") {
-                    write!(f, "{}", s)
-                } else {
-                    write!(f, "{}", s)
-                }
-            }
+            Value::Symbol(s) => write!(f, "{}", s),
             Value::Foreign(_) => write!(f, "<foreign>"),
         }
     }
@@ -1942,6 +1984,57 @@ fn format_key(k: &Key) -> String {
         Key::String(s) => format!("\"{}\"", escape_string_fragment(s)),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        // 既に Clove 構文なのでそのまま出す。
+        Key::Composite(k) => k.repr().to_string(),
+    }
+}
+
+/// [`Key`] で表せない複合値をマップのキーにするときの文字列表現。
+///
+/// `Key` は keyword / symbol / string / number / bool しか持たないため、マップや
+/// ベクタをキーにすると文字列へ落ちる。その表現に `format!("{:?}")` を使うと
+///
+/// - Rust の Debug 表記（`{Keyword("a"): 1}`）が値として利用者に見える
+/// - 等しいマップでも書いた順で別のキーになり、引けなくなる
+///
+/// の2つが起きる。ここでは Clove の表記で、かつ順序に依存しない形へ正規化する。
+/// 複合キーを `Key` 自体で表せるようにするのが本来の直し方。
+pub(crate) fn canonical_key_repr(value: &Value) -> String {
+    match value {
+        Value::Map(map) => {
+            let mut parts: Vec<String> = map
+                .iter()
+                .map(|(k, v)| format!("{} {}", format_key(k), canonical_key_repr(v)))
+                .collect();
+            parts.sort();
+            format!("{{{}}}", parts.join(" "))
+        }
+        Value::SortedMap(map) => {
+            let parts: Vec<String> = map
+                .entries
+                .iter()
+                .map(|(k, v)| format!("{} {}", format_key(k), canonical_key_repr(v)))
+                .collect();
+            format!("{{{}}}", parts.join(" "))
+        }
+        Value::Set(items) => {
+            let mut parts: Vec<String> = items.iter().map(canonical_key_repr).collect();
+            parts.sort();
+            format!("#{{{}}}", parts.join(" "))
+        }
+        Value::SortedSet(set) => {
+            let parts: Vec<String> = set.entries.iter().map(canonical_key_repr).collect();
+            format!("#{{{}}}", parts.join(" "))
+        }
+        Value::Vector(items) => {
+            let parts: Vec<String> = items.iter().map(canonical_key_repr).collect();
+            format!("[{}]", parts.join(" "))
+        }
+        Value::List(items) => {
+            let parts: Vec<String> = items.iter().map(canonical_key_repr).collect();
+            format!("({})", parts.join(" "))
+        }
+        other => other.to_string(),
     }
 }
 

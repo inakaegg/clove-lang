@@ -20,8 +20,8 @@ pub type DebugReplHandler = fn(&Evaluator, EnvRef) -> Result<Value, CloveError>;
 static DEBUG_REPL_HANDLER: Lazy<RwLock<Option<DebugReplHandler>>> = Lazy::new(|| RwLock::new(None));
 
 thread_local! {
-    static LAST_DEBUG_ERROR: RefCell<Option<CloveError>> = RefCell::new(None);
-    static DEBUG_REPL_DEPTH: Cell<usize> = Cell::new(0);
+    static LAST_DEBUG_ERROR: RefCell<Option<CloveError>> = const { RefCell::new(None) };
+    static DEBUG_REPL_DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 
 pub fn set_debug_repl_handler(handler: Option<DebugReplHandler>) {
@@ -539,7 +539,7 @@ enum MetaResult {
 }
 
 fn normalize_command(line: &str) -> Option<String> {
-    let mut parts = line.trim().split_whitespace();
+    let mut parts = line.split_whitespace();
     let cmd = parts.next()?;
     if parts.next().is_some() {
         return None;

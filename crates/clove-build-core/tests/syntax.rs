@@ -415,9 +415,9 @@ fn parse_rest_param() {
         TopLevel::Defn { params, .. } => {
             assert_eq!(params.len(), 2);
             assert_eq!(params[0].name, "a");
-            assert_eq!(params[0].rest, false);
+            assert!(!params[0].rest);
             assert_eq!(params[1].name, "rest");
-            assert_eq!(params[1].rest, true);
+            assert!(params[1].rest);
             assert_eq!(params[1].ty, Some(Type::Vec(Box::new(Type::Int))));
         }
         other => panic!("expected defn, got {:?}", other),

@@ -407,7 +407,7 @@ impl CancelContext {
 }
 
 thread_local! {
-    static CURRENT_CANCEL_CTX: RefCell<Option<Arc<CancelContext>>> = RefCell::new(None);
+    static CURRENT_CANCEL_CTX: RefCell<Option<Arc<CancelContext>>> = const { RefCell::new(None) };
 }
 
 struct CancelCtxGuard {
@@ -1143,7 +1143,7 @@ fn race_like(sources: Vec<PromiseKind>, mode: RaceMode) -> PromiseHandle {
                             target_clone.resolve(res);
                             return;
                         }
-                        if best.as_ref().map_or(true, |(best_idx, _)| idx < *best_idx) {
+                        if best.as_ref().is_none_or(|(best_idx, _)| idx < *best_idx) {
                             best = Some((idx, res));
                         }
                     }

@@ -1048,7 +1048,7 @@ fn write_aligned_bindings(
     options: &PrettyOptions,
     out: &mut String,
 ) -> bool {
-    if items.len() % 2 != 0 {
+    if !items.len().is_multiple_of(2) {
         return false;
     }
     let mut pairs: Vec<(String, &Form)> = Vec::new();

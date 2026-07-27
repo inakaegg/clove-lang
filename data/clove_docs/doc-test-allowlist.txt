@@ -1,25 +1,19 @@
-# List entries to skip in doc_examples_match_actual_results, one per line.
-# Comments (# ...) and blank lines are ignored. By default only * remains and
-# all entries are executed. When adding skips, include the reason in a comment.
+# doc_examples_match_actual_results / doc_examples_oop_match_actual_results で
+# 検査しないエントリ。1行1エントリ。コメント（# ...）と空行は無視する。
+#
+# ここへ足すときは必ず理由を書く。理由は「なぜ今この例を比較できないか」であって
+# 「落ちるから」ではない。直せるものは直してから外すこと。
+#
+# 2026-07-26〜27 の整理で 84 → 28エントリ。経緯と分類は
+# _ai/2026-07-26-doc-example-drift.md を参照。
 *
-# test::deftest: expectation depends on global runner state (counts aggregated across suites)
-test::deftest
-# term::*: requires a real terminal for key input/raw-mode, so skip doc examples
-term::raw-mode!
-term::read-key
-term::with-raw-mode
-# __DATA__: multi-line data section examples don't have expected values
-__DATA__
-# use: the (use default-interop :py) example is a declaration with no value to compare
-use
 #
 # ---------------------------------------------------------------------------
-# Drift found on 2026-07-26 once this test stopped truncating its run (startup
-# got 20x faster, so the 30s budget no longer cut the corpus in half).
-# Triage and the plan to remove these lines again: _ai/2026-07-26-doc-example-drift.md
+# 1. 原理的に比較できない
 # ---------------------------------------------------------------------------
 #
-# [A] 非決定的な値（channel id / agent状態 / promiseのタイミング）で固定値と比較できない
+# 実行ごとに値が変わる（channel id / agent の処理状態 / promise の解決タイミング /
+# ハッシュ値）。doc例に固定値を書く形式そのものが合わない。
 chan
 timeout
 future
@@ -30,7 +24,27 @@ done?
 async::scope-select
 hash
 #
-# [B] 外部環境依存（存在しないファイル・カレントディレクトリ・外部プロセス）
+# 実端末が要る（キー入力・raw mode）。
+term::raw-mode!
+term::read-key
+term::with-raw-mode
+#
+# グローバルなテストランナーの状態に依存する（件数がスイート横断で積算される）。
+test::deftest
+#
+# 比較する値がない。__DATA__ は複数行データ節、use は宣言。
+__DATA__
+use
+#
+# ---------------------------------------------------------------------------
+# 2. 実行環境に依存する（実装が直れば外せるものを含む）
+# ---------------------------------------------------------------------------
+#
+# 相対パスはプロセスの CWD に対して解決される。ファイル系ビルトインは
+# EvalOptions::working_dir を見ずに std::fs をそのまま呼ぶため、
+# cargo test（CWD = crate ディレクトリ）では data/fixtures/... を開けない。
+# fixture 自体はリポジトリにあり、リポジトリルートから実行すれば例は通る。
+# 直すなら「ファイル系ビルトインが working_dir に対して相対パスを解決する」。
 env::parse-file
 json::read-file
 json::read-file-seq
@@ -38,72 +52,20 @@ yaml::read-file
 toml::read-file
 fs::glob
 fs::glob*
+#
+# 外部プロセスを起動する。実行環境に echo / true があることが前提。
 process::run
 process::sh-line
 #
-# [C] 前の例で定義した束縛に依存（ハーネスは1例ごとに新しいランタイムを作る）
-compare-and-set!
-deftype
+# ---------------------------------------------------------------------------
+# 3. 実装側の不具合・未実装（docの期待値のほうが正しい）
+# ---------------------------------------------------------------------------
+#
+# with-redefs-fn: どんな入力でも動かない。with-redefs は特殊形式でリテラルの
+# 束縛ベクタを要求するのに、std の実装は実行時の値 bindings をそのまま渡している
+# （Runtime error: binding name must be symbol）。実行時に束縛を差し替える API が要る。
 with-redefs-fn
-ns
 #
-# [D] 期待値を文字列比較しているためのレンダリング差（エスケープ・複数行・マップ順）
-json::generate
-json::generate-pretty
-ini::generate
-yaml::generate
-yaml::generate-pretty
-toml::generate
-pr-str
-pp-str
-set::rename
-set::rename-keys
-set::index
-sorted-map
-sorted-map-by
-sorted-map-desc
-sorted?
-hash-map
-with-meta
-symbol
-reverse
-instance?
-keyword?
-mut
-#
-# [E] docの期待値が実装より古い（一部は仕様確認が必要）
-regex
-re-pattern
-re-matcher
-fn-type
-doc
-pp
-pprint
-split-at
-gensym
-interpose
-defenum
-source
+# infer-type: 型注釈付きリテラル ([1 2]: [Int Int]) に対して Any を返す。
+# 注釈が推論へ渡っていない。
 infer-type
-lookup
-nav
-split
-string::split
-keyword
-partial
-#
-# [G] OOP例の自動生成が成立しない組み合わせ
-filter
-remove
-keep
-map
-take-while
-drop-while
-split-with
-not-every?
-pmap
-pfilter
-dag::pmap
-dag::pfilter
-doto
-constantly

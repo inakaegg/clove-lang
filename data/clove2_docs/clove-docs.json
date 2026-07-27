@@ -571,9 +571,9 @@
     "doc": "Register a sum/enum type in the current namespace; each member must be a product type in the same namespace or a spread of another enum (e.g. *OtherEnum). Missing member types are auto-created as empty products (constructors/predicates are emitted). Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Red :user::Green]",
-      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Dog",
-      "(defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Dog :user::Cat :user::Salmon]"
+      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Color::Red :user::Color::Green]",
+      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Pets::Dog",
+      "(defenum Pets Dog Cat) (defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Pets::Dog :user::Pets::Cat :user::Animals::Salmon]"
     ]
   },
   {
@@ -591,8 +591,8 @@
     "doc": "Define a record-like type with typed fields; emits a constructor function with the same name. Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(deftype Point {:x Int :y Int})",
-      "(Point {:x 1 :y 2}) ; => {:type user::Point :x 1 :y 2}"
+      "(deftype Point {:x Int :y Int}) ; => user::Point",
+      "(deftype Point {:x Int :y Int}) (Point {:x 1 :y 2}) ; => {:type user::Point :x 1 :y 2}"
     ]
   },
   {
@@ -1048,7 +1048,7 @@
   {
     "name": "index-of",
     "signature": "index-of s substr [start]",
-    "doc": "Return the index of the first occurrence of substr in s (or nil). Optional start skips that many characters.",
+    "doc": "Return the index of the first occurrence of substr in s (or nil). Optional start skips that many characters. Indexes are counted in characters, like subs.",
     "origin": "string",
     "examples": [
       "(index-of \"banana\" \"na\") ; => 2",
@@ -1120,7 +1120,7 @@
     "doc": "Insert sep between every pair of items in coll, returning a vector.",
     "origin": "core",
     "examples": [
-      "(interpose :/ [:a :b :c]) ; => [:a :/ :b :/ :c]",
+      "(interpose :sep [:a :b :c]) ; => [:a :sep :b :sep :c]",
       "(interpose 0 [1 2]) ; => [1 0 2]"
     ]
   },
@@ -1160,8 +1160,8 @@
     "doc": "Read a file from disk and parse it as JSON.",
     "origin": "json",
     "examples": [
-      "(json::read-file \"data::fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
-      "(map? (json::read-file \"data::fixtures/json/example.json\")) ; => true"
+      "(json::read-file \"data/fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
+      "(map? (json::read-file \"data/fixtures/json/example.json\")) ; => true"
     ]
   },
   {
@@ -1263,7 +1263,7 @@
   {
     "name": "last-index-of",
     "signature": "last-index-of s substr [end]",
-    "doc": "Return the index of the last occurrence of substr in s (or nil). Optional end limits the search to the first end characters.",
+    "doc": "Return the index of the last occurrence of substr in s (or nil). Optional end limits the search to the first end characters. Indexes are counted in characters, like subs.",
     "origin": "string",
     "examples": [
       "(last-index-of \"banana\" \"na\") ; => 4",
@@ -1323,8 +1323,8 @@
     "doc": "Alias of nav; unified search across namespaces, vars, and docs.",
     "origin": "special form",
     "examples": [
-      "(lookup \"disj\") ; => {:kind :nav ...}",
-      "(lookup /take|drop/ :var :doc) ; => {:kind :nav ...}"
+      "(:kind (lookup \"disj\")) ; => :nav",
+      "(:kind (lookup /take|drop/ :var :doc)) ; => :nav"
     ]
   },
   {
@@ -1465,9 +1465,9 @@
     "doc": "Unified search across namespaces, vars, and docs with a single API.",
     "origin": "special form",
     "examples": [
-      "(nav 'disj) ; => {:kind :nav ...}",
-      "(nav 'disj :var) ; => {:kind :nav ...}",
-      "(nav /take|drop/ :var :doc) ; => {:kind :nav ...}"
+      "(:query (nav 'disj)) ; => \"disj\"",
+      "(:kind (nav 'disj :var)) ; => :nav",
+      "(:kind (nav /take|drop/ :var :doc)) ; => :nav"
     ]
   },
   {
@@ -1554,8 +1554,8 @@
     "doc": "Declare or switch namespace. Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(ns demo.core) ; => demo.core",
-      "(ns tools.math) ; => tools.math"
+      "(ns demo::core) ; => demo::core",
+      "(ns tools::math) ; => tools::math"
     ]
   },
   {
@@ -1701,7 +1701,7 @@
     "doc": "Return the pr-str representation of the given values as a single string.",
     "origin": "core",
     "examples": [
-      "(pr-str [1 2 3]) ; => \"\\\"[1 2 3]\\\"\" ; Return a string"
+      "(pr-str [1 2 3]) ; => \"[1 2 3]\" ; Return a string"
     ]
   },
   {

@@ -45,7 +45,7 @@ pub(crate) fn install(env: &mut Env) {
             }
         };
         let limit = limit_val
-            .map(|n| crate::builtins::as_number(n))
+            .map(crate::builtins::as_number)
             .transpose()?
             .map(|(n, _)| n.max(0.0) as usize);
         split_with_regex(&s, &regex, limit)
@@ -446,20 +446,40 @@ fn capture_to_value(captures: &regex::Captures) -> Value {
     Value::Vector(items)
 }
 
-fn index_of(s: &str, substr: &str, start: usize) -> Option<usize> {
-    if start >= s.len() {
-        return None;
+/// 文字単位の添字を byte offset へ変換する。文字数を超える添字は `None`。
+///
+/// `index-of` / `last-index-of` の添字は `subs` や `count` と同じ文字単位。
+/// byte offset をそのまま使うと多バイト文字を含む文字列で結果が食い違い、
+/// 文字境界外のスライスで panic する。
+fn char_byte_offset(s: &str, char_index: usize) -> Option<usize> {
+    if char_index == 0 {
+        return Some(0);
     }
-    s[start..].find(substr).map(|idx| idx + start)
+    match s.char_indices().nth(char_index) {
+        Some((byte, _)) => Some(byte),
+        // 末尾ちょうどは char_indices に現れない
+        None if char_index == s.chars().count() => Some(s.len()),
+        None => None,
+    }
+}
+
+fn index_of(s: &str, substr: &str, start: usize) -> Option<usize> {
+    let start_byte = char_byte_offset(s, start)?;
+    s[start_byte..]
+        .find(substr)
+        .map(|idx| s[..start_byte + idx].chars().count())
 }
 
 fn last_index_of(s: &str, substr: &str, end: Option<usize>) -> Option<usize> {
-    let slice_end = end.unwrap_or_else(|| s.len());
-    if slice_end == 0 || substr.is_empty() && slice_end == 0 {
+    let char_len = s.chars().count();
+    let slice_end = end.unwrap_or(char_len);
+    if slice_end == 0 {
         return None;
     }
-    let capped_end = slice_end.min(s.len());
-    s[..capped_end].rfind(substr)
+    let end_byte = char_byte_offset(s, slice_end.min(char_len))?;
+    s[..end_byte]
+        .rfind(substr)
+        .map(|idx| s[..idx].chars().count())
 }
 
 fn register_string_metas() {

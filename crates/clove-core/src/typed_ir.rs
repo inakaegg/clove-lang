@@ -108,11 +108,7 @@ pub fn lower_typed_exprs_to_funcs(exprs: &[TypedExpr]) -> Vec<CodegenFunction> {
                             .collect(),
                         _ => Vec::new(),
                     };
-                    let body_ops = args
-                        .iter()
-                        .skip(2)
-                        .flat_map(|b| lower_expr_to_ops(b))
-                        .collect();
+                    let body_ops = args.iter().skip(2).flat_map(lower_expr_to_ops).collect();
                     out.push(CodegenFunction {
                         name,
                         params,
@@ -262,7 +258,7 @@ fn synthetic_span(base: Span, tag: usize) -> Span {
     }
 }
 
-fn unwrap_oop_stage_items<'a>(items: &'a [Form]) -> &'a [Form] {
+fn unwrap_oop_stage_items(items: &[Form]) -> &[Form] {
     if items.len() >= 2 {
         if let FormKind::Symbol(sym) = &items[0].kind {
             if sym == APPLY_SYM {

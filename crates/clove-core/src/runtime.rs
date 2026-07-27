@@ -165,10 +165,10 @@ const USER_CLV_FILE: &str = "user.clv";
 const BUILTIN_PACKAGE_ID: &str = "<builtin>";
 
 thread_local! {
-    static NO_USER_CONFIG_LOCAL: Cell<bool> = Cell::new(false);
-    static CURRENT_RUNTIME: RefCell<Option<Arc<RuntimeCtx>>> = RefCell::new(None);
-    static CURRENT_DEBUG_STASH_ENABLED: Cell<bool> = Cell::new(false);
-    static REQUIRE_RUNTIME_CONTEXT: Cell<bool> = Cell::new(false);
+    static NO_USER_CONFIG_LOCAL: Cell<bool> = const { Cell::new(false) };
+    static CURRENT_RUNTIME: RefCell<Option<Arc<RuntimeCtx>>> = const { RefCell::new(None) };
+    static CURRENT_DEBUG_STASH_ENABLED: Cell<bool> = const { Cell::new(false) };
+    static REQUIRE_RUNTIME_CONTEXT: Cell<bool> = const { Cell::new(false) };
 }
 
 static NEXT_RUNTIME_ID: AtomicUsize = AtomicUsize::new(1);
@@ -1133,7 +1133,7 @@ impl RuntimeCtx {
         });
         let mut items = Vec::with_capacity(1 + tail.body.len());
         items.push(Form::new(FormKind::Symbol("try".into()), try_span));
-        items.extend(tail.body.into_iter());
+        items.extend(tail.body);
         if let Some(err_form) = tail.err {
             items.push(err_form);
         }
@@ -1565,7 +1565,7 @@ impl RuntimeCtx {
         if !self.debug_stash_enabled() {
             return;
         }
-        let subject = args.get(0).cloned().unwrap_or(Value::Nil);
+        let subject = args.first().cloned().unwrap_or(Value::Nil);
         let mut stash = self.debug_stash.lock().unwrap();
         *stash = Some(DebugStash {
             subject,
@@ -1716,11 +1716,10 @@ impl RuntimeCtx {
     fn error_namespace(&self, err: &CloveError) -> Option<String> {
         let stack = err.stack();
         stack.last().and_then(|frame| {
-            if let Some(idx) = frame.function.rfind("::") {
-                Some(frame.function[..idx].to_string())
-            } else {
-                None
-            }
+            frame
+                .function
+                .rfind("::")
+                .map(|idx| frame.function[..idx].to_string())
         })
     }
 
@@ -2622,11 +2621,11 @@ fn install_lang_builtins(env: EnvRef) {
     let mut env = env.write().unwrap();
     env.set(
         "__apply",
-        Value::native_fn(FnArity::at_least(0), |args| apply_builtin(args)),
+        Value::native_fn(FnArity::at_least(0), apply_builtin),
     );
     env.set(
         "__range_literal",
-        Value::native_fn(FnArity::at_least(0), |args| range_literal_builtin(args)),
+        Value::native_fn(FnArity::at_least(0), range_literal_builtin),
     );
     mirror_core_namespace(&mut env);
 }
@@ -2940,7 +2939,7 @@ fn apply_map_index(
     let key_val = to_key_value_checked(key)?;
     match map.get(&key_val) {
         Some(val) => Ok(val.clone()),
-        None => Ok(rest.get(0).cloned().unwrap_or(Value::Nil)),
+        None => Ok(rest.first().cloned().unwrap_or(Value::Nil)),
     }
 }
 
@@ -3549,7 +3548,7 @@ fn is_refer_all_literal(name: &str) -> bool {
     matches!(name, "all" | ":all" | "*" | ":*")
 }
 
-fn unwrap_quote<'a>(form: &'a Form) -> &'a Form {
+fn unwrap_quote(form: &Form) -> &Form {
     if let FormKind::List(items) = &form.kind {
         if items.len() == 2 {
             if let FormKind::Symbol(sym) = &items[0].kind {
@@ -3664,7 +3663,7 @@ fn build_refer_pairs(
     Ok(pairs)
 }
 
-fn namespace_segments<'a>(name: &'a str) -> impl Iterator<Item = &'a str> {
+fn namespace_segments(name: &str) -> impl Iterator<Item = &str> {
     name.split("::")
         .flat_map(|part| part.split('.'))
         .filter(|s| !s.is_empty())
@@ -3967,7 +3966,7 @@ mod tests {
 
     #[test]
     fn repl_path_has_current_runtime_and_file() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let env = ctx.env();
         let file_name = format!("clove_repl_test_{}.clv", unique_ns_suffix());
         let path = std::env::temp_dir().join(file_name);
@@ -3985,7 +3984,7 @@ mod tests {
 
     #[test]
     fn dot_chain_enabled_by_default() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let value = ctx
             .eval_source("(inc 10).(+ 1 ?)")
             .expect("dot-chain should be enabled");
@@ -3994,7 +3993,7 @@ mod tests {
 
     #[test]
     fn dot_chain_toggle_controls_availability() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         ctx.eval_source("(use dotchain-syntax false)")
             .expect("disable dot-chain");
         let err = ctx
@@ -4015,7 +4014,7 @@ mod tests {
 
     #[test]
     fn top_level_err_fin_runs_in_eval_source() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let value = ctx
             .eval_source(
                 "(do (def x (atom 0))\n     (throw 1)\n     (err (do (atom-set! x 9) ?))\n     (fin (atom-set! x 10)))",
@@ -4028,7 +4027,7 @@ mod tests {
 
     #[test]
     fn tail_recur_is_preserved_through_compiler_lowering() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let value = ctx
             .eval_source(
                 "(do (defn bump-to-three [x]\n                       (if (< x 3)\n                         (recur (inc x))\n                         x))\n                     (bump-to-three 0))",
@@ -4096,7 +4095,7 @@ mod tests {
 
     #[test]
     fn load_file_splits_data_section() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let temp = TempDir::new("clove-load-file-data");
         let file = temp.path().join("data.clv");
         fs::write(
@@ -4113,7 +4112,7 @@ mod tests {
 
     #[test]
     fn eval_file_supports_end_marker_data_section() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let temp = TempDir::new("clove-data-end");
         let file = temp.path().join("end.clv");
         fs::write(&file, "(def data __DATA__)\ndata\n__END__\nhello\n")
@@ -4124,7 +4123,7 @@ mod tests {
 
     #[test]
     fn data_marker_with_whitespace_is_not_split() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let temp = TempDir::new("clove-data-space");
         let file = temp.path().join("space.clv");
         fs::write(&file, "(def x 1)\n  __DATA__  \n(+ x 2)\n").expect("write space file");
@@ -4134,7 +4133,7 @@ mod tests {
 
     #[test]
     fn data_symbol_is_nil_without_marker() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let temp = TempDir::new("clove-data-none");
         let file = temp.path().join("none.clv");
         fs::write(&file, "(def data __DATA__)\ndata\n").expect("write none file");
@@ -4144,7 +4143,7 @@ mod tests {
 
     #[test]
     fn repl_uses_data_section_from_repl_source() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let temp = TempDir::new("clove-repl-data");
         let file = temp.path().join("repl_data.clv");
         fs::write(&file, "(def data __DATA__)\n__DATA__\nhello\n").expect("write repl file");
@@ -4489,7 +4488,7 @@ mod tests {
 
     #[test]
     fn foreign_blocks_can_be_disabled() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let err = ctx
             .eval_source("(do (use foreign false) $py{println \"hi\"})")
             .expect_err("foreign blocks disabled");
@@ -4569,7 +4568,7 @@ mod tests {
 
     #[test]
     fn private_defs_are_not_accessible_from_other_namespaces() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         ctx.eval_source(
             "(ns a)
              (def- x 1)
@@ -4603,7 +4602,6 @@ mod tests {
     #[test]
     fn std_registers_metadata() {
         let _guard = EnvVarGuard::remove("CLOVE_NO_USER_CONFIG");
-        crate::fn_meta::clear_for_tests();
         let ctx = RuntimeCtx::new(EvalOptions::default(), &[]);
         let meta = ctx.with_current_ctx(|ctx| {
             let _ = ctx
@@ -4611,7 +4609,7 @@ mod tests {
                 .expect("std map should work");
             crate::fn_meta::get("std::map").expect("metadata for std::map")
         });
-        let arg_sig = meta.arglist.get(0).cloned().unwrap_or_default();
+        let arg_sig = meta.arglist.first().cloned().unwrap_or_default();
         assert!(
             arg_sig.contains("f") && arg_sig.contains("coll"),
             "unexpected arglist: {}",
@@ -4844,7 +4842,7 @@ mod tests {
 
     #[test]
     fn indexer_toggle_controls_availability() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let value = ctx
             .eval_source("{:a 1}[:a]")
             .expect("indexer should be enabled");
@@ -4867,7 +4865,7 @@ mod tests {
 
     #[test]
     fn reduce_follows_clojuredocs_behaviors() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let zero_default = ctx
             .eval_source("(reduce + [])")
             .expect("reduce should call zero-arity f on empty coll");
@@ -4892,7 +4890,7 @@ mod tests {
 
     #[test]
     fn map_handles_lazy_and_parallel_inputs() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let parallel = ctx
             .eval_source("(map + [1 2 3] [10 20 30])")
             .expect("map over two vectors");
@@ -4910,7 +4908,7 @@ mod tests {
 
     #[test]
     fn range_and_repeat_cover_common_paths() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let forward = ctx
             .eval_source("(range 2 8 3)")
             .expect("bounded forward range");
@@ -4955,7 +4953,7 @@ mod tests {
 
     #[test]
     fn division_matches_single_and_multi_arity() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let reciprocal = ctx.eval_source("(/ 10)").expect("single arg division");
         assert_eq!(reciprocal, Value::Float(0.1));
 
@@ -4972,7 +4970,7 @@ mod tests {
 
     #[test]
     fn count_covers_nil_strings_and_maps() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
         let nil_count = ctx.eval_source("(count nil)").expect("count nil");
         assert_eq!(nil_count, Value::Int(0));
 
@@ -4987,7 +4985,7 @@ mod tests {
 
     #[test]
     fn take_drop_assoc_and_get_cover_common_examples() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
 
         let take_list = ctx
             .eval_source("(vec (take 2 '(9 8 7 6)))")
@@ -5056,7 +5054,7 @@ mod tests {
 
     #[test]
     fn arithmetic_and_comparisons_follow_examples() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
 
         let zero_sum = ctx.eval_source("(+)").expect("zero-arity +");
         assert_eq!(zero_sum, Value::Int(0));
@@ -5116,7 +5114,7 @@ mod tests {
 
     #[test]
     fn seq_basics_follow_examples() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
 
         let first_val = ctx.eval_source("(first [10 20 30])").expect("first vector");
         assert_eq!(first_val, Value::Int(10));
@@ -5226,7 +5224,7 @@ mod tests {
 
     #[test]
     fn transient_api_basics_follow_spec() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
 
         let vec_roundtrip = ctx
             .eval_source(
@@ -5305,7 +5303,7 @@ mod tests {
     #[test]
     fn map_updates_preserve_immutability() {
         run_with_large_stack(|| {
-            let mut ctx = runtime_ctx();
+            let ctx = runtime_ctx();
             let _ = ctx
                 .eval_source("(require std :refer :all)")
                 .expect("require std");
@@ -5339,7 +5337,7 @@ mod tests {
     #[test]
     fn transient_map_does_not_mutate_persistent() {
         run_with_large_stack(|| {
-            let mut ctx = runtime_ctx();
+            let ctx = runtime_ctx();
 
             let ok = ctx
                 .eval_source(
@@ -5353,7 +5351,7 @@ mod tests {
     #[test]
     fn map_and_set_operations_follow_examples() {
         run_with_large_stack(|| {
-            let mut ctx = runtime_ctx();
+            let ctx = runtime_ctx();
             let _ = ctx
                 .eval_source("(require std :refer :all)")
                 .expect("require std");
@@ -5429,7 +5427,7 @@ mod tests {
 
     #[test]
     fn string_utilities_follow_examples() {
-        let mut ctx = runtime_ctx();
+        let ctx = runtime_ctx();
 
         let str_concat = ctx
             .eval_source("(str \"hi\" 123)")
@@ -5504,7 +5502,7 @@ mod tests {
     #[test]
     fn predicate_utilities_follow_examples() {
         run_with_large_stack(|| {
-            let mut ctx = runtime_ctx();
+            let ctx = runtime_ctx();
             let _ = ctx
                 .eval_source("(require std :refer :all)")
                 .expect("require std");

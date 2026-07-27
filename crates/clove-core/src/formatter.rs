@@ -496,12 +496,10 @@ fn collect_form_indices_from_form(
 }
 
 fn find_next_form_index(form_indices: &[usize], comment_index: usize) -> Option<usize> {
-    for &idx in form_indices {
-        if idx > comment_index {
-            return Some(idx);
-        }
-    }
-    None
+    form_indices
+        .iter()
+        .find(|&&idx| idx > comment_index)
+        .copied()
 }
 
 fn find_next_form_index_in_container(
@@ -573,11 +571,7 @@ fn find_nearest_form_index(
         if parent_map.get(&idx).copied().flatten() != container {
             continue;
         }
-        let dist = if idx > comment_index {
-            idx - comment_index
-        } else {
-            comment_index - idx
-        };
+        let dist = idx.abs_diff(comment_index);
         if best.map(|(d, _)| dist < d).unwrap_or(true) {
             best = Some((dist, idx));
         }
@@ -881,7 +875,7 @@ fn format_source_once(source: &str, options: &FormatOptions) -> Result<String, S
     );
     Ok(format_forms_with_comments(
         formatted_forms,
-        &options,
+        options,
         &mut table,
         &blank_lines,
     ))
@@ -2850,7 +2844,7 @@ fn write_aligned_bindings(
     if !options.align_let_bindings {
         return false;
     }
-    if items.len() % 2 != 0 {
+    if !items.len().is_multiple_of(2) {
         return false;
     }
     let mut name_strings: Vec<String> = Vec::new();
@@ -3225,9 +3219,7 @@ fn write_aligned_map(
         }
     }
     let had_dangling = emit_dangling_comments(form.span.index, entry_indent, comments, out);
-    if had_dangling {
-        write_indent(indent, out);
-    } else if out.ends_with('\n') {
+    if had_dangling || out.ends_with('\n') {
         write_indent(indent, out);
     }
     out.push('}');
@@ -3297,9 +3289,7 @@ fn write_map_block(
         }
     }
     let had_dangling = emit_dangling_comments(form.span.index, entry_indent, comments, out);
-    if had_dangling {
-        write_indent(indent, out);
-    } else if out.ends_with('\n') {
+    if had_dangling || out.ends_with('\n') {
         write_indent(indent, out);
     }
     out.push('}');
@@ -4376,10 +4366,7 @@ fn render_oop_chain(
             buf.push_str("?.");
             used_dot = true;
             nil_safe_next = false;
-        } else if force_keyword_dot && keyword_stage {
-            buf.push('.');
-            used_dot = true;
-        } else if !keyword_stage {
+        } else if !keyword_stage || force_keyword_dot {
             buf.push('.');
             used_dot = true;
         }
@@ -7012,7 +6999,7 @@ mod tests {
         let src = "[{:keys [dir] :as state} events]";
         let mut reader = Reader::new(src);
         let forms = reader.read_all().expect("parse args vector");
-        let mut comments = CommentTable::from_source(
+        let comments = CommentTable::from_source(
             &forms,
             reader.take_comments(),
             reader.take_string_escapes(),
@@ -7020,9 +7007,8 @@ mod tests {
             BTreeSet::new(),
             DanglingCommentPolicy::OwnLine,
         );
-        let inline =
-            inline_fn_args_vector_text(&forms[0], &FormatOptions::default(), &mut comments)
-                .expect("inline fn args vector");
+        let inline = inline_fn_args_vector_text(&forms[0], &FormatOptions::default(), &comments)
+            .expect("inline fn args vector");
         assert_eq!(inline, "[{:keys [dir] :as state} events]");
     }
 }

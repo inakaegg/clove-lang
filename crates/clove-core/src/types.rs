@@ -142,7 +142,7 @@ impl TypeKind {
         if uniq.len() == 1 {
             return uniq.remove(0);
         }
-        uniq.sort_by(|a, b| a.describe().cmp(&b.describe()));
+        uniq.sort_by_key(|a| a.describe());
         TypeKind::Union(uniq)
     }
 

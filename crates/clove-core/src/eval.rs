@@ -67,12 +67,12 @@ use once_cell::sync::Lazy;
 pub const CURRENT_NS_KEY: &str = "__clove_current_ns";
 
 thread_local! {
-    static CURRENT_FILE: RefCell<Option<String>> = RefCell::new(None);
-    static STACK: RefCell<Vec<StackFrame>> = RefCell::new(Vec::new());
-    static PENDING_FRAME: RefCell<Option<(String, Option<Span>)>> = RefCell::new(None);
-    static PENDING_CALL_FORM: RefCell<Option<String>> = RefCell::new(None);
-    static RECUR_STACK: RefCell<Vec<RecurContext>> = RefCell::new(Vec::new());
-    static MAP_REF_STACK: RefCell<Vec<MapRefFrame>> = RefCell::new(Vec::new());
+    static CURRENT_FILE: RefCell<Option<String>> = const { RefCell::new(None) };
+    static STACK: RefCell<Vec<StackFrame>> = const { RefCell::new(Vec::new()) };
+    static PENDING_FRAME: RefCell<Option<(String, Option<Span>)>> = const { RefCell::new(None) };
+    static PENDING_CALL_FORM: RefCell<Option<String>> = const { RefCell::new(None) };
+    static RECUR_STACK: RefCell<Vec<RecurContext>> = const { RefCell::new(Vec::new()) };
+    static MAP_REF_STACK: RefCell<Vec<MapRefFrame>> = const { RefCell::new(Vec::new()) };
 }
 
 static LOOP_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -536,7 +536,7 @@ impl Evaluator {
             if enum_variant.is_some() {
                 return Err(span_runtime_error(
                     span,
-                    &format!(
+                    format!(
                         "ambiguous qualified symbol: {} (namespace and enum both match)",
                         canonical_name
                     ),
@@ -855,7 +855,7 @@ impl Evaluator {
                 expected, actual, ..
             } if expected == "function" => span_runtime_error(
                 head.span,
-                &format!(
+                format!(
                     "cannot call {} (type: {})",
                     form_to_string(head, ""),
                     actual
@@ -864,7 +864,7 @@ impl Evaluator {
             CloveError::Other(data) if data.message == "cannot call foreign value" => {
                 span_runtime_error(
                     head.span,
-                    &format!("cannot call foreign value {}", form_to_string(head, "")),
+                    format!("cannot call foreign value {}", form_to_string(head, "")),
                 )
             }
             other => other,
@@ -3408,7 +3408,7 @@ impl Evaluator {
                         }
                         other => Err(span_runtime_error(
                             span,
-                            &format!(
+                            format!(
                                 "nav :topics expects keyword values, got {}",
                                 other.type_name()
                             ),
@@ -3441,7 +3441,7 @@ impl Evaluator {
                     }
                     other => Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "nav :topics expects set of keywords, got {}",
                             other.type_name()
                         ),
@@ -3462,7 +3462,7 @@ impl Evaluator {
                                 other => {
                                     return Err(span_runtime_error(
                                         span,
-                                        &format!(
+                                        format!(
                                             "nav :include-internal? expects bool, got {}",
                                             other.type_name()
                                         ),
@@ -3567,7 +3567,7 @@ impl Evaluator {
                     other => {
                         return Err(span_runtime_error(
                             *span,
-                            &format!(
+                            format!(
                                 "nav selector expects keyword :ns/:var/:doc, got {}",
                                 other.type_name()
                             ),
@@ -3653,7 +3653,7 @@ impl Evaluator {
             for kind in &context_kinds {
                 let rule = context_rule_for(*kind);
                 let mut score = 0;
-                if rule.exact.iter().any(|target| *target == name) {
+                if rule.exact.contains(&name) {
                     score = score.max(80);
                 }
                 if rule.prefixes.iter().any(|prefix| name.starts_with(prefix)) {
@@ -3662,7 +3662,7 @@ impl Evaluator {
                 if rule.suffixes.iter().any(|suffix| name.ends_with(suffix)) {
                     score = score.max(40);
                 }
-                if rule.namespaces.iter().any(|target| *target == ns) {
+                if rule.namespaces.contains(&ns) {
                     score += 20;
                 }
                 best = best.max(score);
@@ -4724,7 +4724,7 @@ impl Evaluator {
             } else if rest_args.len() == 1 {
                 match self.eval(&rest_args[0], env.clone())? {
                     Value::List(items) => items,
-                    Value::Vector(items) => items.into(),
+                    Value::Vector(items) => items,
                     other => vec![other].into(),
                 }
             } else {
@@ -4944,7 +4944,7 @@ impl Evaluator {
     }
 
     fn eval_cond(&self, args: &[Form], env: EnvRef, form_span: Span) -> Result<Value, CloveError> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(span_runtime_error(
                 form_span,
                 "cond expects even number of test/expr pairs",
@@ -5063,7 +5063,7 @@ impl Evaluator {
         let feature = canonical_feature_toggle(feature_sym).ok_or_else(|| {
             span_runtime_error(
                 feature_form.span,
-                &format!("unknown feature '{}'", feature_sym),
+                format!("unknown feature '{}'", feature_sym),
             )
         })?;
         let enabled_value = self.eval(&args[1], env.clone())?;
@@ -5200,7 +5200,7 @@ impl Evaluator {
                 "cond-> expects initial value and clauses",
             ));
         }
-        if (args.len() - 1) % 2 != 0 {
+        if !(args.len() - 1).is_multiple_of(2) {
             return Err(span_runtime_error(
                 form_span,
                 "cond-> expects pairs of test and form",
@@ -6063,7 +6063,7 @@ impl Evaluator {
         env: EnvRef,
         form_span: Span,
     ) -> Result<Value, CloveError> {
-        if args.len() < 1 {
+        if args.is_empty() {
             return Err(span_runtime_error(
                 form_span,
                 "with-dyn expects bindings vector and body",
@@ -6312,7 +6312,7 @@ impl Evaluator {
                 other => {
                     return Err(span_runtime_error(
                         args[0].span,
-                        &format!(
+                        format!(
                             "ns-map expects namespace symbol or string, got {}",
                             other.type_name()
                         ),
@@ -6341,7 +6341,7 @@ impl Evaluator {
         form_span: Span,
     ) -> Result<Value, CloveError> {
         let raw = args
-            .get(0)
+            .first()
             .ok_or_else(|| span_runtime_error(form_span, "create-ns expects namespace symbol"))?;
         let name_val = self.eval(raw, self.global_env())?;
         let name = match name_val {
@@ -6349,7 +6349,7 @@ impl Evaluator {
             other => {
                 return Err(span_runtime_error(
                     raw.span,
-                    &format!(
+                    format!(
                         "create-ns expects namespace symbol, got {}",
                         other.type_name()
                     ),
@@ -6375,7 +6375,7 @@ impl Evaluator {
             other => {
                 return Err(span_runtime_error(
                     args[0].span,
-                    &format!("refer expects namespace symbol, got {}", other.type_name()),
+                    format!("refer expects namespace symbol, got {}", other.type_name()),
                 ))
             }
         };
@@ -6446,7 +6446,7 @@ impl Evaluator {
             other => {
                 return Err(span_runtime_error(
                     args[0].span,
-                    &format!(
+                    format!(
                         "resolve expects symbol or string, got {}",
                         other.type_name()
                     ),
@@ -6484,7 +6484,7 @@ impl Evaluator {
         form_span: Span,
     ) -> Result<Value, CloveError> {
         let path_form = args
-            .get(0)
+            .first()
             .ok_or_else(|| span_runtime_error(form_span, "load-file expects path"))?;
         let path_val = self.eval(path_form, env)?;
         let path = match path_val {
@@ -6492,7 +6492,7 @@ impl Evaluator {
             other => {
                 return Err(span_runtime_error(
                     path_form.span,
-                    &format!("load-file expects path string, got {}", other.type_name()),
+                    format!("load-file expects path string, got {}", other.type_name()),
                 ))
             }
         };
@@ -6521,7 +6521,7 @@ impl Evaluator {
         form_span: Span,
     ) -> Result<Value, CloveError> {
         let src_form = args
-            .get(0)
+            .first()
             .ok_or_else(|| span_runtime_error(form_span, "load-string expects source"))?;
         let src_val = self.eval(src_form, env)?;
         let source = match src_val {
@@ -6529,7 +6529,7 @@ impl Evaluator {
             other => {
                 return Err(span_runtime_error(
                     src_form.span,
-                    &format!("load-string expects string, got {}", other.type_name()),
+                    format!("load-string expects string, got {}", other.type_name()),
                 ))
             }
         };
@@ -6823,15 +6823,16 @@ impl Evaluator {
                 ))
             }
         };
-        let mut rewritten_form = None;
+        // defn を -defn へ書き換えた形は defn_form の借用元として生かす必要がある。
+        let rewritten_form;
         let defn_form = if head == "defn" {
             let mut rewritten = Vec::with_capacity(items.len());
             let mut head_form = items[0].clone();
             head_form.kind = FormKind::Symbol("-defn".into());
             rewritten.push(head_form);
             rewritten.extend_from_slice(&items[1..]);
-            rewritten_form = Some(Form::new(FormKind::List(rewritten), form.span));
-            rewritten_form.as_ref().unwrap_or(form)
+            rewritten_form = Form::new(FormKind::List(rewritten), form.span);
+            &rewritten_form
         } else {
             form
         };
@@ -7368,7 +7369,7 @@ impl Evaluator {
                     if doc.is_some() {
                         return Err(span_runtime_error(
                             items[idx].span,
-                            &format!("{context} allows only one docstring"),
+                            format!("{context} allows only one docstring"),
                         ));
                     }
                     doc = Some(text.clone());
@@ -7378,7 +7379,7 @@ impl Evaluator {
                     if meta_map.is_some() {
                         return Err(span_runtime_error(
                             items[idx].span,
-                            &format!("{context} allows only one attr-map"),
+                            format!("{context} allows only one attr-map"),
                         ));
                     }
                     meta_map = Some(items[idx].clone());
@@ -8601,7 +8602,7 @@ impl Evaluator {
         match value {
             Value::Func(func) => func
                 .debug_name()
-                .and_then(|name| self.fn_meta_from_name(&name)),
+                .and_then(|name| self.fn_meta_from_name(name)),
             Value::Lambda { data, .. } => data
                 .name
                 .as_deref()
@@ -11041,7 +11042,7 @@ fn resolve_named_type_expr(
         return match entry.kind() {
             TypeKind::Primitive => {
                 let primitive = PrimitiveType::from_symbol(entry.name()).ok_or_else(|| {
-                    span_runtime_error(span, &format!("unknown primitive type '{}'", entry.name()))
+                    span_runtime_error(span, format!("unknown primitive type '{}'", entry.name()))
                 })?;
                 Ok(MetaTypeKind::from_primitive_type(primitive))
             }
@@ -11062,7 +11063,7 @@ fn resolve_named_type_expr(
                     let primitive = PrimitiveType::from_symbol(entry.name()).ok_or_else(|| {
                         span_runtime_error(
                             span,
-                            &format!("unknown primitive type '{}'", entry.name()),
+                            format!("unknown primitive type '{}'", entry.name()),
                         )
                     })?;
                     Ok(MetaTypeKind::from_primitive_type(primitive))
@@ -11077,17 +11078,14 @@ fn resolve_named_type_expr(
             };
         }
     }
-    Err(span_runtime_error(
-        span,
-        &format!("unknown type '{}'", name),
-    ))
+    Err(span_runtime_error(span, format!("unknown type '{}'", name)))
 }
 
 fn collect_field_pairs(items: &[Form]) -> Result<Vec<(Form, Form)>, CloveError> {
     if items.is_empty() {
         return Ok(Vec::new());
     }
-    if items.len() % 2 != 0 {
+    if !items.len().is_multiple_of(2) {
         let span = items.last().unwrap().span;
         return Err(span_runtime_error(
             span,
@@ -11443,7 +11441,7 @@ fn parse_defenum_options(args: &[Form], start: usize) -> Result<(bool, usize), C
             _ => {
                 return Err(span_runtime_error(
                     form.span,
-                    &format!("unknown defenum option :{}", option_name),
+                    format!("unknown defenum option :{}", option_name),
                 ))
             }
         }
@@ -11471,8 +11469,7 @@ fn collect_enum_members(
                 ));
             }
         };
-        if sym.starts_with('*') {
-            let target_raw = &sym[1..];
+        if let Some(target_raw) = sym.strip_prefix('*') {
             if target_raw.is_empty() {
                 return Err(span_runtime_error(
                     form.span,
@@ -11501,7 +11498,7 @@ fn collect_enum_members(
                 None => {
                     return Err(span_runtime_error(
                         form.span,
-                        &format!("unknown enum '{}'", target_raw),
+                        format!("unknown enum '{}'", target_raw),
                     ));
                 }
             }
@@ -11535,7 +11532,7 @@ fn collect_enum_members(
                 None => {
                     return Err(span_runtime_error(
                         form.span,
-                        &format!("unknown type '{}'", sym),
+                        format!("unknown type '{}'", sym),
                     ));
                 }
             }
@@ -11558,7 +11555,7 @@ fn collect_enum_members(
             None => {
                 return Err(span_runtime_error(
                     form.span,
-                    &format!("unknown type '{}'", sym),
+                    format!("unknown type '{}'", sym),
                 ));
             }
         }
@@ -11914,7 +11911,7 @@ pub(crate) fn form_to_value(form: &Form) -> Result<Value, CloveError> {
         FormKind::Set(items) => Ok(Value::Set(
             items
                 .iter()
-                .map(|it| form_to_value(it))
+                .map(form_to_value)
                 .collect::<Result<HashSet<_>, _>>()?,
         )),
         FormKind::ForeignBlock { tag, code } => Ok(Value::Foreign(Arc::new(ForeignValue {
@@ -12037,7 +12034,8 @@ pub fn to_key_value(val: Value) -> Key {
         Value::Int(n) => Key::Number(n),
         Value::Float(n) => Key::Number(n as i64),
         Value::Bool(b) => Key::Bool(b),
-        _ => Key::String(format!("{:?}", val)),
+        // to_key_value_checked と同じ正規化を使う。
+        _ => Key::Composite(crate::ast::CompositeKey::new(&val)),
     }
 }
 
@@ -12057,7 +12055,9 @@ pub fn to_key_value_checked(val: &Value) -> Result<Key, CloveError> {
         Value::MutVector(_) | Value::MutMap(_) | Value::MutSet(_) => Err(CloveError::runtime(
             "cannot use mutable collection as map key; use (imut x)",
         )),
-        other => Ok(Key::String(format!("{:?}", other))),
+        // Key で表せない複合値。Clove の表記へ正規化する（Rust の Debug 表記を
+        // 値として見せないため、また等しいマップが同じキーになるため）。
+        other => Ok(Key::Composite(crate::ast::CompositeKey::new(other))),
     }
 }
 
@@ -12084,7 +12084,7 @@ fn spread_items(value: &Value, span: Span) -> Result<Vector<Value>, CloveError> 
         | Value::MutSet(_) => seq_items(value),
         _ => Err(span_runtime_error(
             span,
-            &format!("spread expects a collection, got {}", value.type_name()),
+            format!("spread expects a collection, got {}", value.type_name()),
         )),
     }
 }
@@ -12180,6 +12180,7 @@ pub fn key_to_value(k: &Key) -> Value {
         Key::String(s) => Value::String(s.clone()),
         Key::Number(n) => Value::Int(*n),
         Key::Bool(b) => Value::Bool(*b),
+        Key::Composite(k) => k.value().clone(),
     }
 }
 
@@ -14029,15 +14030,10 @@ fn async_scope_strict_enabled() -> bool {
     match std::env::var("ASYNC_SCOPE_STRICT") {
         Ok(val) => {
             let trimmed = val.trim();
-            if trimmed.is_empty()
+            !(trimmed.is_empty()
                 || trimmed == "0"
                 || trimmed.eq_ignore_ascii_case("false")
-                || trimmed.eq_ignore_ascii_case("no")
-            {
-                false
-            } else {
-                true
-            }
+                || trimmed.eq_ignore_ascii_case("no"))
         }
         Err(_) => false,
     }
@@ -14330,7 +14326,7 @@ fn check_recur_list(form: &Form, items: &[Form], tail: RecurTailContext) -> Resu
 
 fn err_fin_clause_body(form: &Form) -> Option<&[Form]> {
     match &form.kind {
-        FormKind::List(items) if items.len() >= 1 => Some(&items[1..]),
+        FormKind::List(items) if !items.is_empty() => Some(&items[1..]),
         _ => None,
     }
 }
@@ -14524,19 +14520,19 @@ fn value_to_form(v: &Value) -> Result<Form, CloveError> {
         Value::List(items) => FormKind::List(
             items
                 .iter()
-                .map(|i| value_to_form(i))
+                .map(value_to_form)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Value::Vector(items) => FormKind::Vector(
             items
                 .iter()
-                .map(|i| value_to_form(i))
+                .map(value_to_form)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Value::Set(items) => FormKind::Set(
             items
                 .iter()
-                .map(|i| value_to_form(i))
+                .map(value_to_form)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         Value::Map(map) => {
@@ -14548,6 +14544,7 @@ fn value_to_form(v: &Value) -> Result<Form, CloveError> {
                     Key::String(s) => Form::new(FormKind::String(s.clone()), span),
                     Key::Number(n) => Form::new(FormKind::Int(*n), span),
                     Key::Bool(b) => Form::new(FormKind::Bool(*b), span),
+                    Key::Composite(k) => value_to_form(k.value())?,
                 };
                 entries.push(MapItem::KeyValue(key_form, value_to_form(v)?));
             }
@@ -14929,7 +14926,7 @@ impl MapRefRuntime {
                 .join(" -> ");
             return Err(span_runtime_error(
                 span,
-                &format!("map ref cycle detected: {}", formatted),
+                format!("map ref cycle detected: {}", formatted),
             ));
         }
         runtime.borrow_mut().in_progress.push(path.clone());
@@ -15035,7 +15032,7 @@ impl MapRefRuntime {
                 } else {
                     Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "map ref segment :{} not found in {}",
                             name,
                             format_map_ref_path(path)
@@ -15050,7 +15047,7 @@ impl MapRefRuntime {
                 } else {
                     Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "map ref segment \"{}\" not found in {}",
                             name,
                             format_map_ref_path(path)
@@ -15065,7 +15062,7 @@ impl MapRefRuntime {
                 } else {
                     Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "map ref segment {} not found in {}",
                             num,
                             format_map_ref_path(path)
@@ -15080,7 +15077,7 @@ impl MapRefRuntime {
                 } else {
                     Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "map ref segment '{}' not found in {}",
                             name,
                             format_map_ref_path(path)
@@ -15105,7 +15102,7 @@ impl MapRefRuntime {
                 match matches.len() {
                     0 => Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "map ref segment '{}' not found in {}",
                             name,
                             format_map_ref_path(path)
@@ -15114,7 +15111,7 @@ impl MapRefRuntime {
                     1 => Ok(matches.remove(0)),
                     _ => Err(span_runtime_error(
                         span,
-                        &format!(
+                        format!(
                             "map ref segment '{}' is ambiguous in {} (candidates: {})",
                             name,
                             format_map_ref_path(path),
@@ -15144,7 +15141,7 @@ impl MapRefRuntime {
         let idx = node.entries_by_key.get(key).copied().ok_or_else(|| {
             span_runtime_error(
                 span,
-                &format!("map ref path not found: {}", format_map_ref_path(path)),
+                format!("map ref path not found: {}", format_map_ref_path(path)),
             )
         })?;
         match &node.entries[idx] {
@@ -15152,12 +15149,12 @@ impl MapRefRuntime {
                 CalcValue::Map(child_id) => Ok(*child_id),
                 _ => Err(span_runtime_error(
                     span,
-                    &format!("map ref path expects map at {}", format_map_ref_path(path)),
+                    format!("map ref path expects map at {}", format_map_ref_path(path)),
                 )),
             },
             CalcEntry::Spread { .. } => Err(span_runtime_error(
                 span,
-                &format!("map ref path expects map at {}", format_map_ref_path(path)),
+                format!("map ref path expects map at {}", format_map_ref_path(path)),
             )),
         }
     }
@@ -15175,7 +15172,7 @@ impl MapRefRuntime {
             let entry_idx = node.entries_by_key.get(key).copied().ok_or_else(|| {
                 span_runtime_error(
                     span,
-                    &format!("map ref path not found: {}", format_map_ref_path(path)),
+                    format!("map ref path not found: {}", format_map_ref_path(path)),
                 )
             })?;
             match &node.entries[entry_idx] {
@@ -15194,7 +15191,7 @@ impl MapRefRuntime {
                         _ => {
                             return Err(span_runtime_error(
                                 span,
-                                &format!(
+                                format!(
                                     "map ref path expects map at {}",
                                     format_map_ref_path(&path[..=idx])
                                 ),
@@ -15205,14 +15202,14 @@ impl MapRefRuntime {
                 CalcEntry::Spread { .. } => {
                     return Err(span_runtime_error(
                         span,
-                        &format!("map ref path expects map at {}", format_map_ref_path(path)),
+                        format!("map ref path expects map at {}", format_map_ref_path(path)),
                     ))
                 }
             }
         }
         Err(span_runtime_error(
             span,
-            &format!("map ref path not found: {}", format_map_ref_path(path)),
+            format!("map ref path not found: {}", format_map_ref_path(path)),
         ))
     }
 
@@ -15369,6 +15366,7 @@ fn format_map_ref_key(key: &Key) -> String {
         Key::Symbol(name) => name.clone(),
         Key::Number(num) => num.to_string(),
         Key::Bool(val) => val.to_string(),
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 
@@ -15452,7 +15450,7 @@ mod tests {
             Some(Value::Vector(items)) => items,
             other => panic!("expected :var vector, got {:?}", other),
         };
-        let Some(Value::Map(entry)) = vars.get(0) else {
+        let Some(Value::Map(entry)) = vars.front() else {
             panic!("expected var entry");
         };
         assert!(entry.contains_key(&Key::Keyword("sym".into())));
@@ -15497,7 +15495,6 @@ mod tests {
 
     #[test]
     fn defn_registers_fn_meta() {
-        fn_meta::clear_for_tests();
         eval_src("(do (defn sum [x: Int y: Int] -> Int (+ x y)) sum)");
         let meta = fn_meta::get("user::sum").expect("meta");
         assert_eq!(meta.ns, "user");
@@ -16362,7 +16359,7 @@ mod tests {
                 match &items[2].kind {
                     FormKind::List(body_items) => match &body_items[1].kind {
                         FormKind::Vector(bindings) => {
-                            let name = match bindings.get(0).map(|f| &f.kind) {
+                            let name = match bindings.first().map(|f| &f.kind) {
                                 Some(FormKind::Symbol(s)) => s,
                                 other => panic!("expected binding symbol, got {:?}", other),
                             };

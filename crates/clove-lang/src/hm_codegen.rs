@@ -2201,7 +2201,7 @@ fn render_value_to_rust(var: &str, ty: &Type) -> String {
             )
         }
         Type::Record(_) => format!(
-            "match {v} {{ Value::Map(__items) => {{ let mut __out = std::collections::HashMap::new(); for (__k, __v) in __items {{ let __key = match __k {{ Key::Keyword(__s) | Key::String(__s) | Key::Symbol(__s) => __s, Key::Number(__n) => __n.to_string(), Key::Bool(__b) => __b.to_string(), }}; __out.insert(__key, __v); }} __out }}, other => panic!(\"expected map, got {{}}\", other) }}",
+            "match {v} {{ Value::Map(__items) => {{ let mut __out = std::collections::HashMap::new(); for (__k, __v) in __items {{ let __key = match __k {{ Key::Keyword(__s) | Key::String(__s) | Key::Symbol(__s) => __s, Key::Number(__n) => __n.to_string(), Key::Bool(__b) => __b.to_string(), Key::Composite(__c) => __c.repr().to_string(), }}; __out.insert(__key, __v); }} __out }}, other => panic!(\"expected map, got {{}}\", other) }}",
             v = var
         ),
         Type::Opaque(name) if is_symbol_type_name(name) => format!(

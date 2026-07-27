@@ -518,7 +518,7 @@ impl Compiler {
                 }
                 let all_int =
                     !arg_types.is_empty() && arg_types.iter().all(|ty| *ty == LocalType::Int);
-                let any_float = arg_types.iter().any(|ty| *ty == LocalType::Float);
+                let any_float = arg_types.contains(&LocalType::Float);
                 match builtin_id {
                     BuiltinId::Add
                     | BuiltinId::Sub
@@ -625,7 +625,7 @@ impl Compiler {
     }
 
     fn infer_cond_type(&self, forms: &[Form], scope: &mut TypeScope) -> LocalType {
-        if forms.len() % 2 != 0 {
+        if !forms.len().is_multiple_of(2) {
             return LocalType::Unknown;
         }
         let mut types = Vec::new();
@@ -1089,7 +1089,7 @@ impl Compiler {
             let try_span = body.first().map(|f| f.span).unwrap_or(span);
             let mut items = Vec::with_capacity(1 + tail_forms.body.len());
             items.push(Form::new(FormKind::Symbol("try".into()), try_span));
-            items.extend(tail_forms.body.into_iter());
+            items.extend(tail_forms.body);
             if let Some(err_form) = tail_forms.err {
                 items.push(err_form);
             }
@@ -1239,7 +1239,7 @@ impl Compiler {
         span: Span,
         tail: TailContext,
     ) -> Result<(), VmError> {
-        if args.len() % 2 != 0 {
+        if !args.len().is_multiple_of(2) {
             return Err(VmError::unsupported(
                 span,
                 "cond expects even number of test/expr pairs",
@@ -1789,7 +1789,7 @@ impl Compiler {
             return Ok(false);
         }
         let arg_types: Vec<LocalType> = args.iter().map(|arg| self.infer_expr_type(arg)).collect();
-        if arg_types.iter().any(|ty| *ty == LocalType::Unknown) {
+        if arg_types.contains(&LocalType::Unknown) {
             return Ok(false);
         }
         let all_int = arg_types.iter().all(|ty| *ty == LocalType::Int);
@@ -1797,7 +1797,7 @@ impl Compiler {
         let all_numeric = arg_types
             .iter()
             .all(|ty| matches!(ty, LocalType::Int | LocalType::Float));
-        let any_float = arg_types.iter().any(|ty| *ty == LocalType::Float);
+        let any_float = arg_types.contains(&LocalType::Float);
         for arg in args {
             self.compile_form_with_context(arg, TailContext::Value)?;
         }
@@ -2038,7 +2038,7 @@ impl Compiler {
             meta_value = Some(map);
         }
         if is_method {
-            let mut map = meta_value.unwrap_or_else(CowHashMap::new);
+            let mut map = meta_value.unwrap_or_default();
             map.insert(Key::Keyword("is-method".into()), Value::Bool(true));
             meta_value = Some(map);
         }
@@ -2267,7 +2267,7 @@ impl Compiler {
                 nil_safe_stages.push(stage.clone());
                 continue;
             }
-            current = self.build_oop_stage_call(stage, current, form.span)?;
+            current = self.build_oop_stage_call(stage, current)?;
             processed_stages += 1;
         }
         if nil_safe_active {
@@ -2556,12 +2556,7 @@ impl Compiler {
         Ok((base, true))
     }
 
-    fn build_oop_stage_call(
-        &self,
-        stage: &Form,
-        base: Form,
-        form_span: Span,
-    ) -> Result<Form, VmError> {
+    fn build_oop_stage_call(&self, stage: &Form, base: Form) -> Result<Form, VmError> {
         if let Some((placeholder, body)) = self.parse_oop_dot_stage(stage)? {
             return self.build_oop_dot_call(stage.span, placeholder, body, base);
         }
@@ -2618,7 +2613,7 @@ impl Compiler {
         };
         let tmp_name = format!("__oop_nil_safe{}_{}", form_span.index, idx);
         let tmp_sym = Form::new(FormKind::Symbol(tmp_name.clone()), stage.span);
-        let stage_form = self.build_oop_stage_call(stage, tmp_sym.clone(), form_span)?;
+        let stage_form = self.build_oop_stage_call(stage, tmp_sym.clone())?;
         let next_form = if rest.is_empty() {
             stage_form
         } else {

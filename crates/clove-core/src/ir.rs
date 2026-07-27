@@ -614,7 +614,7 @@ fn infer_match_call(
     if callee != Some("match") {
         return None;
     }
-    if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
         return None;
     }
     let target_sym = match &args[0].kind {
@@ -926,7 +926,6 @@ mod tests {
 
     #[test]
     fn analyze_simple_add() {
-        fn_meta::clear_for_tests();
         let mut meta = FnMeta::new("core", "+");
         meta.overloads.push(FnOverload {
             arg_types: vec![TypeKind::Int, TypeKind::Int],
@@ -952,7 +951,6 @@ mod tests {
 
     #[test]
     fn analyze_vector_literal() {
-        fn_meta::clear_for_tests();
         let forms = read_forms("[1 2 3]");
         let params = Vec::new();
         let analysis = analyze_fn_body(&params, &forms);
@@ -961,7 +959,6 @@ mod tests {
 
     #[test]
     fn range_returns_int_vector() {
-        fn_meta::clear_for_tests();
         let forms = read_forms("(range 0 10)");
         let params = Vec::new();
         let analysis = analyze_fn_body(&params, &forms);
@@ -970,7 +967,6 @@ mod tests {
 
     #[test]
     fn map_preserves_vector_inner_type() {
-        fn_meta::clear_for_tests();
         let forms = read_forms("(map inc xs)");
         let params = vec![ParamType {
             name: "xs".into(),
@@ -982,7 +978,6 @@ mod tests {
 
     #[test]
     fn reduce_returns_init_type() {
-        fn_meta::clear_for_tests();
         register_plus_meta();
         let forms = read_forms("(reduce + 0 xs)");
         let params = vec![ParamType {

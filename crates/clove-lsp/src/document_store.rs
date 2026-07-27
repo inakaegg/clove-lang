@@ -512,8 +512,8 @@ impl DocumentStore {
                 kind: lsp_symbol_kind(&info.kind),
                 tags: None,
                 deprecated: None,
-                range: info.range.clone(),
-                selection_range: info.range.clone(),
+                range: info.range,
+                selection_range: info.range,
                 children: None,
             });
         }
@@ -568,7 +568,7 @@ impl DocumentStore {
                 };
                 return Some(Location {
                     uri: uri.clone(),
-                    range: field.range.clone(),
+                    range: field.range,
                 });
             }
         }
@@ -760,7 +760,7 @@ impl DocumentStore {
         let range = self
             .docs
             .get(uri)
-            .and_then(|d| d.namespace_span.clone())
+            .and_then(|d| d.namespace_span)
             .unwrap_or(Range {
                 start: Position {
                     line: 0,
@@ -1048,7 +1048,7 @@ fn extract_namespace_from_text(text: &str) -> Option<String> {
                 .next()
                 .unwrap_or("")
                 .trim_end_matches(')');
-            let token = token.trim_end_matches(|c| c == ')');
+            let token = token.trim_end_matches(')');
             if !token.is_empty() {
                 return Some(token.to_string());
             }
@@ -1253,25 +1253,23 @@ fn index_forms(
                     }
                 }
             }
-            if head == "defenum" {
-                if !qualified_only {
-                    for (member, fields) in enum_member_fields {
-                        let canonical = canonical_symbol_name(&member.name).into_owned();
-                        index.insert(SymbolInfo {
-                            name: member.name.clone(),
-                            canonical,
-                            kind: SymbolKind::Deftype,
-                            range: member.range,
-                            docstring: None,
-                            params: None,
-                            fields,
-                            enum_members: Vec::new(),
-                            namespace: namespace.map(|s| s.to_string()),
-                            namespace_aliases: namespace_aliases.to_vec(),
-                            arities: Vec::new(),
-                            is_private: false,
-                        });
-                    }
+            if head == "defenum" && !qualified_only {
+                for (member, fields) in enum_member_fields {
+                    let canonical = canonical_symbol_name(&member.name).into_owned();
+                    index.insert(SymbolInfo {
+                        name: member.name.clone(),
+                        canonical,
+                        kind: SymbolKind::Deftype,
+                        range: member.range,
+                        docstring: None,
+                        params: None,
+                        fields,
+                        enum_members: Vec::new(),
+                        namespace: namespace.map(|s| s.to_string()),
+                        namespace_aliases: namespace_aliases.to_vec(),
+                        arities: Vec::new(),
+                        is_private: false,
+                    });
                 }
             }
         }
@@ -1587,7 +1585,7 @@ fn extract_deftype_list_fields(entries: &[Form]) -> Option<Vec<TypeField>> {
     if let Some(fields) = extract_deftype_typed_fields(entries) {
         return Some(fields);
     }
-    if entries.len() % 2 != 0 {
+    if !entries.len().is_multiple_of(2) {
         return None;
     }
     let mut fields = Vec::new();
@@ -1785,7 +1783,7 @@ fn build_user_completion_item(info: &SymbolInfo, replace_range: &Range) -> Compl
     item.detail = symbol_signature_label(info);
     item.documentation = user_documentation(info);
     item.text_edit = Some(CompletionTextEdit::Edit(TextEdit {
-        range: replace_range.clone(),
+        range: *replace_range,
         new_text: info.name.clone(),
     }));
     item.data = Some(json!({ "symbol": info.canonical.clone(), "source": "user" }));

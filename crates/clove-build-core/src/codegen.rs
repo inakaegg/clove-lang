@@ -1212,46 +1212,20 @@ fn emit_key_expr(ctx: &mut TypedContext, key_ast: &AstExpr, key: &TypedExpr) -> 
         }
         _ => {}
     }
+    // Rc<str>::from(&str) は借用から作るので、キーが変数でも式でも同じ生成コードでよい。
     match key.kind {
-        TypedKind::Str => {
-            if key.is_symbol {
-                Some(format!(
-                    "Key::Str(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            } else {
-                Some(format!(
-                    "Key::Str(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            }
-        }
-        TypedKind::Keyword => {
-            if key.is_symbol {
-                Some(format!(
-                    "Key::Keyword(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            } else {
-                Some(format!(
-                    "Key::Keyword(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            }
-        }
-        TypedKind::Symbol => {
-            if key.is_symbol {
-                Some(format!(
-                    "Key::Symbol(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            } else {
-                Some(format!(
-                    "Key::Symbol(std::rc::Rc::<str>::from({}.as_str()))",
-                    key.code
-                ))
-            }
-        }
+        TypedKind::Str => Some(format!(
+            "Key::Str(std::rc::Rc::<str>::from({}.as_str()))",
+            key.code
+        )),
+        TypedKind::Keyword => Some(format!(
+            "Key::Keyword(std::rc::Rc::<str>::from({}.as_str()))",
+            key.code
+        )),
+        TypedKind::Symbol => Some(format!(
+            "Key::Symbol(std::rc::Rc::<str>::from({}.as_str()))",
+            key.code
+        )),
         TypedKind::Int => Some(format!("Key::Int({})", key.code)),
         TypedKind::Bool => Some(format!("Key::Bool({})", key.code)),
         _ => None,
@@ -2483,7 +2457,7 @@ fn emit_typed_pipeline(
         return None;
     }
     let range_spec = range_spec_from_ast(ctx, env, fns, locals, source);
-    let (coll, mut elem_kind) = if range_spec.is_some() {
+    let (coll, elem_kind) = if range_spec.is_some() {
         (None, TypedKind::Int)
     } else {
         let coll = emit_typed_expr(ctx, env, fns, locals, source)?;
@@ -4000,11 +3974,7 @@ fn emit_typed_apply(
             let fixed_len = fixed_codes.len();
             let mut call_args = Vec::new();
             let mut extras = Vec::new();
-            let needed = if fixed_len >= params_len {
-                0
-            } else {
-                params_len - fixed_len
-            };
+            let needed = params_len.saturating_sub(fixed_len);
             out.push_str(&format!(
                 "        if {tail}.len() < {needed} {{\n            panic!(\"apply expects at least {params_len} arguments\");\n        }}\n",
                 tail = tail_ref,
@@ -4584,19 +4554,12 @@ fn emit_typed_rest(
     let out_elem_ty = typed_kind_to_rust(&elem_kind)?;
     let can_move_coll = !coll.is_symbol || coll.can_move;
     let code = if can_move_coll {
-        let coll_bind = if coll.is_symbol {
-            format!(
-                "        let mut {coll_var} = {coll};\n",
-                coll_var = coll_var,
-                coll = coll.code
-            )
-        } else {
-            format!(
-                "        let mut {coll_var} = {coll};\n",
-                coll_var = coll_var,
-                coll = coll.code
-            )
-        };
+        // 移動できると分かっているので、変数でも式でも同じ束縛でよい。
+        let coll_bind = format!(
+            "        let mut {coll_var} = {coll};\n",
+            coll_var = coll_var,
+            coll = coll.code
+        );
         let len_expr = format!("{coll_var}.len().saturating_sub(1)", coll_var = coll_var);
         format!(
             "{{\n{coll_bind}        let mut {out_var}: Vec<{out_elem_ty}> = Vec::with_capacity({len_expr});\n        for {value_var} in {coll_var}.into_iter().skip(1) {{\n            {out_var}.push({value_var});\n        }}\n        {out_var}\n    }}",
@@ -4744,7 +4707,7 @@ fn emit_typed_hash_map(
     locals: &HashMap<String, TypedKind>,
     args: &[AstExpr],
 ) -> Option<TypedExpr> {
-    if args.is_empty() || args.len() % 2 != 0 {
+    if args.is_empty() || !args.len().is_multiple_of(2) {
         return None;
     }
     let mut key_kind: Option<TypedKind> = None;
@@ -5004,12 +4967,12 @@ fn emit_typed_sort(
                 chars_var = chars_var,
                 out_var = out_var
             );
-            return Some(TypedExpr {
+            Some(TypedExpr {
                 code,
                 kind: TypedKind::Str,
                 is_symbol: false,
                 can_move: true,
-            });
+            })
         }
         TypedKind::Vec(elem_kind) => {
             let elem_kind = *elem_kind;
@@ -5108,12 +5071,12 @@ fn emit_typed_sort(
                 coll_init = coll_init,
                 sort_body = sort_body
             );
-            return Some(TypedExpr {
+            Some(TypedExpr {
                 code,
                 kind: TypedKind::Vec(Box::new(elem_kind)),
                 is_symbol: false,
                 can_move: true,
-            });
+            })
         }
         _ => None,
     }
@@ -5242,36 +5205,6 @@ fn emit_typed_sort_by(
             out_var = out_var,
             value_ref = value_ref,
             key_block = key_inline_block
-        )
-    } else if args.len() == 2 {
-        let left_key = format!(
-            "{{\n            let {value_var} = {left_expr};\n{inline_prelude}            {inline_expr}\n        }}",
-            value_var = value_var,
-            left_expr = if typed_kind_is_copy(&elem_kind) {
-                "(*left_ref)".to_string()
-            } else {
-                "left_ref.clone()".to_string()
-            },
-            inline_prelude = indent(&key_inline_prelude, 12),
-            inline_expr = key_inline_expr
-        );
-        let right_key = format!(
-            "{{\n            let {value_var} = {right_expr};\n{inline_prelude}            {inline_expr}\n        }}",
-            value_var = value_var,
-            right_expr = if typed_kind_is_copy(&elem_kind) {
-                "(*right_ref)".to_string()
-            } else {
-                "right_ref.clone()".to_string()
-            },
-            inline_prelude = indent(&key_inline_prelude, 12),
-            inline_expr = key_inline_expr
-        );
-        format!(
-            "        {out_var}.sort_by(|left_ref, right_ref| {{\n            let left_key = {left_key};\n            let right_key = {right_key};\n            {cmp_block}\n        }});\n",
-            out_var = out_var,
-            left_key = left_key,
-            right_key = right_key,
-            cmp_block = cmp_block
         )
     } else {
         let left_key = format!(
@@ -6384,7 +6317,7 @@ fn emit_typed_assoc(
     locals: &HashMap<String, TypedKind>,
     args: &[AstExpr],
 ) -> Option<TypedExpr> {
-    if args.len() < 3 || (args.len() - 1) % 2 != 0 {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
         return None;
     }
     let coll = emit_typed_expr(ctx, env, fns, locals, &args[0])?;
@@ -7481,7 +7414,7 @@ fn emit_native_block(
         out.push_str("?;\n");
     }
     out.push_str("    Ok::<Value, Clove2Error>(last)\n");
-    out.push_str("}");
+    out.push('}');
     Ok(out)
 }
 
@@ -8534,7 +8467,7 @@ fn emit_native_try(
     }
     let mut idx = 0;
     let mut bindings = Vec::new();
-    if let Some(AstExpr::Vector(items)) = args.get(0) {
+    if let Some(AstExpr::Vector(items)) = args.first() {
         bindings = parse_try_bindings(items)?;
         idx = 1;
     }
@@ -8554,14 +8487,16 @@ fn emit_native_try(
     }
     let mut on_error: Option<AstExpr> = None;
     let mut on_finally: Option<AstExpr> = None;
-    if catches.is_empty() && finally_body.is_none() {
-        if body.len() >= 2 && is_try_handler_expr(body.last().unwrap()) {
-            if is_try_handler_expr(&body[body.len() - 2]) {
-                on_finally = body.pop();
-                on_error = body.pop();
-            } else {
-                on_error = body.pop();
-            }
+    if catches.is_empty()
+        && finally_body.is_none()
+        && body.len() >= 2
+        && is_try_handler_expr(body.last().unwrap())
+    {
+        if is_try_handler_expr(&body[body.len() - 2]) {
+            on_finally = body.pop();
+            on_error = body.pop();
+        } else {
+            on_error = body.pop();
         }
     }
     if body.is_empty() {
@@ -8601,7 +8536,7 @@ fn emit_native_try(
         let catch_code = emit_native_block(codegen, ctx, &catch.body)?;
         ctx.pop_scope();
         out.push_str(&indent(&catch_code, 12));
-        out.push_str("\n");
+        out.push('\n');
     } else if let Some(handler) = on_error {
         if let AstExpr::Fn { params, body, .. } = handler {
             if params.len() != 1 {
@@ -8616,7 +8551,7 @@ fn emit_native_try(
             let handler_code = emit_native_block(codegen, ctx, &body)?;
             ctx.pop_scope();
             out.push_str(&indent(&handler_code, 12));
-            out.push_str("\n");
+            out.push('\n');
         } else {
             let handler_code = emit_native_expr(codegen, ctx, &handler)?;
             out.push_str("            let handler = ");
@@ -8652,7 +8587,7 @@ fn emit_native_try(
         }
     }
     out.push_str("    result\n");
-    out.push_str("}");
+    out.push('}');
     ctx.pop_scope();
     Ok(out)
 }

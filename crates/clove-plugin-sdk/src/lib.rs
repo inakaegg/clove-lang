@@ -1,3 +1,5 @@
+#![warn(unsafe_op_in_unsafe_fn)]
+
 use std::ffi::CString;
 
 use once_cell::sync::OnceCell;
@@ -37,22 +39,39 @@ pub struct FnSpec {
     pub doc: Option<&'static str>,
     pub arity_min: u8,
     pub arity_max: u8,
-    pub register: fn(&HostApiV1, EnvHandle) -> bool,
+    /// Registers this function into the host environment.
+    ///
+    /// `unsafe` because `EnvHandle` is a raw pointer owned by the host: it is only valid
+    /// during the `clove_plugin_init_v1` call that supplied it.
+    pub register: unsafe fn(&HostApiV1, EnvHandle) -> bool,
 }
 
 inventory::collect!(FnSpec);
 inventory::collect!(TypeSpec);
 
-pub fn register_all(host: &HostApiV1, env: EnvHandle) -> bool {
+/// Register every `#[clove_fn]` in this plugin into the host environment.
+///
+/// # Safety
+///
+/// `env` must be the `EnvHandle` the host passed to `clove_plugin_init_v1`, and this must
+/// be called while that call is still on the stack. The handle is a raw pointer into the
+/// host's runtime; using a stale or forged one is undefined behavior.
+pub unsafe fn register_all(host: &HostApiV1, env: EnvHandle) -> bool {
     for spec in inventory::iter::<FnSpec> {
-        if !(spec.register)(host, env) {
+        if !unsafe { (spec.register)(host, env) } {
             return false;
         }
     }
     true
 }
 
-pub fn register_fn(
+/// Define one function in the host environment.
+///
+/// # Safety
+///
+/// Same contract as [`register_all`]: `env` must be the live handle the host passed to
+/// `clove_plugin_init_v1`.
+pub unsafe fn register_fn(
     host: &HostApiV1,
     env: EnvHandle,
     name: &str,
@@ -187,7 +206,9 @@ macro_rules! clove_plugin_exports_v1 {
             {
                 return 2;
             }
-            if !$crate::register_all(host, env) {
+            // The host guarantees `env` is live for the duration of this call, which is
+            // the contract `register_all` documents.
+            if !unsafe { $crate::register_all(host, env) } {
                 return 3;
             }
             0

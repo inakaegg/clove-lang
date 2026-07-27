@@ -136,7 +136,7 @@ fn nav_reports_set_difference_as_canonical() {
     let mut ctx = create_runtime(EvalOptions::default(), &default_engines());
     let nav = eval(&mut ctx, "(nav \"difference\" :var)");
     let vars = nav_vars(&nav);
-    let Some(entry) = vars.get(0) else {
+    let Some(entry) = vars.first() else {
         panic!("expected var entry");
     };
     let sym = entry_sym(entry).expect("sym missing");
@@ -168,7 +168,7 @@ fn nav_reports_fs_file_exists_as_canonical() {
     let mut ctx = create_runtime(EvalOptions::default(), &default_engines());
     let nav = eval(&mut ctx, "(nav \"file-exists?\" :var)");
     let vars = nav_vars(&nav);
-    let Some(entry) = vars.get(0) else {
+    let Some(entry) = vars.first() else {
         panic!("expected var entry");
     };
     let sym = entry_sym(entry).expect("sym missing");
@@ -221,7 +221,7 @@ fn nav_prefers_set_namespace_for_set_query() {
     let mut ctx = create_runtime(EvalOptions::default(), &default_engines());
     let nav = eval(&mut ctx, "(nav \"set\" :var)");
     let vars = nav_vars(&nav);
-    let Some(entry) = vars.get(0) else {
+    let Some(entry) = vars.first() else {
         panic!("expected var entry");
     };
     let topics = entry_topics(entry);
@@ -233,7 +233,7 @@ fn nav_context_query_prefers_set_topics() {
     let mut ctx = create_runtime(EvalOptions::default(), &default_engines());
     let nav = eval(&mut ctx, "(nav #{} :var)");
     let vars = nav_vars(&nav);
-    let Some(entry) = vars.get(0) else {
+    let Some(entry) = vars.first() else {
         panic!("expected var entry");
     };
     let topics = entry_topics(entry);
