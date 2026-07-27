@@ -908,6 +908,54 @@ pub enum Key {
     String(String),
     Number(i64),
     Bool(bool),
+    /// `Key` で直接表せない複合値（マップ・ベクタ・集合・リスト）をキーにしたもの。
+    Composite(CompositeKey),
+}
+
+/// 複合値のマップキー。
+///
+/// 同一性は正規化した表記 `repr` だけで決める。等しいマップは書いた順に関わらず
+/// 同じキーになり、`Key::String` とは別の variant なので、文字列 `"{:a 1}"` と
+/// マップ `{:a 1}` が同じキーへ潰れることもない。
+///
+/// `value` は元の値。`keys` や外部言語境界でキーを値として取り出すときに使う。
+/// 表記だけを持つと、表記の等しい文字列キーと区別が付かなくなる。
+#[derive(Clone, Debug)]
+pub struct CompositeKey {
+    repr: String,
+    value: Box<Value>,
+}
+
+impl CompositeKey {
+    pub fn new(value: &Value) -> Self {
+        Self {
+            repr: canonical_key_repr(value),
+            value: Box::new(value.clone()),
+        }
+    }
+
+    /// 正規化した Clove 表記。既に Clove 構文なので、表示で引用符を付けない。
+    pub fn repr(&self) -> &str {
+        &self.repr
+    }
+
+    pub fn value(&self) -> &Value {
+        &self.value
+    }
+}
+
+impl PartialEq for CompositeKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.repr == other.repr
+    }
+}
+
+impl Eq for CompositeKey {}
+
+impl std::hash::Hash for CompositeKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.repr.hash(state);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1936,6 +1984,8 @@ fn format_key(k: &Key) -> String {
         Key::String(s) => format!("\"{}\"", escape_string_fragment(s)),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        // 既に Clove 構文なのでそのまま出す。
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 

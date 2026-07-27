@@ -42,3 +42,13 @@ fn source_of_def_has_no_internal_apply() {
 fn source_of_unknown_symbol_is_nil() {
     assert_eq!(eval("(source 'no-such-symbol-here)"), Value::Nil);
 }
+
+/// quote の内側の `__apply` はコンパイラが入れたものではなくユーザーが書いたデータ。
+/// 落とすとソースが変わってしまう。
+#[test]
+fn quoted_apply_is_kept() {
+    assert_eq!(
+        source_of("(defn f [x] '(__apply + x 1)) (source 'f)"),
+        "(defn f [x] (quote (__apply + x 1)))"
+    );
+}

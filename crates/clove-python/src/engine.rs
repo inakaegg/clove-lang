@@ -315,6 +315,7 @@ fn key_to_python(py: Python<'_>, k: &clove_core::ast::Key) -> PyResult<PyObject>
         clove_core::ast::Key::String(s) => Ok(PyString::new(py, s).into()),
         clove_core::ast::Key::Number(n) => Ok((*n).into_py(py)),
         clove_core::ast::Key::Bool(b) => Ok((*b).into_py(py)),
+        clove_core::ast::Key::Composite(k) => to_python(py, k.value()),
     }
 }
 

@@ -44,8 +44,48 @@ fn composite_keys_do_not_leak_rust_debug_output() {
 
 #[test]
 fn composite_keys_use_clove_notation() {
-    assert_eq!(rendered("(keys (assoc {} {:a 1} :x))"), r#"["{:a 1}"]"#);
-    assert_eq!(rendered("(keys (assoc {} [1 2] :v))"), r#"["[1 2]"]"#);
+    // マップの表示では Clove 構文のまま出る。
+    assert_eq!(rendered("(assoc {} {:a 1} :x)"), "{{:a 1} :x}");
+    assert_eq!(rendered("(assoc {} [1 2] :v)"), "{[1 2] :v}");
+}
+
+/// キーを値として取り出す経路でも、複合値は文字列に落ちない。
+/// 落とすと `{:a 1}` と `"{:a 1}"` が同じ値になってしまう。
+#[test]
+fn composite_keys_survive_as_values() {
+    assert_eq!(rendered("(keys (assoc {} {:a 1} :x))"), "[{:a 1}]");
+    assert_eq!(rendered("(keys (assoc {} [1 2] :v))"), "[[1 2]]");
+    assert_eq!(
+        rendered(r#"(keys (assoc (assoc {} {:a 1} :x) "{:a 1}" :y))"#),
+        r#"[{:a 1} "{:a 1}"]"#
+    );
+    // 取り出したキーで引き直せる
+    assert_eq!(
+        eval("(let [m (assoc {} {:a 1} :x)] (get m (first (keys m))))"),
+        Value::Symbol(":x".into())
+    );
+}
+
+/// 複合キーは同じ表記の文字列キーと別物。`Key::String` へ落とすと
+/// `{:a 1}` と `"{:a 1}"` が同じキーへ潰れる。
+#[test]
+fn composite_keys_do_not_collide_with_string_keys() {
+    assert_eq!(
+        eval(r#"(count (assoc (assoc {} {:a 1} :x) "{:a 1}" :y))"#),
+        Value::Int(2)
+    );
+    assert_eq!(
+        eval(r#"(count (assoc (assoc {} [1 2] :x) "[1 2]" :y))"#),
+        Value::Int(2)
+    );
+    assert_eq!(
+        eval(r#"(get (assoc (assoc {} {:a 1} :x) "{:a 1}" :y) {:a 1})"#),
+        Value::Symbol(":x".into())
+    );
+    assert_eq!(
+        eval(r#"(get (assoc (assoc {} {:a 1} :x) "{:a 1}" :y) "{:a 1}")"#),
+        Value::Symbol(":y".into())
+    );
 }
 
 #[test]

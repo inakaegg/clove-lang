@@ -66,12 +66,6 @@ process::sh-line
 # （Runtime error: binding name must be symbol）。実行時に束縛を差し替える API が要る。
 with-redefs-fn
 #
-# set::index: doc は {{:a 1} #{..}}（マップをキーにする）を期待するが、Key が
-# keyword/symbol/string/number/bool しか表せないため文字列キー "{:a 1}" になる。
-# Rust の Debug 表記の漏れと順序依存は修正済み（tests/composite_map_keys.rs）。
-# 直すなら Key 自体が複合値を持てるようにする。
-set::index
-#
 # infer-type: 型注釈付きリテラル ([1 2]: [Int Int]) に対して Any を返す。
 # 注釈が推論へ渡っていない。
 infer-type

@@ -1,5 +1,13 @@
 use crate::ast::{Form, FormKind, InterpolatedPart, MapItem, RegexDelim};
+
 pub fn form_to_source(form: &Form) -> String {
+    form_to_source_inner(form, false)
+}
+
+/// `in_quote` は「このフォームが quote の内側にあるか」。内側では `__apply` は
+/// コンパイラが入れたものではなくユーザーが書いたデータなので、落としてはいけない。
+fn form_to_source_inner(form: &Form, in_quote: bool) -> String {
+    let form_to_source = |f: &Form| form_to_source_inner(f, in_quote);
     match &form.kind {
         FormKind::Int(n) => n.to_string(),
         FormKind::Float(n) => format_float(*n),
@@ -29,8 +37,19 @@ pub fn form_to_source(form: &Form) -> String {
         FormKind::List(items) => {
             // コンパイラは通常の呼び出しを `(__apply f args..)` へ下ろす。ソースとして
             // 見せるときは元の `(f args..)` に戻す。内部形式を利用者へ出さない。
-            let items = strip_internal_apply(items);
-            let parts: Vec<String> = items.iter().map(form_to_source).collect();
+            // quote の内側は下ろされていないので触らない。
+            let items = if in_quote {
+                items.as_slice()
+            } else {
+                strip_internal_apply(items)
+            };
+            // quote の中身はデータ。ここから先は書き換えない。
+            let inner_quote = in_quote
+                || matches!(items.first().map(|f| &f.kind), Some(FormKind::Symbol(s)) if s == "quote");
+            let parts: Vec<String> = items
+                .iter()
+                .map(|item| form_to_source_inner(item, inner_quote))
+                .collect();
             format!("({})", parts.join(" "))
         }
         FormKind::Vector(items) => {

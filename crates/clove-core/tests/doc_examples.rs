@@ -434,6 +434,8 @@ enum Shape {
     Str(String),
     /// シンボルとキーワード（Cloveのキーワードは `:` 付きのシンボル）
     Sym(String),
+    /// Key で直接表せない複合値のキー。文字列キーと区別する。
+    CompositeKey(Box<Shape>),
     Seq(Vec<Shape>),
     Vector(Vec<Shape>),
     Set(Vec<Shape>),
@@ -505,6 +507,8 @@ fn shape_of_key(key: &Key) -> Shape {
         Key::String(s) => Shape::Str(s.clone()),
         Key::Number(n) => Shape::Num(n.to_string()),
         Key::Bool(b) => Shape::Bool(*b),
+        // 複合キーは元の値の形で比べる。文字列キーとは別物。
+        Key::Composite(k) => Shape::CompositeKey(Box::new(shape_of(k.value()))),
     }
 }
 
@@ -578,6 +582,8 @@ fn render_key(key: &Key) -> String {
         Key::String(s) => format!("\"{}\"", s),
         Key::Number(n) => n.to_string(),
         Key::Bool(b) => b.to_string(),
+        // 既に Clove 構文なのでそのまま出す。
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 

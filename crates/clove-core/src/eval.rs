@@ -12035,7 +12035,7 @@ pub fn to_key_value(val: Value) -> Key {
         Value::Float(n) => Key::Number(n as i64),
         Value::Bool(b) => Key::Bool(b),
         // to_key_value_checked と同じ正規化を使う。
-        _ => Key::String(crate::ast::canonical_key_repr(&val)),
+        _ => Key::Composite(crate::ast::CompositeKey::new(&val)),
     }
 }
 
@@ -12057,7 +12057,7 @@ pub fn to_key_value_checked(val: &Value) -> Result<Key, CloveError> {
         )),
         // Key で表せない複合値。Clove の表記へ正規化する（Rust の Debug 表記を
         // 値として見せないため、また等しいマップが同じキーになるため）。
-        other => Ok(Key::String(crate::ast::canonical_key_repr(other))),
+        other => Ok(Key::Composite(crate::ast::CompositeKey::new(other))),
     }
 }
 
@@ -12180,6 +12180,7 @@ pub fn key_to_value(k: &Key) -> Value {
         Key::String(s) => Value::String(s.clone()),
         Key::Number(n) => Value::Int(*n),
         Key::Bool(b) => Value::Bool(*b),
+        Key::Composite(k) => k.value().clone(),
     }
 }
 
@@ -14543,6 +14544,7 @@ fn value_to_form(v: &Value) -> Result<Form, CloveError> {
                     Key::String(s) => Form::new(FormKind::String(s.clone()), span),
                     Key::Number(n) => Form::new(FormKind::Int(*n), span),
                     Key::Bool(b) => Form::new(FormKind::Bool(*b), span),
+                    Key::Composite(k) => value_to_form(k.value())?,
                 };
                 entries.push(MapItem::KeyValue(key_form, value_to_form(v)?));
             }
@@ -15364,6 +15366,7 @@ fn format_map_ref_key(key: &Key) -> String {
         Key::Symbol(name) => name.clone(),
         Key::Number(num) => num.to_string(),
         Key::Bool(val) => val.to_string(),
+        Key::Composite(k) => k.repr().to_string(),
     }
 }
 

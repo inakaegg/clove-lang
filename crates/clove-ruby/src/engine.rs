@@ -316,6 +316,7 @@ fn key_to_ruby(ruby: &Ruby, k: &Key) -> Result<magnus::Value, RubyError> {
         Key::String(s) => Ok(ruby.str_new(s).into_value_with(ruby)),
         Key::Number(n) => Ok(ruby.integer_from_i64(*n).into_value_with(ruby)),
         Key::Bool(b) => Ok(b.into_value_with(ruby)),
+        Key::Composite(k) => to_ruby(ruby, k.value()),
     }
 }
 
