@@ -1345,8 +1345,8 @@
     "doc": "Read a .env-style file and return a map of key/value strings.",
     "origin": "config",
     "examples": [
-      "(env::parse-file \"data::fixtures/doc_examples/config/.env\") ; => {\"MODE\" \"dev\" \"PORT\" \"3000\"}",
-      "(contains? (env::parse-file \"data::fixtures/doc_examples/config/.env\") \"PORT\") ; => true"
+      "(env::parse-file \"data/fixtures/doc_examples/config/.env\") ; => {\"MODE\" \"dev\" \"PORT\" \"3000\"}",
+      "(contains? (env::parse-file \"data/fixtures/doc_examples/config/.env\") \"PORT\") ; => true"
     ]
   },
   {
@@ -2065,8 +2065,8 @@
     "doc": "Read a file from disk and parse it as JSON.",
     "origin": "json",
     "examples": [
-      "(json::read-file \"data::fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
-      "(map? (json::read-file \"data::fixtures/json/example.json\")) ; => true"
+      "(json::read-file \"data/fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
+      "(map? (json::read-file \"data/fixtures/json/example.json\")) ; => true"
     ]
   },
   {
@@ -2075,8 +2075,8 @@
     "doc": "Read a JSON file lazily. Arrays yield elements; objects yield [key value] pairs.",
     "origin": "json",
     "examples": [
-      "(first (json::read-file-seq \"data::fixtures/json/example.json\")) ; => [\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]]",
-      "(seq? (json::read-file-seq \"data::fixtures/json/example.json\")) ; => true"
+      "(first (json::read-file-seq \"data/fixtures/json/example.json\")) ; => [\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]]",
+      "(seq? (json::read-file-seq \"data/fixtures/json/example.json\")) ; => true"
     ]
   },
   {
@@ -4881,8 +4881,8 @@
     "doc": "Read a file and parse it as TOML.",
     "origin": "config",
     "examples": [
-      "(toml::read-file \"data::fixtures/doc_examples/config/settings.toml\") ; => {\"settings\" {\"name\" \"demo\" \"port\" 8080}}",
-      "(map? (toml::read-file \"data::fixtures/doc_examples/config/settings.toml\")) ; => true"
+      "(toml::read-file \"data/fixtures/doc_examples/config/settings.toml\") ; => {\"settings\" {\"name\" \"demo\" \"port\" 8080}}",
+      "(map? (toml::read-file \"data/fixtures/doc_examples/config/settings.toml\")) ; => true"
     ]
   },
   {
@@ -5239,8 +5239,8 @@
     "doc": "Read a file and parse it as YAML.",
     "origin": "yaml",
     "examples": [
-      "(yaml::read-file \"data::fixtures/doc_examples/config/settings.yaml\") ; => {\"settings\" {\"name\" \"demo\" \"port\" 8080}}",
-      "(map? (yaml::read-file \"data::fixtures/doc_examples/config/settings.yaml\")) ; => true"
+      "(yaml::read-file \"data/fixtures/doc_examples/config/settings.yaml\") ; => {\"settings\" {\"name\" \"demo\" \"port\" 8080}}",
+      "(map? (yaml::read-file \"data/fixtures/doc_examples/config/settings.yaml\")) ; => true"
     ]
   },
   {

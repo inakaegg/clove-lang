@@ -1160,8 +1160,8 @@
     "doc": "Read a file from disk and parse it as JSON.",
     "origin": "json",
     "examples": [
-      "(json::read-file \"data::fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
-      "(map? (json::read-file \"data::fixtures/json/example.json\")) ; => true"
+      "(json::read-file \"data/fixtures/json/example.json\") ; => {\"items\" [{\"id\" 1 \"name\" \"alpha\"} {\"id\" 2 \"name\" \"beta\"}]}",
+      "(map? (json::read-file \"data/fixtures/json/example.json\")) ; => true"
     ]
   },
   {
