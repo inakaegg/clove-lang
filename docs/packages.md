@@ -100,10 +100,10 @@ If a package `clove-pkg.json` includes `deps`, it declares **transitive dependen
 ```
 // clove-pkg.json
 {
-  "pkg": "inakaegg/flappy",
-  "ns_root": "inakaegg::flappy",
+  "pkg": "example/flappy",
+  "ns_root": "example::flappy",
   "deps": {
-    "somebody/util": { "origin": "somebody/util", "rev": "v0.1.0" }
+    "example/util": { "origin": "example/util", "rev": "v0.1.0" }
   }
 }
 ```
