@@ -60,28 +60,4 @@ infer-type
 # [G] OOP例の自動生成が成立しない組み合わせ
 #  以下は本体テストでは通るが、生成器が主語にならない引数（キーワードなど）を
 #  主語へ持ち上げるためOOP側だけ落ちる: `(hash-map :a 1 :b 2)` → `:a.hash-map(1 :b 2)`
-hash-map
-sorted-map
-sorted-map-by
-sorted-map-desc
-sorted?
-with-meta
-instance?
-reverse
-keyword?
-symbol
 #
-filter
-remove
-keep
-map
-take-while
-drop-while
-split-with
-not-every?
-pmap
-pfilter
-dag::pmap
-dag::pfilter
-doto
-constantly
