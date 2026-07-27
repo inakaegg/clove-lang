@@ -315,7 +315,9 @@ fn key_to_python(py: Python<'_>, k: &clove_core::ast::Key) -> PyResult<PyObject>
         clove_core::ast::Key::String(s) => Ok(PyString::new(py, s).into()),
         clove_core::ast::Key::Number(n) => Ok((*n).into_py(py)),
         clove_core::ast::Key::Bool(b) => Ok((*b).into_py(py)),
-        clove_core::ast::Key::Composite(k) => to_python(py, k.value()),
+        // Python の dict キーは hashable でなければならず、list / dict / set は不可。
+        // 複合キーは正規化した Clove 表記の文字列として渡す。
+        clove_core::ast::Key::Composite(k) => Ok(PyString::new(py, k.repr()).into()),
     }
 }
 

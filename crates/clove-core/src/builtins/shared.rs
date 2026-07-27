@@ -364,7 +364,13 @@ pub(crate) fn map_like_to_hashmap(
 }
 
 fn compare_keys(comparator: &Value, left: &Key, right: &Key) -> Result<Ordering, CloveError> {
-    compare_values(comparator, &key_to_value(left), &key_to_value(right))
+    // 複合キーは正規化した表記で比べる。compare はベクタ同士やマップ同士を
+    // 比べられないので、元の値を渡すと sorted-map が作れなくなる。
+    let to_comparable = |key: &Key| match key {
+        Key::Composite(k) => Value::String(k.repr().to_string()),
+        other => key_to_value(other),
+    };
+    compare_values(comparator, &to_comparable(left), &to_comparable(right))
 }
 
 fn compare_values(comparator: &Value, left: &Value, right: &Value) -> Result<Ordering, CloveError> {

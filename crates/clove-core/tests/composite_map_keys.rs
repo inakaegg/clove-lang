@@ -116,3 +116,13 @@ fn vector_keys_keep_their_order() {
     );
     assert_eq!(eval("(get (assoc {} [1 2] :v) [2 1])"), Value::Nil);
 }
+
+/// sorted-map は複合キーも並べられる。`compare` はベクタ同士やマップ同士を
+/// 比べられないので、正規化した表記で比べる。
+#[test]
+fn composite_keys_can_be_sorted() {
+    assert_eq!(
+        rendered("(sorted-map (assoc (assoc {} [1] :a) [2] :b))"),
+        "{[1] :a [2] :b}"
+    );
+}

@@ -12,7 +12,7 @@ fn form_to_source_inner(form: &Form, in_quote: bool) -> String {
         FormKind::Int(n) => n.to_string(),
         FormKind::Float(n) => format_float(*n),
         FormKind::String(s) => format!("\"{}\"", escape_string_fragment(s)),
-        FormKind::InterpolatedString(parts) => format_interpolated_string(parts),
+        FormKind::InterpolatedString(parts) => format_interpolated_string(parts, in_quote),
         FormKind::Bool(b) => {
             if *b {
                 "true".into()
@@ -33,7 +33,9 @@ fn form_to_source_inner(form: &Form, in_quote: bool) -> String {
             RegexDelim::Hash => format!("#\"{}\"", escape_regex_fragment(pattern)),
             RegexDelim::HashSlash => format!("#/{}/", escape_regex_fragment(pattern)),
         },
-        FormKind::InterpolatedRegex { parts, delim } => format_interpolated_regex(parts, delim),
+        FormKind::InterpolatedRegex { parts, delim } => {
+            format_interpolated_regex(parts, delim, in_quote)
+        }
         FormKind::List(items) => {
             // コンパイラは通常の呼び出しを `(__apply f args..)` へ下ろす。ソースとして
             // 見せるときは元の `(f args..)` に戻す。内部形式を利用者へ出さない。
@@ -97,7 +99,7 @@ fn strip_internal_apply(items: &[Form]) -> &[Form] {
     }
 }
 
-fn format_interpolated_string(parts: &[InterpolatedPart]) -> String {
+fn format_interpolated_string(parts: &[InterpolatedPart], in_quote: bool) -> String {
     let mut buf = String::new();
     buf.push('"');
     for part in parts {
@@ -105,7 +107,7 @@ fn format_interpolated_string(parts: &[InterpolatedPart]) -> String {
             InterpolatedPart::Text(text) => buf.push_str(&escape_string_fragment(text)),
             InterpolatedPart::Expr(expr) => {
                 buf.push_str("#{");
-                buf.push_str(&form_to_source(expr));
+                buf.push_str(&form_to_source_inner(expr, in_quote));
                 buf.push('}');
             }
         }
@@ -114,7 +116,11 @@ fn format_interpolated_string(parts: &[InterpolatedPart]) -> String {
     buf
 }
 
-fn format_interpolated_regex(parts: &[InterpolatedPart], delim: &RegexDelim) -> String {
+fn format_interpolated_regex(
+    parts: &[InterpolatedPart],
+    delim: &RegexDelim,
+    in_quote: bool,
+) -> String {
     let (prefix, suffix) = match delim {
         RegexDelim::Slash => ("/", "/"),
         RegexDelim::Hash => ("#\"", "\""),
@@ -127,7 +133,7 @@ fn format_interpolated_regex(parts: &[InterpolatedPart], delim: &RegexDelim) -> 
             InterpolatedPart::Text(text) => buf.push_str(&escape_regex_fragment(text)),
             InterpolatedPart::Expr(expr) => {
                 buf.push_str("#{");
-                buf.push_str(&form_to_source(expr));
+                buf.push_str(&form_to_source_inner(expr, in_quote));
                 buf.push('}');
             }
         }

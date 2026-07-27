@@ -52,3 +52,12 @@ fn quoted_apply_is_kept() {
         "(defn f [x] (quote (__apply + x 1)))"
     );
 }
+
+/// quote の内側の補間式でも `__apply` を落とさない。
+#[test]
+fn quoted_interpolation_keeps_apply() {
+    assert_eq!(
+        source_of(r#"(defn f [] '"v=#{(__apply + 1 2)}") (source 'f)"#),
+        r#"(defn f [] (quote "v=#{(__apply + 1 2)}"))"#
+    );
+}
