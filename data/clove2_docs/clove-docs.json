@@ -571,9 +571,9 @@
     "doc": "Register a sum/enum type in the current namespace; each member must be a product type in the same namespace or a spread of another enum (e.g. *OtherEnum). Missing member types are auto-created as empty products (constructors/predicates are emitted). Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Red :user::Green]",
-      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Dog",
-      "(defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Dog :user::Cat :user::Salmon]"
+      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Color::Red :user::Color::Green]",
+      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Pets::Dog",
+      "(defenum Pets Dog Cat) (defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Pets::Dog :user::Pets::Cat :user::Animals::Salmon]"
     ]
   },
   {

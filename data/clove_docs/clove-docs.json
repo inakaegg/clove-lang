@@ -1045,9 +1045,9 @@
     "doc": "Register a sum/enum type in the current namespace; each member must be a product type in the same namespace or a spread of another enum (e.g. *OtherEnum). Missing member types are auto-created as empty products (constructors/predicates are emitted). Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Red :user::Green]",
-      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Dog",
-      "(defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Dog :user::Cat :user::Salmon]"
+      "(defenum Color Red Green) (enum-members :user::Color) ; => [:user::Color::Red :user::Color::Green]",
+      "(defenum Pets Dog Cat) (type-of (Dog)) ; => user::Pets::Dog",
+      "(defenum Pets Dog Cat) (defenum Animals *Pets Salmon) (enum-members :user::Animals) ; => [:user::Pets::Dog :user::Pets::Cat :user::Animals::Salmon]"
     ]
   },
   {
@@ -5738,11 +5738,11 @@
   {
     "name": "mut",
     "signature": "mut x",
-    "doc": "Deep-convert collections to mutable ones; nested map/vector/set values become mutable as well. Note: if you replace a key with assoc!, older references still point to the previous value (by design).",
+    "doc": "Shallow-convert a collection to a mutable one; only the top level becomes mutable and children stay immutable (write (mut ..) at each level you need, or let assoc-in! / update-in! convert the touched path). Note: if you replace a key with assoc!, older references still point to the previous value (by design).",
     "origin": "core",
     "examples": [
       "(mut {:a 1}) ; => #<mut {:a 1}>",
-      "(let [world (mut {:player {:x 10 :y 20} :tick 0})]\n  (mut? (get world :player))) ; => true"
+      "(let [world (mut {:player (mut {:x 10 :y 20}) :tick 0})]\n  (mut? (get world :player))) ; => true"
     ]
   },
   {

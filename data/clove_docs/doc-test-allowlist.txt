@@ -56,14 +56,6 @@ ns
 set::index
 #  infer-type: 型注釈付きリテラル ([1 2]: [Int Int]) で Any を返す
 infer-type
-#  mut: (mut? (get world :player)) が false。入れ子のマップが mut にならないのが
-#  仕様か不具合か未確定
-mut
-#
-# [F'] 仕様判断が必要
-#  defenum: enumキーワードに型名を含めるか。実装は :user::Color::Red、docは :user::Red。
-#  例#3 の他enum取り込み (defenum Animals *Pets Salmon) は unknown enum 'Pets' で落ちる
-defenum
 #
 # [G] OOP例の自動生成が成立しない組み合わせ
 #  以下は本体テストでは通るが、生成器が主語にならない引数（キーワードなど）を
