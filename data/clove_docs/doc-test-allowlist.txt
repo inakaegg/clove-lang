@@ -41,11 +41,11 @@ fs::glob*
 process::run
 process::sh-line
 #
-# [C] 前の例で定義した束縛に依存（ハーネスは1例ごとに新しいランタイムを作る）
-compare-and-set!
-deftype
+# [C] 実装側の未実装・不具合
+#  with-redefs-fn: どんな入力でも動かない。with-redefs は特殊形式でリテラルの
+#  束縛ベクタを要求するのに、std の実装は実行時の値 `bindings` をそのまま渡している
+#  （Runtime error: binding name must be symbol）。実行時の束縛差し替えAPIが要る
 with-redefs-fn
-ns
 #
 #
 # [F] 実装側の不具合・精度不足（docの期待値のほうが正しい）

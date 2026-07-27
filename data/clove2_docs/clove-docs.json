@@ -591,8 +591,8 @@
     "doc": "Define a record-like type with typed fields; emits a constructor function with the same name. Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(deftype Point {:x Int :y Int})",
-      "(Point {:x 1 :y 2}) ; => {:type user::Point :x 1 :y 2}"
+      "(deftype Point {:x Int :y Int}) ; => user::Point",
+      "(deftype Point {:x Int :y Int}) (Point {:x 1 :y 2}) ; => {:type user::Point :x 1 :y 2}"
     ]
   },
   {
@@ -1554,8 +1554,8 @@
     "doc": "Declare or switch namespace. Optional docstring and attr-map may appear after the name in any order.",
     "origin": "special form",
     "examples": [
-      "(ns demo.core) ; => demo.core",
-      "(ns tools.math) ; => tools.math"
+      "(ns demo::core) ; => demo::core",
+      "(ns tools::math) ; => tools::math"
     ]
   },
   {
