@@ -1,9 +1,15 @@
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, Weak};
 
+use rustc_hash::FxHashMap;
+
 use crate::ast::Value;
 use crate::symbols::canonical_symbol_name;
+
+/// 環境のキーはプログラム中のシンボルで、外部入力ではない。DoS 耐性のための
+/// SipHash は要らず、ハッシュ計算が `Env::get` / `set` の実測で目立っていた。
+/// 外部入力をキーにする箱（`Value::Map` など）はこれを使わないこと。
+type HashMap<K, V> = FxHashMap<K, V>;
 
 pub type EnvRef = Arc<RwLock<Env>>;
 
@@ -29,7 +35,7 @@ impl Default for Env {
     fn default() -> Self {
         count_created();
         Self {
-            data: HashMap::new(),
+            data: HashMap::default(),
             outer: None,
             self_ref: Weak::new(),
         }
@@ -61,7 +67,7 @@ impl Env {
     pub fn new_child(outer: EnvRef) -> Self {
         count_created();
         Self {
-            data: HashMap::new(),
+            data: HashMap::default(),
             outer: Some(outer),
             self_ref: Weak::new(),
         }

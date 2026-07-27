@@ -320,6 +320,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rpds",
+ "rustc-hash",
  "rustyline",
  "serde",
  "serde_json",
