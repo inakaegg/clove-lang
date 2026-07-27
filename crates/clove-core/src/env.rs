@@ -101,14 +101,18 @@ impl Env {
     }
 
     pub fn get(&self, key: &str) -> Option<Value> {
-        let canonical = canonical_symbol_name(key);
-        if let Some(v) = self.data.get(canonical.as_ref()) {
+        self.get_canonical(canonical_symbol_name(key).as_ref())
+    }
+
+    /// 正規化済みのキーで引く。スコープを1段上がるたびに正規化し直さないための分離。
+    fn get_canonical(&self, key: &str) -> Option<Value> {
+        if let Some(v) = self.data.get(key) {
             return Some(v.clone_with_strong_env());
         }
-        if let Some(ref outer) = self.outer {
-            return outer.read().unwrap().get(canonical.as_ref());
+        match self.outer {
+            Some(ref outer) => outer.read().unwrap().get_canonical(key),
+            None => None,
         }
-        None
     }
 
     pub fn clone_data(&self) -> Vec<(String, Value)> {
