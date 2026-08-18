@@ -1,6 +1,6 @@
 # Namespace Design Notes (`ns` / `require`)
 
-Japanese version: [namespaces_design.ja.md](namespaces_design.ja.md)
+🇯🇵 日本語ドキュメント: [namespaces_design.ja.md](namespaces_design.ja.md)
 
 This document is a design memo for Clove namespaces (`ns`) and `require`.
 

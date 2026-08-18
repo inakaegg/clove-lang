@@ -1,6 +1,6 @@
 # コードスタイル（公開向け）
 
-English version: [code_style.md](code_style.md)
+English documentation: [code_style.md](code_style.md)
 
 このドキュメントは、公開リポジトリ向けの言語ルールをまとめたものです。
 

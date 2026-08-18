@@ -1,6 +1,6 @@
 # Reader / 構文一覧
 
-English version: [reader_syntax.md](reader_syntax.md)
+English documentation: [reader_syntax.md](reader_syntax.md)
 
 - 更新日: 2026-01-14
 

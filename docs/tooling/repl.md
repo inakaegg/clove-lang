@@ -1,6 +1,6 @@
 # REPL Guide
 
-Japanese version: [repl.ja.md](repl.ja.md)
+🇯🇵 日本語ドキュメント: [repl.ja.md](repl.ja.md)
 
 - Updated: 2026-01-14
 

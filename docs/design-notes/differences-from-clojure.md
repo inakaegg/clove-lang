@@ -1,6 +1,6 @@
 # What was not taken from Clojure
 
-Japanese version: [differences-from-clojure.ja.md](differences-from-clojure.ja.md)
+🇯🇵 日本語ドキュメント: [differences-from-clojure.ja.md](differences-from-clojure.ja.md)
 
 - Updated: 2026-07-25
 

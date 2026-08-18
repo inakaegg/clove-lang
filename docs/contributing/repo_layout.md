@@ -1,6 +1,6 @@
 # Repository layout
 
-Japanese version: [repo_layout.ja.md](repo_layout.ja.md)
+🇯🇵 日本語ドキュメント: [repo_layout.ja.md](repo_layout.ja.md)
 
 - Updated: 2026-01-14
 

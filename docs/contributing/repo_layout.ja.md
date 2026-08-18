@@ -1,6 +1,6 @@
 # リポジトリ構成
 
-English version: [repo_layout.md](repo_layout.md)
+English documentation: [repo_layout.md](repo_layout.md)
 
 - 更新日: 2026-01-14
 

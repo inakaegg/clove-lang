@@ -1,6 +1,6 @@
 # 名前空間（ns / require）
 
-English version: [namespaces.md](namespaces.md)
+English documentation: [namespaces.md](namespaces.md)
 
 - 更新日: 2026-01-14
 

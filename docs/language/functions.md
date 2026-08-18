@@ -1,6 +1,6 @@
 # Functions
 
-Japanese version: [functions.ja.md](functions.ja.md)
+🇯🇵 日本語ドキュメント: [functions.ja.md](functions.ja.md)
 
 - Updated: 2026-07-24
 

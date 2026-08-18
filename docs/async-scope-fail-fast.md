@@ -1,6 +1,6 @@
 # async-scope fail-fast cancellation policy
 
-Japanese version: [async-scope-fail-fast.ja.md](async-scope-fail-fast.ja.md)
+🇯🇵 日本語ドキュメント: [async-scope-fail-fast.ja.md](async-scope-fail-fast.ja.md)
 
 Clove's async-scope defaults to “fail-fast: if one dies, stop everyone”.
 When a child task/body returns Err, the scope is cancelled and the cancel-chan is closed

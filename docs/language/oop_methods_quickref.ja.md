@@ -1,6 +1,6 @@
 # OOP メソッド新記法クイックリファレンス
 
-English version: [oop_methods_quickref.md](oop_methods_quickref.md)
+English documentation: [oop_methods_quickref.md](oop_methods_quickref.md)
 
 このページは **OOP メソッドの新記法だけ**を短くまとめたものです。
 詳細は [docs/language/oop_methods.md](oop_methods.ja.md) を参照してください。

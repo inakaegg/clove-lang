@@ -1,6 +1,6 @@
 # Phase2 Design and Current Status
 
-Japanese version: [README.ja.md](README.ja.md)
+🇯🇵 日本語ドキュメント: [README.ja.md](README.ja.md)
 
 Phase2 is Clove's experimental native-build path. The existing runtime remains responsible for the REPL and script execution, while `clove build` now sends a supported subset of the language through a C backend.
 

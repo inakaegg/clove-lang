@@ -1,6 +1,6 @@
 # Development environment setup
 
-Japanese version: [dev_setup.ja.md](dev_setup.ja.md)
+🇯🇵 日本語ドキュメント: [dev_setup.ja.md](dev_setup.ja.md)
 
 - Updated: 2025-12-21
 

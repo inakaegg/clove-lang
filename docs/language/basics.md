@@ -1,6 +1,6 @@
 # Language basics
 
-Japanese version: [basics.ja.md](basics.ja.md)
+🇯🇵 日本語ドキュメント: [basics.ja.md](basics.ja.md)
 
 This document is a rough overview of the "first things to know" in Clove:
 

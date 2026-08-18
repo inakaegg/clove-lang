@@ -1,6 +1,6 @@
 # マクロを持たない
 
-English version: [no-macros.md](no-macros.md)
+English documentation: [no-macros.md](no-macros.md)
 
 - 更新日: 2026-07-25
 

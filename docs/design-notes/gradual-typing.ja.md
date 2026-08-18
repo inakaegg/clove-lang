@@ -1,6 +1,6 @@
 # 型は任意注釈にとどめる
 
-English version: [gradual-typing.md](gradual-typing.md)
+English documentation: [gradual-typing.md](gradual-typing.md)
 
 - 更新日: 2026-07-25
 

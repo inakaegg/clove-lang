@@ -1,6 +1,6 @@
 # 実行時設定（use / use-syntax）
 
-English version: [runtime_settings.md](runtime_settings.md)
+English documentation: [runtime_settings.md](runtime_settings.md)
 
 - 更新日: 2025-12-21
 

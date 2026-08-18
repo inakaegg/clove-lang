@@ -1,6 +1,6 @@
 # 標準ライブラリ (`std`) 概要
 
-English version: [stdlib.md](stdlib.md)
+English documentation: [stdlib.md](stdlib.md)
 
 Clove には、コア言語とは別に「電池込み」な標準ライブラリ `std` が付属します。`clove run` / REPL では `clove::core` とともに `std` を読み込むことを想定しています。
 

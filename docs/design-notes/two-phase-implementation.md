@@ -1,6 +1,6 @@
 # Two implementations: interpreter and native build
 
-Japanese version: [two-phase-implementation.ja.md](two-phase-implementation.ja.md)
+🇯🇵 日本語ドキュメント: [two-phase-implementation.ja.md](two-phase-implementation.ja.md)
 
 - Updated: 2026-07-25
 

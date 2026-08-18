@@ -1,6 +1,6 @@
 # OOP syntax
 
-Japanese version: [oop_syntax.ja.md](oop_syntax.ja.md)
+🇯🇵 日本語ドキュメント: [oop_syntax.ja.md](oop_syntax.ja.md)
 
 This page has moved.
 

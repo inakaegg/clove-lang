@@ -1,6 +1,6 @@
 # Clove ドキュメント
 
-English version: [index.md](index.md)
+English documentation: [index.md](index.md)
 
 - 更新日: 2026-01-14
 

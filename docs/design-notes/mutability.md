@@ -1,6 +1,6 @@
 # `mut` and `imut`
 
-Japanese version: [mutability.ja.md](mutability.ja.md)
+🇯🇵 日本語ドキュメント: [mutability.ja.md](mutability.ja.md)
 
 - Updated: 2026-07-25
 

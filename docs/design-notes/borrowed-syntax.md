@@ -1,6 +1,6 @@
 # Borrowed notation
 
-Japanese version: [borrowed-syntax.ja.md](borrowed-syntax.ja.md)
+🇯🇵 日本語ドキュメント: [borrowed-syntax.ja.md](borrowed-syntax.ja.md)
 
 - Updated: 2026-07-25
 

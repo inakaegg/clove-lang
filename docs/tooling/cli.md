@@ -1,6 +1,6 @@
 # CLI tools (`clove` / `clove fmt` / `clove build`)
 
-Japanese version: [cli.ja.md](cli.ja.md)
+🇯🇵 日本語ドキュメント: [cli.ja.md](cli.ja.md)
 
 - Updated: 2026-07-25
 

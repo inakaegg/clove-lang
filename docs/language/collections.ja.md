@@ -1,6 +1,6 @@
 # コレクション
 
-English version: [collections.md](collections.md)
+English documentation: [collections.md](collections.md)
 
 - 更新日: 2026-01-14
 

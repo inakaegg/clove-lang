@@ -1,6 +1,6 @@
 # async-scope の fail-fast キャンセル方針
 
-English version: [async-scope-fail-fast.md](async-scope-fail-fast.md)
+English documentation: [async-scope-fail-fast.md](async-scope-fail-fast.md)
 
 Clove の async-scope は「誰かが死んだら全員止める」fail-fast をデフォルトにする。子タスク／body が Err を返した瞬間にスコープを cancel し、兄弟タスクにも cancel-chan close で伝播する。await は従来どおり全員を待ってエラーを集約する。
 

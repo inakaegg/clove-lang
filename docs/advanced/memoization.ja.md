@@ -1,6 +1,6 @@
 # メモ化と永続キャッシュ (`memo` / `memoize`)
 
-English version: [memoization.md](memoization.md)
+English documentation: [memoization.md](memoization.md)
 
 Clove には「関数の結果をキャッシュする」ための仕組みとして
 

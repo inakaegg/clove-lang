@@ -1,6 +1,6 @@
 # 並行 / 非同期
 
-English version: [concurrency.md](concurrency.md)
+English documentation: [concurrency.md](concurrency.md)
 
 - 更新日: 2026-01-14
 

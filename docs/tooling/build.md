@@ -1,6 +1,6 @@
 # Build (`clove build`)
 
-Japanese version: [build.ja.md](build.ja.md)
+🇯🇵 日本語ドキュメント: [build.ja.md](build.ja.md)
 
 - Updated: 2026-07-25
 

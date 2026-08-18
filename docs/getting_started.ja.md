@@ -1,6 +1,6 @@
 # Getting Started
 
-English version: [getting_started.md](getting_started.md)
+English documentation: [getting_started.md](getting_started.md)
 
 - 更新日: 2025-12-21
 

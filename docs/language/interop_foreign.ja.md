@@ -1,6 +1,6 @@
 # 外部エンジン埋め込み (Ruby / Python など)
 
-English version: [interop_foreign.md](interop_foreign.md)
+English documentation: [interop_foreign.md](interop_foreign.md)
 
 Clove の特徴のひとつが「外部言語エンジン」を埋め込めることです。
 Rust 側の `ForeignEngine` 実装を通じて、Clove のコードから Ruby / Python などを呼び出せます。

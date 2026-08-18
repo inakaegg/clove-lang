@@ -1,6 +1,6 @@
 # Memoization and Persistent Cache (`memo` / `memoize`)
 
-Japanese version: [memoization.ja.md](memoization.ja.md)
+🇯🇵 日本語ドキュメント: [memoization.ja.md](memoization.ja.md)
 
 Clove provides two ways to cache function results:
 

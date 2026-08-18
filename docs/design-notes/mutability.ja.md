@@ -1,6 +1,6 @@
 # `mut` と `imut`
 
-English version: [mutability.md](mutability.md)
+English documentation: [mutability.md](mutability.md)
 
 - 更新日: 2026-07-25
 

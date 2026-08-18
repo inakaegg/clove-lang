@@ -1,6 +1,6 @@
 # Standard library (`std`) overview
 
-Japanese version: [stdlib.ja.md](stdlib.ja.md)
+🇯🇵 日本語ドキュメント: [stdlib.ja.md](stdlib.ja.md)
 
 Clove ships a “batteries included” standard library `std` separate from core.
 `clove run` / REPL are expected to load `std` along with `clove::core`.

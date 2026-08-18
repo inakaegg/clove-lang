@@ -1,6 +1,6 @@
 # VS Code 拡張
 
-English version: [vscode.md](vscode.md)
+English documentation: [vscode.md](vscode.md)
 
 このドキュメントでは、[packages/vscode-clove](../../packages/vscode-clove) に含まれる
 VS Code 拡張の機能と使い方をまとめます。

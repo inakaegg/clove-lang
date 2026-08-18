@@ -1,6 +1,6 @@
 # Packages (Phase1)
 
-Japanese version: [packages.ja.md](packages.ja.md)
+🇯🇵 日本語ドキュメント: [packages.ja.md](packages.ja.md)
 
 Phase1 targets **pure Clove libraries**, fetched from Git repositories and made available to `require`.
 Native/plugins/docs externalization/fn_meta are not covered here.

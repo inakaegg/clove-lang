@@ -1,6 +1,6 @@
 # Phase2 decisions
 
-Japanese version: [DECISIONS.ja.md](DECISIONS.ja.md)
+🇯🇵 日本語ドキュメント: [DECISIONS.ja.md](DECISIONS.ja.md)
 
 - Updated: 2026-07-25
 

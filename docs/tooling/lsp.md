@@ -1,6 +1,6 @@
 # LSP (clove-lsp)
 
-Japanese version: [lsp.ja.md](lsp.ja.md)
+🇯🇵 日本語ドキュメント: [lsp.ja.md](lsp.ja.md)
 
 - Updated: 2025-12-21
 

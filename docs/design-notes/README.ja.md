@@ -1,6 +1,6 @@
 # 設計ノート
 
-English version: [README.md](README.md)
+English documentation: [README.md](README.md)
 
 - 更新日: 2026-07-25
 

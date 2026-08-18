@@ -1,6 +1,6 @@
 # 名前空間区切りに `/` を使わない
 
-English version: [namespace-separator.md](namespace-separator.md)
+English documentation: [namespace-separator.md](namespace-separator.md)
 
 - 更新日: 2026-07-25
 

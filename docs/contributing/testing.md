@@ -1,6 +1,6 @@
 # Testing policy
 
-Japanese version: [testing.ja.md](testing.ja.md)
+🇯🇵 日本語ドキュメント: [testing.ja.md](testing.ja.md)
 
 - Updated: 2025-12-21
 

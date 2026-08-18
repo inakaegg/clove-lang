@@ -1,6 +1,6 @@
 # Clove Documentation
 
-Japanese version: [index.ja.md](index.ja.md)
+🇯🇵 日本語ドキュメント: [index.ja.md](index.ja.md)
 
 - Updated: 2026-01-14
 

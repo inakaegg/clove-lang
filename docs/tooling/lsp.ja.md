@@ -1,6 +1,6 @@
 # LSP（clove-lsp）
 
-English version: [lsp.md](lsp.md)
+English documentation: [lsp.md](lsp.md)
 
 - 更新日: 2025-12-21
 

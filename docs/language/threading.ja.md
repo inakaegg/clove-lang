@@ -1,6 +1,6 @@
 # スレッディング / パイプ
 
-English version: [threading.md](threading.md)
+English documentation: [threading.md](threading.md)
 
 - 更新日: 2026-01-14
 

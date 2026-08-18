@@ -1,6 +1,6 @@
 # ドキュメントの書き方
 
-English version: [docs_style.md](docs_style.md)
+English documentation: [docs_style.md](docs_style.md)
 
 - 更新日: 2025-12-21
 

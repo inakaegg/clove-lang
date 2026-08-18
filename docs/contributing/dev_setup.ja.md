@@ -1,6 +1,6 @@
 # 開発環境セットアップ
 
-English version: [dev_setup.md](dev_setup.md)
+English documentation: [dev_setup.md](dev_setup.md)
 
 - 更新日: 2025-12-21
 

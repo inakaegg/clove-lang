@@ -1,6 +1,6 @@
 # Formatter
 
-English version: [formatter.md](formatter.md)
+English documentation: [formatter.md](formatter.md)
 
 - 更新日: 2026-01-14
 
