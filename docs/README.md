@@ -1,6 +1,6 @@
 # About docs/
 
-Japanese version: [README.ja.md](README.ja.md)
+🇯🇵 日本語ドキュメント: [README.ja.md](README.ja.md)
 
 This directory collects documentation for **the Clove language and tools**.
 

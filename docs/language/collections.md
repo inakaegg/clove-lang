@@ -1,6 +1,6 @@
 # Collections
 
-Japanese version: [collections.ja.md](collections.ja.md)
+🇯🇵 日本語ドキュメント: [collections.ja.md](collections.ja.md)
 
 - Updated: 2026-01-14
 

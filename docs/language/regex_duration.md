@@ -1,6 +1,6 @@
 # Regex / Duration literals
 
-Japanese version: [regex_duration.ja.md](regex_duration.ja.md)
+🇯🇵 日本語ドキュメント: [regex_duration.ja.md](regex_duration.ja.md)
 
 - Updated: 2025-12-21
 

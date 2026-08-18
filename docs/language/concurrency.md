@@ -1,6 +1,6 @@
 # Concurrency / async
 
-Japanese version: [concurrency.ja.md](concurrency.ja.md)
+🇯🇵 日本語ドキュメント: [concurrency.ja.md](concurrency.ja.md)
 
 - Updated: 2026-01-14
 

@@ -1,6 +1,6 @@
 # 正規表現 / Duration リテラル
 
-English version: [regex_duration.md](regex_duration.md)
+English documentation: [regex_duration.md](regex_duration.md)
 
 - 更新日: 2025-12-21
 

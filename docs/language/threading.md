@@ -1,6 +1,6 @@
 # Threading / pipeline
 
-Japanese version: [threading.ja.md](threading.ja.md)
+🇯🇵 日本語ドキュメント: [threading.ja.md](threading.ja.md)
 
 - Updated: 2026-01-14
 

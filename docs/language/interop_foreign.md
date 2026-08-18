@@ -1,6 +1,6 @@
 # External engine embedding (Ruby / Python, etc.)
 
-Japanese version: [interop_foreign.ja.md](interop_foreign.ja.md)
+🇯🇵 日本語ドキュメント: [interop_foreign.ja.md](interop_foreign.ja.md)
 
 One of Clove's features is embedding **external language engines**.
 Through Rust-side `ForeignEngine` implementations, Clove code can call Ruby/Python, etc.

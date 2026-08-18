@@ -1,7 +1,6 @@
 # docs/ について
 
-英語版（公式）: `README.md`  
-※ 日本語版は `README.ja.md` にまとめています。
+English documentation: [README.md](README.md)
 
 このディレクトリは **Clove 言語本体 + ツール群** のドキュメントをまとめたものです。
 

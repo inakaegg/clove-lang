@@ -1,6 +1,6 @@
 # ブラケット indexer（`[]`）
 
-English version: [indexer.md](indexer.md)
+English documentation: [indexer.md](indexer.md)
 
 - 更新日: 2025-12-21
 

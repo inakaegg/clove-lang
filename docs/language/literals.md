@@ -1,6 +1,6 @@
 # Literals
 
-Japanese version: [literals.ja.md](literals.ja.md)
+🇯🇵 日本語ドキュメント: [literals.ja.md](literals.ja.md)
 
 - Updated: 2025-12-21
 

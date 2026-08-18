@@ -1,6 +1,6 @@
 # 名前空間設計ノート (`ns` / `require`)
 
-English version: [namespaces_design.md](namespaces_design.md)
+English documentation: [namespaces_design.md](namespaces_design.md)
 
 このドキュメントは、Clove の名前空間 (`ns`) と `require` 周りの設計メモです。
 

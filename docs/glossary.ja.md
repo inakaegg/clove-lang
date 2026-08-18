@@ -1,6 +1,6 @@
 # 用語集
 
-English version: [glossary.md](glossary.md)
+English documentation: [glossary.md](glossary.md)
 
 - 更新日: 2026-01-14
 

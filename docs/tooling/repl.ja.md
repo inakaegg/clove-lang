@@ -1,6 +1,6 @@
 # REPL ガイド
 
-English version: [repl.md](repl.md)
+English documentation: [repl.md](repl.md)
 
 - 更新日: 2026-01-14
 

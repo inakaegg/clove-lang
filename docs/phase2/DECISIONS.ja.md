@@ -1,6 +1,6 @@
 # Phase2 の決定事項
 
-English version: [DECISIONS.md](DECISIONS.md)
+English documentation: [DECISIONS.md](DECISIONS.md)
 
 - 更新日: 2026-07-25
 

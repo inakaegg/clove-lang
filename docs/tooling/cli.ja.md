@@ -1,6 +1,6 @@
 # CLI ツール (`clove` / `clove fmt` / `clove build`)
 
-English version: [cli.md](cli.md)
+English documentation: [cli.md](cli.md)
 
 - Updated: 2026-07-25
 

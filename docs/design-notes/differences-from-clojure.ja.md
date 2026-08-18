@@ -1,6 +1,6 @@
 # Clojure から採らなかったもの
 
-English version: [differences-from-clojure.md](differences-from-clojure.md)
+English documentation: [differences-from-clojure.md](differences-from-clojure.md)
 
 - 更新日: 2026-07-25
 

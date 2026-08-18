@@ -1,6 +1,6 @@
 # Design Notes
 
-Japanese version: [README.ja.md](README.ja.md)
+🇯🇵 日本語ドキュメント: [README.ja.md](README.ja.md)
 
 - Updated: 2026-07-25
 

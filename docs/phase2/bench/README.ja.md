@@ -1,7 +1,6 @@
 # 公開用ベンチ（1本化）
 
-英語版（公式）: `README.md`  
-※ 日本語版は `README.ja.md` にまとめています。
+English documentation: [README.md](README.md)
 
 このディレクトリは **公開リポジトリ向けの最小ベンチ**のみを保持します。
 

@@ -1,6 +1,6 @@
 # OOP method chain and Ruby default tag handling
 
-Japanese version: [oop_syntax.ja.md](oop_syntax.ja.md)
+🇯🇵 日本語ドキュメント: [oop_syntax.ja.md](oop_syntax.ja.md)
 
 - `oop-syntax` is enabled by default. To disable: `(use oop-syntax false)` (re-enable with `(use oop-syntax true)` if needed).
 - The receiver position is resolved in this order: **function meta (`{:subject-pos n}` or `:last`) > `$arg` > argument name inference (`coll`/`xs`/`seq`)**.

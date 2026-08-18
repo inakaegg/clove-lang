@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Japanese version: [troubleshooting.ja.md](troubleshooting.ja.md)
+🇯🇵 日本語ドキュメント: [troubleshooting.ja.md](troubleshooting.ja.md)
 
 This page collects common issues and quick fixes.
 

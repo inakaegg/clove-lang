@@ -1,6 +1,6 @@
 # Reader / syntax overview
 
-Japanese version: [reader_syntax.ja.md](reader_syntax.ja.md)
+🇯🇵 日本語ドキュメント: [reader_syntax.ja.md](reader_syntax.ja.md)
 
 - Updated: 2026-01-14
 

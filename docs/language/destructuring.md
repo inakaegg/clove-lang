@@ -1,6 +1,6 @@
 # Destructuring
 
-Japanese version: [destructuring.ja.md](destructuring.ja.md)
+🇯🇵 日本語ドキュメント: [destructuring.ja.md](destructuring.ja.md)
 
 - Updated: 2025-12-21
 

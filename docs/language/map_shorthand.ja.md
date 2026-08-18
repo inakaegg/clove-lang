@@ -1,6 +1,6 @@
 # マップ省略記法（JS 準拠）
 
-English version: [map_shorthand.md](map_shorthand.md)
+English documentation: [map_shorthand.md](map_shorthand.md)
 
 ## 目的
 JS のオブジェクトリテラルに倣い、`{:a, :b}` のようにキーと同名の値を省略して書ける記法を追加しています。`clove fmt` / `pretty-print` も省略形のまま維持します。

@@ -1,6 +1,6 @@
 # Map shorthand (JS-style)
 
-Japanese version: [map_shorthand.ja.md](map_shorthand.ja.md)
+🇯🇵 日本語ドキュメント: [map_shorthand.ja.md](map_shorthand.ja.md)
 
 ## Goal
 

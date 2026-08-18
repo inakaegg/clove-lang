@@ -1,6 +1,6 @@
 # FAQ
 
-Japanese version: [faq.ja.md](faq.ja.md)
+🇯🇵 日本語ドキュメント: [faq.ja.md](faq.ja.md)
 
 - Updated: 2025-12-21
 

@@ -1,6 +1,6 @@
 # Namespaces (ns / require)
 
-Japanese version: [namespaces.ja.md](namespaces.ja.md)
+🇯🇵 日本語ドキュメント: [namespaces.ja.md](namespaces.ja.md)
 
 - Updated: 2026-01-14
 

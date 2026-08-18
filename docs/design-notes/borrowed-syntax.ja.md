@@ -1,6 +1,6 @@
 # 他言語から借りた記法
 
-English version: [borrowed-syntax.md](borrowed-syntax.md)
+English documentation: [borrowed-syntax.md](borrowed-syntax.md)
 
 - 更新日: 2026-07-25
 

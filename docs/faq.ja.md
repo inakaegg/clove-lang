@@ -1,6 +1,6 @@
 # FAQ
 
-English version: [faq.md](faq.md)
+English documentation: [faq.md](faq.md)
 
 - 更新日: 2025-12-21
 

@@ -1,6 +1,6 @@
 # トラブルシューティング
 
-English version: [troubleshooting.md](troubleshooting.md)
+English documentation: [troubleshooting.md](troubleshooting.md)
 
 よくある問題と簡単な対処をまとめます。
 

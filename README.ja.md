@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml)
 
-英語版（公式）: [README.md](README.md)
+English documentation: [README.md](README.md)
 
 Clove は Clojure に着想を得た小さな Lisp です。**S 式**をベースに、
 **軽量な型（`deftype` / `defenum`）とパターンマッチ**、**Ruby / Python のインライン埋め込み**を

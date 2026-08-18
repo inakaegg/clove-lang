@@ -1,6 +1,6 @@
 # 型ヒント
 
-English version: [type_hints.md](type_hints.md)
+English documentation: [type_hints.md](type_hints.md)
 
 - 更新日: 2026-07-25
 

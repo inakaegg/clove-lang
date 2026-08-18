@@ -1,6 +1,6 @@
 # Bracket indexer (`[]`)
 
-Japanese version: [indexer.ja.md](indexer.ja.md)
+🇯🇵 日本語ドキュメント: [indexer.ja.md](indexer.ja.md)
 
 - Updated: 2025-12-21
 

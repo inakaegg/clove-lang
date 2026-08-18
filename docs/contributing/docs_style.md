@@ -1,6 +1,6 @@
 # Writing docs
 
-Japanese version: [docs_style.ja.md](docs_style.ja.md)
+🇯🇵 日本語ドキュメント: [docs_style.ja.md](docs_style.ja.md)
 
 - Updated: 2025-12-21
 

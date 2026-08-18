@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml/badge.svg)](https://github.com/inakaegg/clove-lang/actions/workflows/ci.yml)
 
-Japanese version: [README.ja.md](README.ja.md)
+🇯🇵 日本語ドキュメント: [README.ja.md](README.ja.md)
 
 Clove is a small Lisp inspired by Clojure. It combines **S-expressions**,
 **lightweight types (`deftype` / `defenum`) with pattern matching**, and

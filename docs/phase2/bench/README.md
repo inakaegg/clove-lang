@@ -1,6 +1,6 @@
 # Public Bench (Single Bundle)
 
-Japanese version: [README.ja.md](README.ja.md)
+🇯🇵 日本語ドキュメント: [README.ja.md](README.ja.md)
 
 This directory keeps **the minimal public benchmark set** for the public repo.
 

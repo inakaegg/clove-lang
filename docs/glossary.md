@@ -1,6 +1,6 @@
 # Glossary
 
-Japanese version: [glossary.ja.md](glossary.ja.md)
+🇯🇵 日本語ドキュメント: [glossary.ja.md](glossary.ja.md)
 
 - Updated: 2026-01-14
 

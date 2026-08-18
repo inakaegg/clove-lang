@@ -1,6 +1,6 @@
 # No macros
 
-Japanese version: [no-macros.ja.md](no-macros.ja.md)
+🇯🇵 日本語ドキュメント: [no-macros.ja.md](no-macros.ja.md)
 
 - Updated: 2026-07-25
 

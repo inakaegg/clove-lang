@@ -1,6 +1,6 @@
 # Formatter
 
-Japanese version: [formatter.ja.md](formatter.ja.md)
+🇯🇵 日本語ドキュメント: [formatter.ja.md](formatter.ja.md)
 
 - Updated: 2026-01-14
 

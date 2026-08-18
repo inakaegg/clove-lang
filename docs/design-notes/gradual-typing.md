@@ -1,6 +1,6 @@
 # Types stay optional annotations
 
-Japanese version: [gradual-typing.ja.md](gradual-typing.ja.md)
+🇯🇵 日本語ドキュメント: [gradual-typing.ja.md](gradual-typing.ja.md)
 
 - Updated: 2026-07-25
 

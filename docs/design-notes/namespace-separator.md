@@ -1,6 +1,6 @@
 # No `/` as a namespace separator
 
-Japanese version: [namespace-separator.ja.md](namespace-separator.ja.md)
+🇯🇵 日本語ドキュメント: [namespace-separator.ja.md](namespace-separator.ja.md)
 
 - Updated: 2026-07-25
 

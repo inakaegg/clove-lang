@@ -1,6 +1,6 @@
 # VS Code extension
 
-Japanese version: [vscode.ja.md](vscode.ja.md)
+🇯🇵 日本語ドキュメント: [vscode.ja.md](vscode.ja.md)
 
 This document summarizes features and usage of the VS Code extension in
 [packages/vscode-clove](../../packages/vscode-clove).

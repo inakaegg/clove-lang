@@ -1,6 +1,6 @@
 # インタプリタとネイティブビルドの2経路
 
-English version: [two-phase-implementation.md](two-phase-implementation.md)
+English documentation: [two-phase-implementation.md](two-phase-implementation.md)
 
 - 更新日: 2026-07-25
 

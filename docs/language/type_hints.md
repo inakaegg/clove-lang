@@ -1,6 +1,6 @@
 # Type hints
 
-Japanese version: [type_hints.ja.md](type_hints.ja.md)
+🇯🇵 日本語ドキュメント: [type_hints.ja.md](type_hints.ja.md)
 
 - Updated: 2026-07-25
 

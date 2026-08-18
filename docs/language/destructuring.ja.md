@@ -1,6 +1,6 @@
 # デストラクチャリング
 
-English version: [destructuring.md](destructuring.md)
+English documentation: [destructuring.md](destructuring.md)
 
 - 更新日: 2025-12-21
 

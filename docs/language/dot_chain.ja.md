@@ -1,6 +1,6 @@
 # dot-chain（`x.(f ?)`）
 
-English version: [dot_chain.md](dot_chain.md)
+English documentation: [dot_chain.md](dot_chain.md)
 
 - 更新日: 2026-01-14
 

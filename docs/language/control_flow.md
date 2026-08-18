@@ -1,6 +1,6 @@
 # Control flow (special forms)
 
-Japanese version: [control_flow.ja.md](control_flow.ja.md)
+🇯🇵 日本語ドキュメント: [control_flow.ja.md](control_flow.ja.md)
 
 - Updated: 2026-01-14
 

@@ -1,6 +1,6 @@
 # Getting Started
 
-Japanese version: [getting_started.ja.md](getting_started.ja.md)
+🇯🇵 日本語ドキュメント: [getting_started.ja.md](getting_started.ja.md)
 
 - Updated: 2025-12-21
 

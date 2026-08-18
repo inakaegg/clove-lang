@@ -1,6 +1,6 @@
 # 言語の基礎
 
-English version: [basics.md](basics.md)
+English documentation: [basics.md](basics.md)
 
 このドキュメントは、Clove の「最初に知っておきたい基本文法」をざっくりまとめたものです。
 

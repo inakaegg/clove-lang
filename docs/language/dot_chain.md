@@ -1,6 +1,6 @@
 # dot-chain (`x.(f ?)`)
 
-Japanese version: [dot_chain.ja.md](dot_chain.ja.md)
+🇯🇵 日本語ドキュメント: [dot_chain.ja.md](dot_chain.ja.md)
 
 - Updated: 2026-01-14
 

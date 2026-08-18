@@ -1,6 +1,6 @@
 # Types / enum / match
 
-Japanese version: [types_enum_match.ja.md](types_enum_match.ja.md)
+🇯🇵 日本語ドキュメント: [types_enum_match.ja.md](types_enum_match.ja.md)
 
 Clove is a Lisp dialect designed around dynamic, map-centric data,
 but by combining `deftype` / `defenum` / `match`, you can write in a lightweight ADT style.

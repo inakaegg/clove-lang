@@ -1,6 +1,6 @@
 # Runtime settings (use / use-syntax)
 
-Japanese version: [runtime_settings.ja.md](runtime_settings.ja.md)
+🇯🇵 日本語ドキュメント: [runtime_settings.ja.md](runtime_settings.ja.md)
 
 - Updated: 2025-12-21
 

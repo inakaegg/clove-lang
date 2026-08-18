@@ -1,6 +1,6 @@
 # 制御構文（special forms）
 
-English version: [control_flow.md](control_flow.md)
+English documentation: [control_flow.md](control_flow.md)
 
 - 更新日: 2026-01-14
 
