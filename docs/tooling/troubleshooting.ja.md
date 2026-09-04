@@ -43,6 +43,20 @@ English documentation: [troubleshooting.md](troubleshooting.md)
   - OS に合った拡張子（`.dylib` / `.so` / `.dll`）を確認。
   - 実行時ライブラリ（例: SDL2）の導入を確認してください。
 
+## 5. 配布バイナリの問題
+
+- **`Runtime error: unknown foreign tag: rb`（または `py`）が出る**
+  - リリースに添付しているバイナリは Ruby / Python の埋め込みなしでビルドしているため、
+    `$rb{ ... }` と `$py{ ... }` は実行できません。埋め込みを外した理由は
+    [設計ノート](../design-notes/prebuilt-binaries.ja.md)にあります。
+  - 埋め込みが必要ならソースからインストールしてください。
+    `cargo install --git https://github.com/inakaegg/clove-lang --locked clove-lang`
+
+- **Apple Silicon でプラグインの dylib が署名不正として拒否される**
+  - arm64 の macOS は署名のない dylib を読み込みません。`cargo` や `cc` はビルド時に
+    ad-hoc 署名を付けるので、アーカイブから取り出した、あるいは署名を落としたなどで
+    署名が失われた dylib が原因のことが多いです。`codesign -s - <dylib>` で署名し直してください。
+
 ---
 <!-- NAV:START -->
 **前へ:** [VS Code 拡張](vscode.ja.md)

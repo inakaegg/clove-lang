@@ -180,8 +180,69 @@ More examples: [examples/concurrency/](examples/concurrency/) and [docs/language
 
 ## Install / Build
 
-Clove is developed as a Rust workspace. Building from source is the primary
-supported path.
+Clove is developed as a Rust workspace. A prebuilt binary is the quickest way to
+run Clove; build from source when you want the embedded Ruby and Python
+runtimes, which the prebuilt binaries leave out.
+
+### Prebuilt binaries
+
+Every release attaches one archive per platform, plus a `SHA256SUMS` file, to
+the [Releases page](https://github.com/inakaegg/clove-lang/releases).
+
+| Platform | Archive | Requirements |
+| --- | --- | --- |
+| macOS, Apple Silicon | `clove-<version>-aarch64-apple-darwin.tar.gz` | arm64 Mac; built on macOS 14 (GitHub runner), run verified on macOS 26 |
+| Linux, x86_64 | `clove-<version>-x86_64-unknown-linux-gnu.tar.gz` | glibc 2.35 or newer; built on Ubuntu 22.04 |
+
+```bash
+# Check the download first, then unpack it.
+# On Linux, use `sha256sum` in place of `shasum -a 256`.
+shasum -a 256 --ignore-missing -c SHA256SUMS
+tar xzf clove-0.1.0-aarch64-apple-darwin.tar.gz
+./clove-0.1.0-aarch64-apple-darwin/clove --version
+```
+
+An archive holds the `clove` executable and the two license files (MIT and
+Apache-2.0), nothing else.
+`clove-lsp` is not distributed this way; build it from source.
+
+#### Limitations and caveats
+
+- **No embedded Ruby or Python.** `$rb{ ... }` and `$py{ ... }` stop at runtime
+  with `unknown foreign tag: rb` (or `py`). The rest of the language, `clove
+  build` included, behaves as usual. Both runtimes have to be linked in when
+  the binary is built, which no redistributable build can do; [the design
+  note](docs/design-notes/prebuilt-binaries.md) explains why and what else was
+  weighed. If you need the embedding, install from source instead:
+
+  ```bash
+  cargo install --git https://github.com/inakaegg/clove-lang --locked clove-lang
+  ```
+
+- **`clove build` still needs a C compiler.** The native build path invokes
+  `cc`, which the archive does not carry. Install the Xcode Command Line Tools
+  on macOS (`xcode-select --install`), or your distribution's build-essential
+  package on Linux.
+
+- **macOS: the first run may need a network connection.** macOS marks what a
+  browser downloads with a *quarantine* attribute, and a quarantined copy is
+  checked with Apple before it runs — offline, that check can fail and the
+  binary is refused. Unpacking with `tar` leaves no such attribute, so a
+  download from the terminal normally just runs. If macOS does stop the binary,
+  clear the attribute yourself:
+
+  ```bash
+  xattr -d com.apple.quarantine ./clove
+  ```
+
+  The check goes over the network because a lone executable, unlike an app
+  bundle, cannot carry its notarization ticket inside itself — Apple calls
+  storing it there *stapling* — so the ticket has to be fetched instead.
+  Archives are signed with a Developer ID certificate and notarized starting
+  with the first release cut after the signing keys were registered; earlier
+  ones are unsigned, and an unsigned copy is stopped whether or not you are
+  online. The step above is the same either way, and `codesign -dv ./clove`
+  tells you which one you have.
 
 ### From source
 

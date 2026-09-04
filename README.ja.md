@@ -179,7 +179,66 @@ config["host"] ; => "localhost"
 
 ## インストール / ビルド
 
-Clove は Rust ワークスペースとして開発しており、ソースからのビルドが基本の導入経路です。
+Clove は Rust ワークスペースとして開発しています。すぐ動かすなら配布バイナリが手軽で、
+Ruby / Python の埋め込みが必要な場合はソースからビルドしてください。配布バイナリには
+埋め込みが入っていません。
+
+### 配布バイナリ
+
+リリースごとに、プラットフォーム別のアーカイブと `SHA256SUMS` を
+[Releases ページ](https://github.com/inakaegg/clove-lang/releases)へ添付しています。
+
+| プラットフォーム | アーカイブ | 必要な環境 |
+| --- | --- | --- |
+| macOS（Apple Silicon） | `clove-<version>-aarch64-apple-darwin.tar.gz` | arm64 の Mac。macOS 14（GitHub の runner）でビルド。動作確認は macOS 26 |
+| Linux（x86_64） | `clove-<version>-x86_64-unknown-linux-gnu.tar.gz` | glibc 2.35 以上。Ubuntu 22.04 でビルド |
+
+```bash
+# 先にダウンロードを検証してから展開します。
+# Linux では `shasum -a 256` の代わりに `sha256sum` を使ってください。
+shasum -a 256 --ignore-missing -c SHA256SUMS
+tar xzf clove-0.1.0-aarch64-apple-darwin.tar.gz
+./clove-0.1.0-aarch64-apple-darwin/clove --version
+```
+
+アーカイブに入っているのは `clove` の実行ファイルと、ライセンスファイル 2 つ
+（MIT と Apache-2.0）だけです。
+`clove-lsp` はこの形では配布していないので、ソースからビルドしてください。
+
+#### 制限と注意点
+
+- **Ruby / Python の埋め込みがありません。** `$rb{ ... }` と `$py{ ... }` は実行時に
+  `unknown foreign tag: rb`（または `py`）で止まります。それ以外は `clove build` も含めて
+  通常どおり動きます。どちらのランタイムもビルド時にリンクする必要があり、配布用の
+  バイナリではそれを満たせません。理由と検討した代案は
+  [設計ノート](docs/design-notes/prebuilt-binaries.ja.md)にあります。埋め込みが必要なら
+  ソースからインストールしてください。
+
+  ```bash
+  cargo install --git https://github.com/inakaegg/clove-lang --locked clove-lang
+  ```
+
+- **`clove build` には別途 C コンパイラが要ります。** ネイティブビルドの経路は `cc` を呼び出しますが、
+  コンパイラ自体はアーカイブに入っていません。macOS なら Xcode Command Line
+  Tools（`xcode-select --install`）、Linux ならディストリビューションの build-essential
+  相当を入れてください。
+
+- **macOS では初回起動にネット接続が要ることがあります。** macOS は、ブラウザで
+  ダウンロードしたファイルへ quarantine（検疫）属性を付けます。この属性が付いたコピーは、
+  実行する前に Apple へ問い合わせが入ります。ネットワークがないとその確認が通らず、実行を
+  拒否されることがあります。`tar` で展開した場合は属性が付かないので、ターミナルから
+  落としたものはそのまま動くのが普通です。もし止められたら、属性を自分で外してください。
+
+  ```bash
+  xattr -d com.apple.quarantine ./clove
+  ```
+
+  問い合わせがネットワーク越しになるのは、単体の実行ファイルには app バンドルと違って公証
+  チケットを埋め込めないためです。この埋め込みを Apple は staple と呼びます。埋め込めない分、
+  チケットは都度取りに行くことになります。なお、アーカイブへ Developer ID 証明書で署名して
+  公証を通しているのは、署名鍵を登録したあとの最初のリリースからで、それ以前のものは
+  未署名です。未署名のものは、ネット接続の有無にかかわらず止められます。どちらであっても
+  上の対処は同じで、`codesign -dv ./clove` で見分けられます。
 
 ### ソースから
 
@@ -220,7 +279,7 @@ macOS 付属の `/usr/bin/ruby`（2.6）などの古い Ruby ではビルドに�
 ### `clove build` について
 
 `examples/build/high_value_report.clv` は `clove build` での生成・実行を確認済みのサンプルで、
-簡単な売上集計を行います。現在の `examples/` にはインタプリタ向けの例と build 向けの例が
+売上を簡単に集計します。現在の `examples/` にはインタプリタ向けの例と build 向けの例が
 混在しており、すべての例が `clove build` を通る状態ではありません。
 
 ---
