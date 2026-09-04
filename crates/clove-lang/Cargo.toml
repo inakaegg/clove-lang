@@ -1,6 +1,6 @@
 [package]
 name = "clove-lang"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "CLI / language shim on top of clove-core"
 authors = ["inakaegg <52376271+inakaegg@users.noreply.github.com>"]
