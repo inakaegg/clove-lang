@@ -47,6 +47,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Releases carry prebuilt `clove` binaries for macOS on Apple Silicon and Linux on
+  x86_64. A `v*` tag makes the `Release` workflow build, attach, and checksum them
+  (`SHA256SUMS`); `tools/release/package.sh` produces the same archive locally. These
+  builds leave out the embedded Ruby and Python runtimes, so `$rb{ ... }` and
+  `$py{ ... }` report `unknown foreign tag` there — the runtimes are linked against one
+  exact minor version at one absolute library path and cannot be redistributed. macOS
+  archives are unsigned until the signing secrets are registered; from the first release
+  after that, they are signed with a Developer ID certificate and notarized.
 - `clove build --main` calls `(-main)` after the top-level forms, mirroring the
   interpreter's `clove --main`. Defining `-main` without passing it warns at build time;
   passing it without defining `-main` is an error. Native builds used to build such a

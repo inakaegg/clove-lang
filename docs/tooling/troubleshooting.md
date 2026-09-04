@@ -42,6 +42,21 @@ This page collects common issues and quick fixes.
   - Verify platform-specific filename (`.dylib` / `.so` / `.dll`).
   - Ensure the runtime library (e.g., SDL2) is installed.
 
+## 5. Prebuilt binary issues
+
+- **`Runtime error: unknown foreign tag: rb` (or `py`)**
+  - The binaries attached to a release are built without the embedded Ruby and
+    Python runtimes, so `$rb{ ... }` and `$py{ ... }` cannot run. Why they are
+    left out is in the [design note](../design-notes/prebuilt-binaries.md).
+  - Install from source to get the embedding:
+    `cargo install --git https://github.com/inakaegg/clove-lang --locked clove-lang`.
+
+- **A plugin dylib is rejected for an invalid code signature on Apple Silicon**
+  - arm64 macOS refuses to load an unsigned dylib at all. `cargo` and `cc` sign
+    what they build ad hoc, so a dylib that lost its signature — copied out of
+    an archive, or stripped — is the usual cause. Sign it again with
+    `codesign -s - <dylib>`.
+
 ---
 <!-- NAV:START -->
 **Previous:** [VS Code Extension](vscode.md)

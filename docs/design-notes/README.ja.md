@@ -24,6 +24,7 @@ Clove は Clojure 系の Lisp を土台にしていますが、意図的に外�
 | [型は任意注釈にとどめる](gradual-typing.ja.md) | 実行時の型検査はしない。型情報はツールとネイティブ最適化のために使う |
 | [`mut` と `imut`](mutability.ja.md) | 既定は永続データ構造。`mut` は破壊的更新を明示する契約 |
 | [他言語から借りた記法](borrowed-syntax.ja.md) | indexer / dot-chain / OOP風呼び出し / map 省略記法を入れた理由 |
+| [配布バイナリは Ruby / Python を埋め込まない](prebuilt-binaries.ja.md) | 配布版は `libruby` / `libpython` にリンクせず、`$rb{}` / `$py{}` は実行時に失敗する。その理由と、macOS の署名で library validation を緩める理由 |
 
 ## 読み方
 
