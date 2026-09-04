@@ -25,6 +25,7 @@ unimplemented or intentionally absent.
 | [Types stay optional annotations](gradual-typing.md) | No runtime type checking. Type information serves tooling and native optimization |
 | [`mut` and `imut`](mutability.md) | Persistent data structures by default. `mut` is an explicit contract for destructive updates |
 | [Borrowed notation](borrowed-syntax.md) | Why indexers, dot-chains, OOP-style calls, and map shorthand exist |
+| [Prebuilt binaries ship without embedded Ruby / Python](prebuilt-binaries.md) | Release binaries link no `libruby` / `libpython`; `$rb{}` / `$py{}` fail at run time. Why, and why the macOS signature relaxes library validation |
 
 ## How to read these
 

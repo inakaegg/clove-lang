@@ -67,6 +67,7 @@ Clove が「なぜこうなっているのか」。仕様を選んだ理由と�
 - [型は任意注釈にとどめる](design-notes/gradual-typing.ja.md)
 - [`mut` と `imut`](design-notes/mutability.ja.md)
 - [他言語から借りた記法](design-notes/borrowed-syntax.ja.md)
+- [配布バイナリは Ruby / Python を埋め込まない](design-notes/prebuilt-binaries.ja.md)
 
 ## ネイティブビルド経路（Phase2）
 

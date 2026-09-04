@@ -68,6 +68,7 @@ alternatives that were dropped.
 - [Types stay optional annotations](design-notes/gradual-typing.md)
 - [`mut` and `imut`](design-notes/mutability.md)
 - [Borrowed notation](design-notes/borrowed-syntax.md)
+- [Prebuilt binaries ship without embedded Ruby / Python](design-notes/prebuilt-binaries.md)
 
 ## Native Build Path (Phase2)
 
