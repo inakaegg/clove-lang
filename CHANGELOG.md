@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
 ### Performance
 
 - Startup dropped from 514ms to 25ms for `clove examples/hello.clv`, and RSS from 38MB
@@ -44,6 +46,9 @@ All notable changes to this project will be documented in this file.
   return-type annotations (`(defn add :int [x<Int> y<Int>] ...)`). Recursive functions are
   reported as unsupported instead of aborting the build process with a stack overflow.
   `(range n)` with one argument builds.
+- Prevented call environments from being retained by directly bound local closures and local
+  functions.
+- Shared lambda payloads across value clones to avoid repeatedly cloning function ASTs.
 
 ### Added
 
@@ -60,9 +65,6 @@ All notable changes to this project will be documented in this file.
   passing it without defining `-main` is an error. Native builds used to build such a
   program successfully and print nothing.
 - `clove --stack SIZE` sets how much native stack the evaluator may use.
-
-### Added
-
 - `docs/design-notes/` records the reasoning behind Clove's distinctive design
   decisions — no macros, `::` instead of `/` as the namespace separator, what was
   not taken from Clojure, the two implementations, optional type annotations,
@@ -106,9 +108,3 @@ All notable changes to this project will be documented in this file.
 - Added English back-links to Japanese pages and wired `contributing/code_style` into the
   documentation index.
 - Aligned example namespaces with their file paths so examples run without warnings.
-
-### Fixed
-
-- Prevented call environments from being retained by directly bound local closures and local
-  functions.
-- Shared lambda payloads across value clones to avoid repeatedly cloning function ASTs.
