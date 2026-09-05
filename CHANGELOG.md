@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-05
+
+### Fixed
+
+- The release workflow signs the macOS binary when the signing secrets are
+  registered. Two defects in `tools/release/sign-macos.sh` stopped every signed build:
+  on the GitHub macOS 14 runners `codesign` could not find the imported identity
+  until the throwaway keychain was also on the user search list ("The specified item
+  could not be found in the keychain"), and `entitlements.plist` carried an XML
+  comment that `plutil` accepts but codesign's entitlement parser rejects. The script
+  now adds the keychain for the duration of the run and restores the original list,
+  and the plist holds only the entitlement. No behavior of `clove` changed.
+
 ## [0.2.0] - 2026-09-04
 
 ### Performance

@@ -27,6 +27,9 @@ binary="$1"
 [ -f "$binary" ] || die "no such file: $binary"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# The plist must stay free of XML comments: plutil accepts them, but codesign's
+# entitlement parser (AMFIUnserializeXML) rejects the file with a syntax error.
+# Why the entitlement exists is explained next to the check that reads it back.
 entitlements="$script_dir/entitlements.plist"
 [ -f "$entitlements" ] || die "missing $entitlements"
 
@@ -43,7 +46,16 @@ umask 077
 work="$(mktemp -d)"
 keychain="$work/clove-signing.keychain-db"
 keychain_created=0
+original_search_list=""
+search_list_modified=0
 cleanup() {
+  if [ "$search_list_modified" -eq 1 ]; then
+    # shellcheck disable=SC2086
+    if ! security list-keychains -d user -s $original_search_list >/dev/null 2>&1; then
+      printf 'sign-macos.sh: warning: could not restore the keychain search list; expected: %s\n' \
+        "$original_search_list" >&2
+    fi
+  fi
   if [ "$keychain_created" -eq 1 ]; then
     security delete-keychain "$keychain" >/dev/null 2>&1 || true
   fi
@@ -51,9 +63,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# A throwaway keychain keeps the certificate out of the login keychain, and
-# `codesign --keychain` keeps it out of the search list as well, so running
-# this on a developer's own Mac leaves no trace once the trap fires.
+# A throwaway keychain keeps the certificate out of the login keychain. It is
+# added to the user search list only for the duration of this script and the
+# trap restores the original list, so a developer's own Mac is left as it was.
 keychain_password="$(uuidgen)"
 security create-keychain -p "$keychain_password" "$keychain"
 keychain_created=1
@@ -63,6 +75,17 @@ security unlock-keychain -p "$keychain_password" "$keychain"
 printf '%s' "$MACOS_CERT_P12" | base64 --decode > "$work/certificate.p12"
 security import "$work/certificate.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" \
   -T /usr/bin/codesign -f pkcs12 >/dev/null
+# `codesign --keychain` alone is not enough on the macOS 14 runners: codesign
+# reports "The specified item could not be found in the keychain" for an
+# identity that `security find-identity` lists as valid, until the keychain is
+# also on the user search list. Measured on macos-14 with the same certificate:
+# of four import variants, only the two that added the keychain to the list
+# signed, and they added it at this point, before the partition list is set.
+# The trap restores the original list.
+original_search_list="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
+# shellcheck disable=SC2086
+security list-keychains -d user -s "$keychain" $original_search_list
+search_list_modified=1
 # Without this, codesign stops for a GUI prompt that no CI runner can answer.
 security set-key-partition-list -S apple-tool:,apple:,codesign: \
   -s -k "$keychain_password" "$keychain" >/dev/null
@@ -82,8 +105,10 @@ codesign --verify --strict --verbose=2 "$binary"
 
 # The entitlement is the reason clove can still load a native plugin dylib the
 # user built themselves -- from the default trusted directories as well as with
-# --allow-native-plugins. A signature without it would break those paths in the
-# downloaded binary only.
+# --allow-native-plugins. Those dylibs carry no Developer ID signature, and the
+# hardened runtime would reject them in a signed build only, so a signature
+# without it would break those paths in the downloaded binary alone. See
+# docs/design-notes/prebuilt-binaries.md.
 codesign -d --entitlements - "$binary" > "$work/entitlements-actual" 2>&1
 if ! grep -q 'disable-library-validation' "$work/entitlements-actual"; then
   cat "$work/entitlements-actual" >&2
