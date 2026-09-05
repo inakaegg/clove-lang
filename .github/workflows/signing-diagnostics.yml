@@ -2,6 +2,10 @@ name: Signing diagnostics
 
 on:
   workflow_dispatch:
+  # A dispatch needs the workflow on the default branch; a push trigger on this
+  # probe branch runs it without touching main.
+  push:
+    branches: ["ci/signing-probe"]
 
 permissions:
   contents: read
