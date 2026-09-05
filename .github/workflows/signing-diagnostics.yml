@@ -1,0 +1,19 @@
+name: Signing diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe keychain import on the macOS runner
+    runs-on: macos-14
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the probe (statuses and counts only)
+        run: bash tools/release/diagnose-signing.sh
